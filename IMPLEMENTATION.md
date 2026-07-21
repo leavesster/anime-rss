@@ -768,6 +768,22 @@ same configurable count.
 **Reason:** Count retention is predictable on small NAS volumes and does not add a
 second timer loop or a hidden file owner.
 
+### BACKUP-004: Restore and migration share one fail-closed startup lock
+
+**Choice:** Startup and the migration CLI take an advisory file lock adjacent to
+the SQLite database before restore inspection or Alembic work. Lock acquisition
+times out after 60 seconds by default and process exit releases ownership. Inside
+the lock, the service compares current and target Alembic heads. A pending
+migration of an existing versioned database creates a consistent online archive
+with reason `pre-migration`; only a successful backup permits migration. Clean
+installs, current schemas, and the second process after a concurrent migration do
+not create an archive. A migration failure leaves the archive in normal retention.
+
+**Reason:** A database row cannot serialize work that starts before the schema is
+known, and a marker file without an OS lock can become permanently stale after a
+crash. Check, snapshot, and upgrade must be one critical section so overlapping
+container generations cannot both migrate or replace the same SQLite file.
+
 ### OPS-004: Correlation context is persisted across every execution boundary
 
 **Choice:** HTTP requests accept only canonical UUID correlation IDs and generate
@@ -1006,13 +1022,13 @@ truth; a row is complete only when code and proportionate evidence both exist.
 | HTTP consistency | `0017`, durable replay/conflict tests, version/precondition tests, cursor traversal tests, structured error tests, and checked OpenAPI/TypeScript contract | Complete |
 | Browser-origin security | Host/IP and proxy-origin policy, Fetch Metadata rejection, bounded per-client setup/login and connection-test limits, deployment documentation, and security integration tests | Complete |
 | Password KDF | Argon2id setup/reset, fixed parameters, successful-login legacy scrypt migration, timestamp preservation, audit event, malformed-hash rejection, and integration coverage | Complete |
-| Startup migration safety | Alembic startup migration and portable backups exist | Add migration lock and automatic consistent pre-migration backup |
+| Startup migration safety | OS-released lock spans restore/check/backup/upgrade; versioned pending schemas receive a validated online `pre-migration` archive; clean/current/failure/contention paths have integration coverage; Compose lifecycle passes | Complete |
 | qBittorrent contract | Adapter unit tests cover idempotent add/retry paths | Prove supported real versions, two-success external removal, and upgrade cancellation ordering |
 | Stable engineering gates | lint, typecheck, unit/integration, OpenAPI generation, Compose acceptance | Add doctor, checked OpenAPI drift, security scan, clean-room, and release-evidence commands |
 | External acceptance | Durable seven-day evidence tooling exists | Configure two real feeds, two Bangumi subscriptions, qBittorrent, then complete seven natural days |
 
-The next implementation unit is startup migration safety. Release gates then
-proceed as independent reviewable units; the
+The next implementation unit is the qBittorrent compatibility and reconciliation
+contract. Release gates then proceed as independent reviewable units; the
 seven-day clock starts only after its external preflight is genuinely satisfied.
 
 ## 7. Current Verification Evidence
@@ -1022,12 +1038,15 @@ Verified on 2026-07-22 with `make verify` after migration `0017` and parser
 
 - Ruff formatting and lint: passed.
 - Pyright: passed with zero errors.
-- Backend: 99 tests passed, 88.99% statement coverage.
+- Backend: 103 tests passed, 89.06% statement coverage.
 - Frontend: ESLint and TypeScript passed; 14 Vitest tests passed.
 - Production Vite build: passed.
 - Authentication integration evidence covers Argon2id setup and reset, valid
   legacy scrypt login migration, timestamp preservation, one-time audit output,
   session revocation, and malformed or unknown hash rejection.
+- Startup migration evidence covers clean installation, Alembic head inspection,
+  a snapshot that remains at the prior revision, one-time backup behavior,
+  fail-before-migrate ordering, lock timeout, and post-failure recovery evidence.
 - Disposable Compose lifecycle: passed for clean setup, operator backup,
   in-place upgrade through `0017`, clean-volume restore, and backup-based
   rollback, including audit history, waiting work, Decision, and DownloadTask

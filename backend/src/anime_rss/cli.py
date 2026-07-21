@@ -12,9 +12,9 @@ from anime_rss.acceptance import (
 )
 from anime_rss.config import Settings
 from anime_rss.infrastructure.database import create_database_engine, create_session_factory
-from anime_rss.infrastructure.migrations import run_migrations
 from anime_rss.modules.system.auth import AuthService
 from anime_rss.modules.system.backup import BackupService
+from anime_rss.modules.system.startup import StartupService
 
 app = typer.Typer(no_args_is_help=True)
 acceptance_app = typer.Typer(no_args_is_help=True)
@@ -70,7 +70,7 @@ def acceptance_report(
 def migrate(data_dir: Annotated[Path, typer.Option()] = Path("data")) -> None:
     settings = Settings(data_dir=data_dir)
     settings.data_dir.mkdir(parents=True, exist_ok=True)
-    run_migrations(settings.resolved_database_url)
+    _prepare_database(settings)
 
 
 @app.command()
@@ -91,13 +91,28 @@ def reset_password(
     data_dir: Annotated[Path, typer.Option()] = Path("data"),
 ) -> None:
     settings = Settings(data_dir=data_dir)
-    run_migrations(settings.resolved_database_url)
+    _prepare_database(settings)
     engine = create_database_engine(settings.resolved_database_url)
     try:
         AuthService(create_session_factory(engine)).reset_password(password)
     finally:
         engine.dispose()
     typer.echo("Administrator password reset; existing sessions were revoked.")
+
+
+def _prepare_database(settings: Settings) -> None:
+    backups = BackupService(
+        database_url=settings.resolved_database_url,
+        master_key_file=settings.resolved_master_key_file,
+        data_dir=settings.data_dir,
+        retention_count=settings.backup_retention_count,
+        max_restore_bytes=settings.backup_max_restore_bytes,
+    )
+    StartupService(
+        database_url=settings.resolved_database_url,
+        backups=backups,
+        lock_timeout_seconds=settings.migration_lock_timeout_seconds,
+    ).prepare(auto_migrate=True)
 
 
 @app.command("backup")

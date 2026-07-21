@@ -156,6 +156,9 @@ printf 'Upgrading the existing volume to the current image...\n'
 compose_for "$SOURCE_PROJECT" "$BASELINE_IMAGE" "$SOURCE_PORT" down >/dev/null
 compose_for "$SOURCE_PROJECT" "$CURRENT_IMAGE" "$SOURCE_PORT" up -d --no-build >/dev/null
 wait_ready "$SOURCE_PORT"
+UPGRADED_CONTAINER_ID=$(compose_for "$SOURCE_PROJECT" "$CURRENT_IMAGE" "$SOURCE_PORT" ps -q anime-rss)
+docker exec "$UPGRADED_CONTAINER_ID" sh -c \
+  'set -- /data/backups/*-pre-migration.backup; test -f "$1"'
 login "$SOURCE_PORT"
 assert_restored_state "$SOURCE_PORT"
 

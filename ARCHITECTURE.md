@@ -68,6 +68,13 @@ busy timeout, foreign keys, and WAL where the mounted filesystem safely supports
 it. Startup performs migrations before either HTTP traffic or scheduled work is
 accepted.
 
+Restore application, migration inspection, pre-migration backup, and Alembic
+upgrade run inside one advisory file lock adjacent to the SQLite database. The
+lock is released by the operating system if a process exits. A pending migration
+of an existing versioned database first creates an online SQLite snapshot that
+includes the current master key; backup failure aborts migration. Clean installs
+and already-current schemas skip this backup.
+
 ## 4. Architectural Style
 
 ### 4.1 Package by capability

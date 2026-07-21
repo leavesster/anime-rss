@@ -32,7 +32,6 @@ from anime_rss.infrastructure.browser_security import (
 from anime_rss.infrastructure.database import create_database_engine, create_session_factory
 from anime_rss.infrastructure.events import EventDispatcher, RegisteredHandler
 from anime_rss.infrastructure.http import SafeHttpClient
-from anime_rss.infrastructure.migrations import run_migrations
 from anime_rss.infrastructure.observability import (
     configure_logging,
     log_event,
@@ -82,6 +81,7 @@ from anime_rss.modules.system.http import (
     router as auth_router,
 )
 from anime_rss.modules.system.settings_http import router as settings_router
+from anime_rss.modules.system.startup import StartupService
 from anime_rss.runtime import ApplicationRuntime
 
 logger = logging.getLogger(__name__)
@@ -123,9 +123,11 @@ def create_app(
             max_restore_bytes=runtime_settings.backup_max_restore_bytes,
             clock=clock,
         )
-        backups.apply_pending_restore()
-        if runtime_settings.auto_migrate:
-            run_migrations(runtime_settings.resolved_database_url)
+        StartupService(
+            database_url=runtime_settings.resolved_database_url,
+            backups=backups,
+            lock_timeout_seconds=runtime_settings.migration_lock_timeout_seconds,
+        ).prepare(auto_migrate=runtime_settings.auto_migrate)
         configure_logging(
             data_dir=runtime_settings.data_dir,
             level=runtime_settings.log_level,

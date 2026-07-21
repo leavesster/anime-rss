@@ -29,6 +29,7 @@ The feed-to-qBittorrent product path and self-hosted delivery layer are implemen
 - first-run administrator setup, session cookies, and CSRF-protected mutations
 - in-application notifications and encrypted Webhook delivery with durable retry
 - portable SQLite and master-key backups, retention, and restart-safe restore staging
+- serialized startup migration with automatic consistent pre-migration backups
 - production image, Compose data volume, readiness health check, and non-root runtime
 - versioned implementation decision record for handoff and review
 - advisory airing calendar, versioned per-episode overrides, episode history, and one-time
@@ -82,8 +83,14 @@ docker compose up -d
 docker compose ps
 ```
 
-Migrations run before HTTP and scheduled work starts. To roll back application
-data, upload a `.backup` archive in the system page and restart the container:
+Migrations run before HTTP and scheduled work starts. Restore and migration work
+is serialized by an OS file lock; an existing versioned database receives a
+`pre-migration` archive before Alembic changes it. Clean installs and restarts on
+the current schema do not create one. Lock acquisition waits 60 seconds by default
+and can be bounded with `ANIME_RSS_MIGRATION_LOCK_TIMEOUT_SECONDS`.
+
+To roll back application data, upload a `.backup` archive in the system page and
+restart the container:
 
 ```bash
 docker compose restart anime-rss

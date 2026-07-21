@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_retention_days: int = Field(default=14, ge=1, le=365)
     auto_migrate: bool = True
+    migration_lock_timeout_seconds: float = Field(default=60.0, ge=0.1, le=600.0)
     web_dist_dir: Path | None = None
 
     feed_connect_timeout_seconds: float = Field(default=10.0, gt=0)

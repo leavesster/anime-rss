@@ -38,7 +38,7 @@ test-integration:
 	$(PYTHON) -m pytest backend/tests/integration backend/tests/security
 
 migrate:
-	.venv/bin/alembic upgrade head
+	$(PYTHON) -m anime_rss migrate --data-dir data
 
 run:
 	.venv/bin/anime-rss serve --reload
