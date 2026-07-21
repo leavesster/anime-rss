@@ -3,7 +3,7 @@
 Single-user, self-hosted anime RSS ingestion and download automation. Product
 requirements live in `DESIGN.md`; module boundaries and dependency rules live
 in `ARCHITECTURE.md`; implemented behavior and concrete choices are tracked in
-`IMPLEMENTATION.md`.
+`IMPLEMENTATION.md`; first-release proof is tracked in `ACCEPTANCE.md`.
 
 ## Current implementation status
 
@@ -97,6 +97,12 @@ Run `make acceptance-compose` before changing image packaging, migrations, or
 backup behavior. It builds a historical baseline and the current image, then
 verifies clean setup, backup, in-place upgrade, clean-volume restore, and
 backup-based rollback with disposable Compose projects.
+
+For real-feed release acceptance, run `make acceptance-soak-preflight`. After it
+reports two healthy feeds, two following Bangumi anime, a verified qBittorrent
+connection, and a healthy scheduler, run `make acceptance-soak-start` once.
+`make acceptance-soak-status` and `make acceptance-soak-report` inspect the
+immutable seven-day window without exposing feed URLs or downloader credentials.
 
 ## Implemented API
 

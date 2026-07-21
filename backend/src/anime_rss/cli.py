@@ -4,6 +4,12 @@ from typing import Annotated
 import typer
 import uvicorn
 
+from anime_rss.acceptance import (
+    SoakAcceptanceService,
+    SoakNotReadyError,
+    render_preflight,
+    render_status,
+)
 from anime_rss.config import Settings
 from anime_rss.infrastructure.database import create_database_engine, create_session_factory
 from anime_rss.infrastructure.migrations import run_migrations
@@ -11,6 +17,53 @@ from anime_rss.modules.system.auth import AuthService
 from anime_rss.modules.system.backup import BackupService
 
 app = typer.Typer(no_args_is_help=True)
+acceptance_app = typer.Typer(no_args_is_help=True)
+app.add_typer(acceptance_app, name="acceptance")
+
+
+@acceptance_app.command("preflight")
+def acceptance_preflight(
+    data_dir: Annotated[Path, typer.Option()] = Path("data"),
+) -> None:
+    checks = SoakAcceptanceService(data_dir).preflight()
+    typer.echo(render_preflight(checks))
+    if not all(check.passed for check in checks):
+        raise typer.Exit(1)
+
+
+@acceptance_app.command("start")
+def acceptance_start(
+    data_dir: Annotated[Path, typer.Option()] = Path("data"),
+) -> None:
+    service = SoakAcceptanceService(data_dir)
+    try:
+        state = service.start()
+    except SoakNotReadyError:
+        typer.echo(render_preflight(service.preflight()))
+        raise typer.Exit(1) from None
+    typer.echo(f"Soak started: {state.started_at.isoformat()}")
+    typer.echo(f"Earliest completion: {state.earliest_completion_at.isoformat()}")
+
+
+@acceptance_app.command("status")
+def acceptance_status(
+    data_dir: Annotated[Path, typer.Option()] = Path("data"),
+) -> None:
+    typer.echo(render_status(SoakAcceptanceService(data_dir).status()))
+
+
+@acceptance_app.command("report")
+def acceptance_report(
+    data_dir: Annotated[Path, typer.Option()] = Path("data"),
+    output: Annotated[Path | None, typer.Option()] = None,
+) -> None:
+    report = SoakAcceptanceService(data_dir).render_report()
+    if output is None:
+        typer.echo(report, nl=False)
+        return
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(report, encoding="utf-8")
+    typer.echo(str(output))
 
 
 @app.command()

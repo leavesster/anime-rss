@@ -674,6 +674,32 @@ image entrypoint, volume ownership, static asset, or Compose wiring regressions.
 Cross-architecture builds, registry publication, SBOM attachment, and attestation
 are verified only when the GitHub Actions workflow runs.
 
+### ACC-001: Live acceptance is an immutable, redacted evidence window
+
+**Choice:** The `anime-rss acceptance` CLI exposes `preflight`, `start`, `status`,
+and `report` commands. Preflight requires completed setup, two healthy feeds, two
+following Bangumi-backed anime, a successfully tested qBittorrent connection,
+and a healthy scheduler. `start` writes one immutable timestamp under
+`/data/acceptance`; repeated starts preserve the original boundary.
+
+Status and report use a disposable, read-only cross-module SQLite projection.
+They aggregate feed refreshes, cross-feed releases, recognition and manual actions,
+decisions, downloader attempts, job failures, duplicate task identities, and lost
+decision references. They never read endpoint ciphertext, payload ciphertext,
+credentials, raw magnet links, or private URL fields.
+
+**Reason:** Existing durable histories already contain the evidence needed for a
+seven-day run. A read-only projection avoids a second monitoring write model and
+cannot alter Candidate, Decision, DownloadTask, or user history. The explicit
+start marker prevents a failed or partial run from being silently restarted to
+produce a favorable window.
+
+**Tradeoff:** Counts can detect duplication and state-integrity failures but cannot
+prove that an anime title was semantically matched correctly. Final approval
+requires human review of the mapped episodes. The marker survives restarts on the
+same data volume but is intentionally outside operator backup archives; a clean
+restore restarts the seven-day clock.
+
 ### SCH-001: Schedule is a downstream projection, never an acquisition source
 
 **Choice:** `schedule` reads catalog metadata, subscriptions, selection slots,
@@ -772,12 +798,13 @@ attempts are not silently rewritten.
 
 The next coherent delivery unit is `real-feed release acceptance`:
 
-1. Connect two real feeds and subscribe to two currently airing anime through
-   Bangumi, recording only redacted identifiers in acceptance evidence.
-2. Run continuously for seven natural days while recording refreshes, decisions,
-   duplicate suppression, downloader reconciliation, and any manual corrections.
-3. Produce a final evidence table for all twelve `DESIGN.md` acceptance criteria,
-   separating automated proof from observations that require real external systems.
+1. Satisfy `make acceptance-soak-preflight` by connecting a second real feed,
+   following two currently airing Bangumi anime, and testing qBittorrent.
+2. Run `make acceptance-soak-start`, then operate continuously for seven natural
+   days while the existing durable histories record refreshes, decisions,
+   duplicate suppression, downloader reconciliation, and manual corrections.
+3. Review `make acceptance-soak-report` together with `ACCEPTANCE.md`, then close
+   the remaining live rows only with real-system evidence.
 
 ## 7. Current Verification Evidence
 
@@ -785,12 +812,13 @@ Verified on 2026-07-22 with `make verify` after migration `0012`:
 
 - Ruff formatting and lint: passed.
 - Pyright: passed with zero errors.
-- Backend: 66 tests passed, 88.45% statement coverage.
+- Backend: 69 tests passed, 88.09% statement coverage.
 - Frontend: ESLint and TypeScript passed; 6 Vitest tests passed.
 - Production Vite build: passed.
 - Disposable Compose lifecycle: passed for clean setup, operator backup,
   in-place upgrade from the pre-`0012` baseline, clean-volume restore, and
-  backup-based rollback.
+  backup-based rollback, including audit history, waiting work, Decision, and
+  DownloadTask associations.
 - Container publishing workflow: statically validated for `linux/amd64` and
   `linux/arm64`, GHCR tags, BuildKit provenance, SBOM, and GitHub attestation;
   registry publication still requires an actual GitHub Actions run.
@@ -808,6 +836,12 @@ Verified on 2026-07-22 with `make verify` after migration `0012`:
 - Schedule integration evidence covers UTC-to-instance-timezone rendering,
   one-time missing notification, acquired-elsewhere recovery, and the absence of
   download tasks from schedule processing.
+- Soak acceptance evidence covers incomplete-preflight refusal, idempotent start,
+  the exact seven-day boundary, redacted reporting, cross-feed observation counts,
+  and duplicate task identity signals.
+- Alias correction evidence proves a newly arriving episode matches after an
+  explicit subscription alias update while the earlier unmatched record remains
+  historical evidence.
 
 The two-feed/two-anime external acceptance and seven-day real-feed soak remain
 runtime work and are not inferred from the automated suites.

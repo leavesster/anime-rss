@@ -1,4 +1,4 @@
-.PHONY: bootstrap bootstrap-web format lint lint-web typecheck typecheck-web test test-web test-unit test-integration migrate run run-web build-web verify verify-backend verify-web acceptance-compose
+.PHONY: bootstrap bootstrap-web format lint lint-web typecheck typecheck-web test test-web test-unit test-integration migrate run run-web build-web verify verify-backend verify-web acceptance-compose acceptance-soak-preflight acceptance-soak-start acceptance-soak-status acceptance-soak-report
 
 PYTHON := .venv/bin/python
 
@@ -58,3 +58,15 @@ verify: verify-backend verify-web
 
 acceptance-compose:
 	./scripts/acceptance-compose.sh
+
+acceptance-soak-preflight:
+	$(PYTHON) -m anime_rss acceptance preflight --data-dir data
+
+acceptance-soak-start:
+	$(PYTHON) -m anime_rss acceptance start --data-dir data
+
+acceptance-soak-status:
+	$(PYTHON) -m anime_rss acceptance status --data-dir data
+
+acceptance-soak-report:
+	$(PYTHON) -m anime_rss acceptance report --data-dir data

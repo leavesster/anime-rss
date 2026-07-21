@@ -126,6 +126,45 @@ def test_historical_candidates_require_backfill_preview_and_explicit_commit(
         assert decision["candidate_snapshot"]["release_group"] == "Nix-Raws"
 
 
+def test_manual_alias_correction_matches_later_entries(tmp_path: Path) -> None:
+    current_rss = [_rss("[Group] Unexpected Show - 01 [1080p AVC][CHS]", "1" * 40)]
+    feed_transport = httpx.MockTransport(
+        lambda request: httpx.Response(200, content=current_rss[0])
+    )
+    with TestClient(
+        create_app(_settings(tmp_path, "alias.sqlite3"), feed_transport=feed_transport)
+    ) as client:
+        anime = client.post("/api/v1/catalog/anime", json={"title": "Canonical Show"}).json()
+        subscription = client.post(
+            "/api/v1/subscriptions",
+            json={
+                "anime_id": anime["id"],
+                "rules": {"fallback_wait_minutes": 0},
+            },
+        ).json()
+        feed = client.post(
+            "/api/v1/feeds", json={"name": "Alias", "url": "https://feed.test/rss"}
+        ).json()
+        client.post(f"/api/v1/feeds/{feed['id']}/refresh")
+        assert client.get("/api/v1/selection/episodes").json() == []
+
+        corrected = client.patch(
+            f"/api/v1/subscriptions/{subscription['id']}",
+            headers={"If-Match": str(subscription["version"])},
+            json={"aliases": ["Unexpected Show"]},
+        )
+        assert corrected.status_code == 200
+        assert "unexpectedshow" in corrected.json()["match_keys"]
+
+        current_rss[0] = _rss("[Group] Unexpected Show - 02 [1080p AVC][CHS]", "2" * 40)
+        client.post(f"/api/v1/feeds/{feed['id']}/refresh")
+
+        episodes = client.get("/api/v1/selection/episodes").json()
+        assert [(episode["episode_key"], episode["state"]) for episode in episodes] == [
+            ("2", "decided")
+        ]
+
+
 def test_fallback_deadline_survives_and_commits_when_due(tmp_path: Path) -> None:
     current = [datetime(2026, 7, 21, 12, 0, tzinfo=UTC)]
 
