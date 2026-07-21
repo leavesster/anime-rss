@@ -115,7 +115,7 @@ future extraction. Event handlers are idempotent.
 | `recognition` | parsed-title results, match attempts, candidates, confidence, corrections | deterministic parsing, anime/episode matching, explanations | preferences or downloader tasks |
 | `subscriptions` | subscriptions, rule profiles, activation cutoffs, lifecycle | effective rules and aliases linked to a subscription | candidate ranking or schedule state |
 | `selection` | waiting state, decisions, manual overrides, rejections, upgrade plans | hard filters, lexicographic comparison, fallback timers, backfill preview, V2/V3 policy | external downloader calls |
-| `schedule` | expected episodes, calendar state, missing-notification markers | weekly expectation projection, timezone calendar, episode history, missing-state evaluation | candidates, decisions, or download requests |
+| `schedule` | expected episodes, episode-level overrides, calendar state, missing-notification markers | weekly baseline plus override projection, timezone calendar, episode history, missing-state evaluation | candidates, decisions, or download requests |
 | `downloads` | qBittorrent configuration, submission attempts, idempotency keys, task links, observed state | default path/category/tags, submit/cancel/retry/reconcile | deciding which release should win |
 | `notifications` | notification intents, delivery attempts, in-app notifications | policy for when to notify, JSON webhook delivery and retry | originating business decisions |
 | `audit` | append-only administrator-facing events | searchable history and redacted diagnostic context | workflow coordination |

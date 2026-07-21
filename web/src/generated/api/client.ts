@@ -49,6 +49,10 @@ export type AnimeScheduleUpdate = components["schemas"]["AnimeScheduleUpdateRequ
 export type ExpectedEpisode = components["schemas"]["ExpectedEpisodeResponse"];
 export type CalendarDay = components["schemas"]["CalendarDayResponse"];
 export type ScheduleSync = components["schemas"]["ScheduleSyncResponse"];
+export type EpisodeScheduleOverride =
+  components["schemas"]["EpisodeScheduleOverrideResponse"];
+export type EpisodeScheduleOverrideRequest =
+  components["schemas"]["EpisodeScheduleOverrideRequest"];
 
 const client = createClient<paths>({ baseUrl: "" });
 
@@ -498,6 +502,52 @@ export async function listAnimeEpisodeHistory(animeId: string): Promise<Expected
       params: { path: { anime_id: animeId }, query: { limit: 200 } },
     }),
   );
+}
+
+export async function listEpisodeScheduleOverrides(
+  animeId: string,
+): Promise<EpisodeScheduleOverride[]> {
+  return unwrap(
+    await client.GET("/api/v1/schedule/anime/{anime_id}/overrides", {
+      params: { path: { anime_id: animeId } },
+    }),
+  );
+}
+
+export async function saveEpisodeScheduleOverride(
+  animeId: string,
+  episodeKey: string,
+  payload: EpisodeScheduleOverrideRequest,
+  version?: number,
+): Promise<EpisodeScheduleOverride> {
+  return unwrap(
+    await client.PUT("/api/v1/schedule/anime/{anime_id}/overrides/{episode_key}", {
+      params: {
+        path: { anime_id: animeId, episode_key: episodeKey },
+        header: { "if-match": version },
+      },
+      body: payload,
+    }),
+  );
+}
+
+export async function deleteEpisodeScheduleOverride(
+  animeId: string,
+  episodeKey: string,
+  version?: number,
+): Promise<void> {
+  const result = await client.DELETE(
+    "/api/v1/schedule/anime/{anime_id}/overrides/{episode_key}",
+    {
+      params: {
+        path: { anime_id: animeId, episode_key: episodeKey },
+        header: { "if-match": version },
+      },
+    },
+  );
+  if (result.error !== undefined) {
+    throw new ApiError(errorMessage(result.error), result.response.status);
+  }
 }
 
 export async function refreshSchedule(): Promise<{

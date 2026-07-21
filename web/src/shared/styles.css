@@ -254,7 +254,7 @@ a.compact-row:hover { background: var(--surface-soft); }
 .catalog-search { max-width: none; }
 .catalog-search .button { flex: 0 0 auto; }
 .catalog-results article { min-height: 66px; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 13px; border-bottom: 1px solid var(--soft-line); }
-.dialog--wide { width: min(760px, 100%); }
+.dialog--wide { width: min(860px, 100%); }
 .episode-acquired-form { display: grid; grid-template-columns: minmax(180px, 1fr) auto; align-items: end; gap: 10px; margin-bottom: 18px; }
 .episode-control-list { display: grid; gap: 18px; }
 .episode-control { border-top: 1px solid var(--line); padding-top: 16px; }
@@ -446,6 +446,18 @@ a.compact-row:hover { background: var(--surface-soft); }
 
 .schedule-form { display: grid; grid-template-columns: 1.2fr .7fr 1fr 1fr 1.2fr; align-items: end; gap: 12px; padding: 16px; background: var(--surface-soft); border: 1px solid var(--line); border-radius: 8px; }
 .schedule-form__action { grid-column: 1 / -1; display: flex; justify-content: flex-end; }
+.schedule-overrides { display: grid; gap: 12px; margin-top: 24px; padding-top: 22px; border-top: 1px solid var(--line); }
+.schedule-override-form { display: grid; grid-template-columns: .7fr 1.1fr 1.2fr; align-items: end; gap: 12px; }
+.schedule-override-cancelled { min-height: 40px; margin: 0; }
+.schedule-override-actions { grid-column: 2 / -1; display: flex; justify-content: flex-end; gap: 8px; }
+.schedule-overrides__empty { padding: 10px 2px; }
+.schedule-override-list { display: grid; overflow: hidden; border: 1px solid var(--line); border-radius: 8px; }
+.schedule-override-list article { min-height: 58px; display: grid; grid-template-columns: 110px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 9px 10px 9px 13px; border-bottom: 1px solid var(--soft-line); }
+.schedule-override-list article:last-child { border-bottom: 0; }
+.schedule-override-key, .schedule-override-time { min-width: 0; display: grid; gap: 4px; }
+.schedule-override-key strong, .schedule-override-time strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.schedule-override-key small, .schedule-override-time small { overflow: hidden; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.schedule-override-row-actions { display: flex; gap: 5px; }
 .schedule-history { margin-top: 24px; }
 .schedule-history__list { display: grid; overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
 .schedule-history__list article { min-height: 54px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 9px 12px; border-bottom: 1px solid var(--soft-line); }
@@ -476,6 +488,8 @@ a.compact-row:hover { background: var(--surface-soft); }
   .dependency-grid article:nth-child(2) { border-right: 0; }
   .dependency-grid article:nth-child(-n+2) { border-bottom: 1px solid var(--soft-line); }
   .schedule-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .schedule-override-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .schedule-override-actions { grid-column: 1 / -1; }
 }
 
 @media (max-width: 780px) {
@@ -629,6 +643,10 @@ a.compact-row:hover { background: var(--surface-soft); }
   .schedule-form { grid-template-columns: 1fr; }
   .schedule-form__action { grid-column: 1; }
   .schedule-form__action .button { width: 100%; }
+  .schedule-override-form { grid-template-columns: 1fr; }
+  .schedule-override-actions { grid-column: 1; align-items: stretch; flex-direction: column-reverse; }
+  .schedule-override-actions .button { width: 100%; }
+  .schedule-override-list article { grid-template-columns: 76px minmax(0, 1fr) auto; gap: 8px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

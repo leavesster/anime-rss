@@ -150,3 +150,194 @@ def test_acceptable_fallback_suppresses_missing_warning(tmp_path: Path) -> None:
         history = client.get(f"/api/v1/schedule/anime/{anime['id']}/episodes").json()
         assert history[0]["state"] == "scheduled"
         assert history[0]["has_acceptable_candidate"] is True
+
+
+def test_episode_overrides_cover_delays_double_episodes_specials_and_cancellations(
+    tmp_path: Path,
+) -> None:
+    current = [datetime(2026, 7, 20, 0, 0, tzinfo=UTC)]
+
+    def clock() -> datetime:
+        return current[0]
+
+    with TestClient(create_app(_settings(tmp_path), clock=clock)) as client:
+        client.put(
+            "/api/v1/system/settings",
+            headers={"If-Match": "0"},
+            json={
+                "timezone": "UTC",
+                "interface_language": "zh-CN",
+                "missing_episode_grace_hours": 24,
+            },
+        )
+        anime = client.post("/api/v1/catalog/anime", json={"title": "Irregular Anime"}).json()
+        client.put(
+            f"/api/v1/catalog/anime/{anime['id']}/schedule",
+            json={
+                "air_date": "2026-07-20",
+                "episode_count": 12,
+                "airing_weekday": 0,
+                "airing_time": "01:00",
+                "schedule_timezone": "UTC",
+            },
+        )
+        client.post("/api/v1/subscriptions", json={"anime_id": anime["id"]})
+        assert client.post("/api/v1/schedule/sync").json()["generated"] == 2
+
+        delayed_at = "2026-07-22T03:00:00Z"
+        delayed = client.put(
+            f"/api/v1/schedule/anime/{anime['id']}/overrides/1",
+            headers={"If-Match": "0"},
+            json={"expected_at": delayed_at, "note": "provider postponement"},
+        )
+        assert delayed.status_code == 200
+        assert delayed.json()["version"] == 1
+        idempotent = client.put(
+            f"/api/v1/schedule/anime/{anime['id']}/overrides/1",
+            headers={"If-Match": "1"},
+            json={"expected_at": delayed_at, "note": "provider postponement"},
+        )
+        assert idempotent.json()["version"] == 1
+
+        episode_two = client.put(
+            f"/api/v1/schedule/anime/{anime['id']}/overrides/2",
+            json={"expected_at": delayed_at, "note": "double episode"},
+        ).json()
+        special = client.put(
+            f"/api/v1/schedule/anime/{anime['id']}/overrides/SP1",
+            json={"expected_at": delayed_at, "source": "provider", "note": "special"},
+        ).json()
+        assert episode_two["version"] == 1
+        assert special["source"] == "provider"
+
+        synced = client.post("/api/v1/schedule/sync").json()
+        assert synced["generated"] == 3
+        calendar = client.get("/api/v1/schedule/calendar", params={"days": 8}).json()
+        same_time = [
+            episode
+            for day in calendar
+            for episode in day["episodes"]
+            if episode["expected_at"] == "2026-07-22T03:00:00Z"
+        ]
+        assert {episode["episode_key"] for episode in same_time} == {"1", "2", "SP1"}
+        assert (
+            next(item for item in same_time if item["episode_key"] == "SP1")["schedule_source"]
+            == "provider"
+        )
+        assert client.get("/api/v1/downloads/tasks").json() == []
+        assert client.get("/api/v1/selection/decisions").json() == []
+
+        cancelled = client.put(
+            f"/api/v1/schedule/anime/{anime['id']}/overrides/2",
+            headers={"If-Match": str(episode_two["version"])},
+            json={"cancelled": True, "note": "broadcast cancelled"},
+        )
+        assert cancelled.status_code == 200
+        assert cancelled.json()["version"] == 2
+        client.post("/api/v1/schedule/sync")
+        history = client.get(f"/api/v1/schedule/anime/{anime['id']}/episodes").json()
+        assert next(item for item in history if item["episode_key"] == "2")["state"] == "inactive"
+        calendar = client.get("/api/v1/schedule/calendar", params={"days": 8}).json()
+        assert "2" not in {
+            episode["episode_key"] for day in calendar for episode in day["episodes"]
+        }
+
+        moved_outside_horizon = client.put(
+            f"/api/v1/schedule/anime/{anime['id']}/overrides/SP1",
+            headers={"If-Match": str(special["version"])},
+            json={"expected_at": "2026-08-10T03:00:00Z", "source": "provider"},
+        )
+        assert moved_outside_horizon.status_code == 200
+        client.post("/api/v1/schedule/sync")
+        history = client.get(f"/api/v1/schedule/anime/{anime['id']}/episodes").json()
+        assert next(item for item in history if item["episode_key"] == "SP1")["state"] == (
+            "inactive"
+        )
+
+        restored = client.delete(
+            f"/api/v1/schedule/anime/{anime['id']}/overrides/2",
+            headers={"If-Match": "2"},
+        )
+        assert restored.status_code == 204
+        client.post("/api/v1/schedule/sync")
+        history = client.get(f"/api/v1/schedule/anime/{anime['id']}/episodes").json()
+        restored_episode = next(item for item in history if item["episode_key"] == "2")
+        assert restored_episode["state"] == "scheduled"
+        assert restored_episode["expected_at"] == "2026-07-27T01:00:00Z"
+        assert restored_episode["schedule_source"] == "manual"
+
+        conflict = client.put(
+            f"/api/v1/schedule/anime/{anime['id']}/overrides/1",
+            headers={"If-Match": "99"},
+            json={"expected_at": "2026-07-23T03:00:00Z"},
+        )
+        assert conflict.status_code == 409
+        naive = client.put(
+            f"/api/v1/schedule/anime/{anime['id']}/overrides/OVA1",
+            json={"expected_at": "2026-07-23T03:00:00"},
+        )
+        assert naive.status_code == 422
+        invalid_key = client.put(
+            f"/api/v1/schedule/anime/{anime['id']}/overrides/bad%20key",
+            json={"expected_at": "2026-07-23T03:00:00Z"},
+        )
+        assert invalid_key.status_code == 422
+
+        overrides = client.get(f"/api/v1/schedule/anime/{anime['id']}/overrides").json()
+        assert {item["episode_key"] for item in overrides} == {"1", "SP1"}
+        audit_types = {event["event_type"] for event in client.get("/api/v1/audit/events").json()}
+        assert {
+            "schedule.override_created",
+            "schedule.override_updated",
+            "schedule.override_deleted",
+        } <= audit_types
+
+
+def test_missing_notification_uses_overridden_time_and_resets_after_reschedule(
+    tmp_path: Path,
+) -> None:
+    current = [datetime(2026, 7, 20, 0, 0, tzinfo=UTC)]
+
+    def clock() -> datetime:
+        return current[0]
+
+    with TestClient(create_app(_settings(tmp_path), clock=clock)) as client:
+        anime = client.post("/api/v1/catalog/anime", json={"title": "Delayed Anime"}).json()
+        client.put(
+            f"/api/v1/catalog/anime/{anime['id']}/schedule",
+            json={
+                "air_date": "2026-07-20",
+                "episode_count": 1,
+                "airing_weekday": 0,
+                "airing_time": "01:00",
+                "schedule_timezone": "UTC",
+            },
+        )
+        client.post("/api/v1/subscriptions", json={"anime_id": anime["id"]})
+        client.post("/api/v1/schedule/sync")
+        override = client.put(
+            f"/api/v1/schedule/anime/{anime['id']}/overrides/1",
+            json={"expected_at": "2026-07-21T01:00:00Z"},
+        ).json()
+
+        current[0] = datetime(2026, 7, 21, 2, 0, tzinfo=UTC)
+        before_grace = client.post("/api/v1/schedule/sync").json()
+        assert before_grace["missing"] == 0
+        assert before_grace["notifications"] == 0
+
+        current[0] = datetime(2026, 7, 22, 2, 0, tzinfo=UTC)
+        missing = client.post("/api/v1/schedule/sync").json()
+        assert missing["missing"] == 1
+        assert missing["notifications"] == 1
+
+        postponed_again = client.put(
+            f"/api/v1/schedule/anime/{anime['id']}/overrides/1",
+            headers={"If-Match": str(override["version"])},
+            json={"expected_at": "2026-07-24T01:00:00Z"},
+        )
+        assert postponed_again.status_code == 200
+        recovered = client.post("/api/v1/schedule/sync").json()
+        assert recovered["missing"] == 0
+        history = client.get(f"/api/v1/schedule/anime/{anime['id']}/episodes").json()
+        assert history[0]["state"] == "scheduled"
+        assert history[0]["missing_notified_at"] is None

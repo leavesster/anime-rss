@@ -86,6 +86,8 @@ packaged as a first-run authenticated, recoverable Compose service.
   subscription, selection, and instance-setting public query DTOs only.
 - Durable expected episodes generated from the first air date at seven-day
   intervals, bounded by the known episode count and current subscription epoch.
+- Versioned per-episode overrides for postponements, double episodes, specials,
+  cancellations, split-cour dates, and future provider episode data.
 - UTC schedule storage with calendar rendering in the administrator-selected
   IANA timezone.
 - Today plus seven-day calendar and per-anime expected-episode history.
@@ -172,7 +174,8 @@ packaged as a first-run authenticated, recoverable Compose service.
 - Dashboard failed-work summary plus candidate confirmation and release-mapping
   controls.
 - Eight-day airing calendar, missing-episode warning list, editable airing
-  metadata, per-anime episode history, and instance locale settings.
+  metadata and episode overrides, per-anime episode history, and instance locale
+  settings.
 
 ## 3. Decision Log
 
@@ -734,9 +737,8 @@ subsequent numeric episodes are seven days apart, stop at the known episode
 count, and begin no earlier than the subscription activation epoch. Bangumi
 times use `Asia/Tokyo`; manual schedules require an explicit IANA timezone.
 
-**Tradeoff:** Split cours, postponements, double episodes, and specials require a
-manual schedule correction or future provider episode data. The generator does
-not guess irregular broadcasts.
+**Tradeoff:** The generator does not guess irregular broadcasts. Corrections are
+explicit episode-level facts supplied manually or by a future provider adapter.
 
 ### SCH-003: Missing means no acquisition and no acceptable fallback
 
@@ -746,6 +748,32 @@ following subscription becomes missing after the instance grace period, once.
 
 **Reason:** The alert should identify absent usable releases, not pressure a
 still-running selection wait or repeatedly notify on every scheduler cycle.
+
+### SCH-004: Irregular broadcasts are versioned episode-level overrides
+
+**Choice:** `schedule_episode_overrides` owns one row per anime and episode key.
+An override may replace the timezone-aware expected time, add an arbitrary safe
+key such as `SP1` or `OVA1`, or mark the episode cancelled. Two keys may share a
+timestamp, which represents a double-episode broadcast. `source` is `manual` in
+the interface and can identify a future provider without changing the merge
+contract. Split cours are represented by explicit rows for their resumed dates.
+
+The synchronizer builds the numeric weekly baseline, overlays these rows, and
+then reconciles the durable projection. Cancelled keys and keys moved outside
+the activation-to-eight-day horizon make an existing expected row `inactive`
+rather than deleting it. Deleting an override restores the weekly baseline on
+the next sync. A moved or reactivated row clears its stale missing-notification
+claim and is evaluated once at the corrected time.
+
+Mutations are idempotent when values do not change, accept `If-Match` optimistic
+versions, and append create, update, and delete audit events. The merge can only
+emit `EpisodeMissing.v1`; tests assert that overrides cannot create Candidate,
+Decision, or DownloadTask records.
+
+**Reason:** Irregular schedules need a durable correction layer, but they remain
+advisory broadcast facts. Keeping them inside `schedule` preserves the boundary
+that only recognition and selection can cause acquisition work, while inactive
+history makes corrections and later baseline restoration inspectable.
 
 ### SYS-001: Locale and missing threshold are versioned instance settings
 
@@ -806,8 +834,6 @@ attempts are not silently rewritten.
 - Restore requires an explicit service restart after upload.
 - The Webhook adapter emits generic JSON; provider-specific message formats are
   not implemented.
-- Weekly schedule generation does not model postponements, split cours, specials,
-  or provider episode-level overrides yet.
 
 ## 6. Next Planned Slice
 
@@ -823,12 +849,12 @@ The next coherent delivery unit is `real-feed release acceptance`:
 
 ## 7. Current Verification Evidence
 
-Verified on 2026-07-22 with `make verify` after migration `0013`:
+Verified on 2026-07-22 with `make verify` after migration `0014`:
 
 - Ruff formatting and lint: passed.
 - Pyright: passed with zero errors.
-- Backend: 73 tests passed, 88.17% statement coverage.
-- Frontend: ESLint and TypeScript passed; 7 Vitest tests passed.
+- Backend: 75 tests passed, 88.28% statement coverage.
+- Frontend: ESLint and TypeScript passed; 8 Vitest tests passed.
 - Production Vite build: passed.
 - Disposable Compose lifecycle: passed for clean setup, operator backup,
   in-place upgrade from the pre-`0012` baseline, clean-volume restore, and
@@ -856,6 +882,13 @@ Verified on 2026-07-22 with `make verify` after migration `0013`:
 - Schedule integration evidence covers UTC-to-instance-timezone rendering,
   one-time missing notification, acquired-elsewhere recovery, and the absence of
   download tasks from schedule processing.
+- Episode-override evidence covers postponements, double episodes, special keys,
+  cancellations, split-cour-style explicit dates, horizon deactivation, baseline
+  restoration, optimistic conflicts, timezone validation, corrected missing
+  timing, audit history, and frontend create/edit/delete commands. The `0014`
+  migration passed a `0013 -> head -> 0013 -> head` round trip. A disposable
+  no-auth browser instance verified those commands at 1280px and 390px with no
+  horizontal overflow or console errors.
 - Soak acceptance evidence covers incomplete-preflight refusal, idempotent start,
   the exact seven-day boundary, redacted reporting, cross-feed observation counts,
   and duplicate task identity signals.
@@ -864,4 +897,7 @@ Verified on 2026-07-22 with `make verify` after migration `0013`:
   historical evidence.
 
 The two-feed/two-anime external acceptance and seven-day real-feed soak remain
-runtime work and are not inferred from the automated suites.
+runtime work and are not inferred from the automated suites. The 2026-07-22
+preflight found administrator setup and the durable scheduler ready, but only
+one healthy feed, zero following Bangumi anime, and no verified qBittorrent
+connection; it therefore correctly refused to start the seven-day clock.

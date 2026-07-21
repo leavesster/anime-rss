@@ -741,6 +741,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/schedule/anime/{anime_id}/overrides": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Overrides */
+        get: operations["list_overrides_api_v1_schedule_anime__anime_id__overrides_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedule/anime/{anime_id}/overrides/{episode_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put Override */
+        put: operations["put_override_api_v1_schedule_anime__anime_id__overrides__episode_key__put"];
+        post?: never;
+        /** Delete Override */
+        delete: operations["delete_override_api_v1_schedule_anime__anime_id__overrides__episode_key__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/schedule/missing": {
         parameters: {
             query?: never;
@@ -1471,6 +1506,52 @@ export interface components {
              * Format: date-time
              */
             latest_seen_at: string;
+        };
+        /** EpisodeScheduleOverrideRequest */
+        EpisodeScheduleOverrideRequest: {
+            /** Expected At */
+            expected_at?: string | null;
+            /**
+             * Cancelled
+             * @default false
+             */
+            cancelled: boolean;
+            /**
+             * Source
+             * @default manual
+             */
+            source: string;
+            /** Note */
+            note?: string | null;
+        };
+        /** EpisodeScheduleOverrideResponse */
+        EpisodeScheduleOverrideResponse: {
+            /** Id */
+            id: string;
+            /** Anime Id */
+            anime_id: string;
+            /** Episode Key */
+            episode_key: string;
+            /** Expected At */
+            expected_at: string | null;
+            /** Cancelled */
+            cancelled: boolean;
+            /** Source */
+            source: string;
+            /** Note */
+            note: string | null;
+            /** Version */
+            version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** EpisodeSlotResponse */
         EpisodeSlotResponse: {
@@ -3607,6 +3688,107 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ExpectedEpisodeResponse"][];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_overrides_api_v1_schedule_anime__anime_id__overrides_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                anime_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EpisodeScheduleOverrideResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_override_api_v1_schedule_anime__anime_id__overrides__episode_key__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "if-match"?: number | null;
+            };
+            path: {
+                anime_id: string;
+                episode_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EpisodeScheduleOverrideRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EpisodeScheduleOverrideResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_override_api_v1_schedule_anime__anime_id__overrides__episode_key__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "if-match"?: number | null;
+            };
+            path: {
+                anime_id: string;
+                episode_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

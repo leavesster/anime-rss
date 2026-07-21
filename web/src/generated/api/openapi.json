@@ -2113,6 +2113,187 @@
         }
       }
     },
+    "/api/v1/schedule/anime/{anime_id}/overrides": {
+      "get": {
+        "tags": [
+          "schedule"
+        ],
+        "summary": "List Overrides",
+        "operationId": "list_overrides_api_v1_schedule_anime__anime_id__overrides_get",
+        "parameters": [
+          {
+            "name": "anime_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Anime Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EpisodeScheduleOverrideResponse"
+                  },
+                  "title": "Response List Overrides Api V1 Schedule Anime  Anime Id  Overrides Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schedule/anime/{anime_id}/overrides/{episode_key}": {
+      "put": {
+        "tags": [
+          "schedule"
+        ],
+        "summary": "Put Override",
+        "operationId": "put_override_api_v1_schedule_anime__anime_id__overrides__episode_key__put",
+        "parameters": [
+          {
+            "name": "anime_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Anime Id"
+            }
+          },
+          {
+            "name": "episode_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Episode Key"
+            }
+          },
+          {
+            "name": "if-match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EpisodeScheduleOverrideRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EpisodeScheduleOverrideResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "schedule"
+        ],
+        "summary": "Delete Override",
+        "operationId": "delete_override_api_v1_schedule_anime__anime_id__overrides__episode_key__delete",
+        "parameters": [
+          {
+            "name": "anime_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Anime Id"
+            }
+          },
+          {
+            "name": "episode_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Episode Key"
+            }
+          },
+          {
+            "name": "if-match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/schedule/missing": {
       "get": {
         "tags": [
@@ -4211,6 +4392,120 @@
           "latest_seen_at"
         ],
         "title": "EpisodeGroupResponse"
+      },
+      "EpisodeScheduleOverrideRequest": {
+        "properties": {
+          "expected_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected At"
+          },
+          "cancelled": {
+            "type": "boolean",
+            "title": "Cancelled",
+            "default": false
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "manual"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "title": "EpisodeScheduleOverrideRequest"
+      },
+      "EpisodeScheduleOverrideResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "anime_id": {
+            "type": "string",
+            "title": "Anime Id"
+          },
+          "episode_key": {
+            "type": "string",
+            "title": "Episode Key"
+          },
+          "expected_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected At"
+          },
+          "cancelled": {
+            "type": "boolean",
+            "title": "Cancelled"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "anime_id",
+          "episode_key",
+          "expected_at",
+          "cancelled",
+          "source",
+          "note",
+          "version",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "EpisodeScheduleOverrideResponse"
       },
       "EpisodeSlotResponse": {
         "properties": {

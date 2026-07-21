@@ -31,7 +31,8 @@ The feed-to-qBittorrent product path and self-hosted delivery layer are implemen
 - portable SQLite and master-key backups, retention, and restart-safe restore staging
 - production image, Compose data volume, readiness health check, and non-root runtime
 - versioned implementation decision record for handoff and review
-- advisory airing calendar, per-anime episode history, and one-time missing warnings
+- advisory airing calendar, versioned per-episode overrides, episode history, and one-time
+  missing warnings
 
 The application is designed for one administrator and one process. Put it behind
 HTTPS before exposing it outside a trusted network and set
@@ -156,6 +157,9 @@ POST   /api/v1/downloads/process
 GET    /api/v1/schedule/calendar
 GET    /api/v1/schedule/missing
 GET    /api/v1/schedule/anime/{anime_id}/episodes
+GET    /api/v1/schedule/anime/{anime_id}/overrides
+PUT    /api/v1/schedule/anime/{anime_id}/overrides/{episode_key}
+DELETE /api/v1/schedule/anime/{anime_id}/overrides/{episode_key}
 POST   /api/v1/schedule/sync
 GET    /api/v1/operations/overview
 GET    /api/v1/operations/jobs
