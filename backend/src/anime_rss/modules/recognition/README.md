@@ -18,7 +18,12 @@ consumes `ReleaseIdentified.v1` and reads release observations only through the
 ## Invariants
 
 - Parser output is determined by title plus `PARSER_VERSION`.
+- The versioned fixture contract expands to at least 300 complete golden cases;
+  deterministic Unicode property cases enforce normalization, output bounds,
+  and repeatability without network data.
 - Episode numbers use canonical decimal strings, never floating point.
+- Series keys are bounded to their 300-character persistence contract after
+  case folding, and revisions are limited to three digits.
 - A release has one active candidate; remapping supersedes rather than rewrites
   the previous candidate.
 - Series grouping uses an exact normalized key; fuzzy matching is forbidden.

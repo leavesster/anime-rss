@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 
-PARSER_VERSION = "title-rules.v1"
+PARSER_VERSION = "title-rules.v2"
+MAX_SERIES_KEY_LENGTH = 300
 
 
 class MatchConfidence(StrEnum):
@@ -45,18 +46,18 @@ _GROUP = re.compile(r"^\s*[\[【](?P<group>[^\]】]{1,120})[\]】]\s*")
 _SEASON_EPISODE = re.compile(
     r"(?i)\bS(?P<season>\d{1,2})E(?P<start>\d{1,3}(?:\.\d+)?)"
     r"(?:\s*[-~]\s*(?:E)?(?P<end>\d{1,3}(?:\.\d+)?))?"
-    r"(?:V(?P<revision>\d+))?\b"
+    r"(?:V(?P<revision>[1-9]\d{0,2}))?\b"
 )
 _DASH_EPISODE = re.compile(
     r"(?:^|\s)[-\u2013\u2014]\s*(?P<start>\d{1,3}(?:\.\d+)?)"
     r"(?:\s*[-~]\s*(?P<end>\d{1,3}(?:\.\d+)?))?"
-    r"(?:V(?P<revision>\d+))?(?=\s|$|\(|\[)",
+    r"(?:V(?P<revision>[1-9]\d{0,2}))?(?=\s|$|\(|\[)",
     re.IGNORECASE,
 )
 _BRACKET_EPISODE = re.compile(
     r"[\[【](?P<start>\d{1,3}(?:\.\d+)?)"
     r"(?:\s*[-~]\s*(?P<end>\d{1,3}(?:\.\d+)?))?"
-    r"(?:V(?P<revision>\d+))?[\]】]",
+    r"(?:V(?P<revision>[1-9]\d{0,2}))?[\]】]",
     re.IGNORECASE,
 )
 
@@ -79,7 +80,8 @@ def canonical_episode_number(value: str | None) -> str | None:
 
 def normalize_series_key(value: str) -> str:
     normalized = unicodedata.normalize("NFKC", value).casefold()
-    return "".join(character for character in normalized if character.isalnum())
+    key = "".join(character for character in normalized if character.isalnum())
+    return key[:MAX_SERIES_KEY_LENGTH]
 
 
 def _content_kind(title: str) -> ContentKind:

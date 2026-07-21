@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "parser_version": "title-rules.v2",
+  "minimum_expanded_cases": 300,
+  "matrix": {
+    "groups": [
+      {"source": "[Lilith-Raws]", "expected": "Lilith-Raws"},
+      {"source": "[Nekomoe kissaten]", "expected": "Nekomoe kissaten"},
+      {"source": "【幻之字幕组】", "expected": "幻之字幕组"},
+      {"source": "[黒ネズミたち]", "expected": "黒ネズミたち"}
+    ],
+    "series": [
+      {"source": "Example Anime", "normalized": "Example Anime", "key": "exampleanime"},
+      {"source": "无自觉圣女", "normalized": "无自觉圣女", "key": "无自觉圣女"},
+      {"source": "動畫 名稱", "normalized": "動畫 名稱", "key": "動畫名稱"},
+      {"source": "ＡＮＩＭＥ　１２", "normalized": "ANIME 12", "key": "anime12"},
+      {"source": "ぼっち・ざ・ろっく！", "normalized": "ぼっち・ざ・ろっく!", "key": "ぼっちざろっく"}
+    ],
+    "episodes": [
+      {"source": " - 01", "season": null, "start": "1", "end": null, "key": "1", "revision": 1},
+      {"source": " S01E02V2", "season": 1, "start": "2", "end": null, "key": "2", "revision": 2},
+      {"source": " — 07.50V3", "season": null, "start": "7.5", "end": null, "key": "7.5", "revision": 3},
+      {"source": " [12-13]", "season": null, "start": "12", "end": "13", "key": "12-13", "revision": 1}
+    ],
+    "profiles": [
+      {"source": " [1080p AVC][CHS]", "resolution": "1080p", "codec": "AVC", "subtitles": "zh-Hans"},
+      {"source": " (1920x1080 HEVC) [简繁]", "resolution": "1080p", "codec": "HEVC", "subtitles": "zh-Hans+zh-Hant"},
+      {"source": " [720p AV1][RAW]", "resolution": "720p", "codec": "AV1", "subtitles": "raw"},
+      {"source": " [2160p x265][CHT]", "resolution": "2160p", "codec": "HEVC", "subtitles": "zh-Hant"}
+    ]
+  },
+  "focused_cases": [
+    {
+      "name": "missing group remains medium confidence",
+      "title": "Example Anime - 03 [1080p]",
+      "expected": {"release_group": null, "series_title": "Example Anime", "episode_key": "3", "confidence": "medium", "reason_code": "parsed_series_episode_without_group"}
+    },
+    {
+      "name": "localized title before slash is canonical",
+      "title": "[Group] 中文标题 / Japanese Title - 04 [1080p HEVC]",
+      "expected": {"series_title": "中文标题", "series_key": "中文标题", "episode_key": "4", "video_codec": "HEVC"}
+    },
+    {
+      "name": "batch without episode stays explainable",
+      "title": "[Group] Example Anime Complete Batch [1080p]",
+      "expected": {"content_kind": "batch", "episode_key": null, "confidence": "low", "reason_code": "episode_not_found"}
+    },
+    {
+      "name": "movie marker is descriptive",
+      "title": "[Group] Example Anime Movie - 01 [1080p]",
+      "expected": {"content_kind": "movie", "episode_key": "1", "confidence": "high"}
+    },
+    {
+      "name": "special without numeric episode stays unmatched",
+      "title": "[Group] Example Anime OVA [1080p]",
+      "expected": {"content_kind": "special", "episode_key": null, "reason_code": "episode_not_found"}
+    },
+    {
+      "name": "episode without series is low confidence",
+      "title": "[Group] - 05 [1080p]",
+      "expected": {"series_title": null, "episode_key": "5", "confidence": "low", "reason_code": "series_not_found"}
+    },
+    {
+      "name": "fullwidth title and metadata normalize first",
+      "title": "【字幕組】 Ａｎｉｍｅ　Ｎａｍｅ － ０６ [１２８０ｘ７２０ x264][簡]",
+      "expected": {"release_group": "字幕組", "series_title": "Anime Name", "series_key": "animename", "episode_key": "6", "resolution": "720p", "video_codec": "AVC", "subtitle_language": "zh-Hans"}
+    },
+    {
+      "name": "tilde range is canonical",
+      "title": "[Group] Example Anime - 08~09 [1080p]",
+      "expected": {"episode_start": "8", "episode_end": "9", "episode_key": "8-9"}
+    },
+    {
+      "name": "four decimal places are rejected",
+      "title": "[Group] Example Anime - 07.5000 [1080p]",
+      "expected": {"episode_key": null, "confidence": "low", "reason_code": "episode_not_found"}
+    },
+    {
+      "name": "zero revision is rejected",
+      "title": "[Group] Example Anime - 07V000 [1080p]",
+      "expected": {"episode_key": null, "revision": 1, "confidence": "low", "reason_code": "episode_not_found"}
+    },
+    {
+      "name": "empty input is bounded and explainable",
+      "title": "　 ",
+      "expected": {"source_title": "", "release_group": null, "series_title": null, "episode_key": null, "confidence": "low", "reason_code": "episode_not_found"}
+    }
+  ]
+}

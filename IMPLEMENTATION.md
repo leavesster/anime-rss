@@ -54,7 +54,7 @@ packaged as a first-run authenticated, recoverable Compose service.
 
 ### Recognition
 
-- Pure deterministic parser identified by `title-rules.v1`.
+- Pure deterministic parser identified by `title-rules.v2`.
 - Release group, localized series title, season marker, decimal/range episode,
   revision, resolution, video codec, subtitle language, and content kind.
 - Immutable parse attempts for every release source observation.
@@ -582,6 +582,20 @@ but re-running deterministic code must not duplicate candidates or let a parser
 regression destroy a known-good mapping. Keeping attempt, Candidate, and Decision
 lifecycles separate preserves both retry safety and historical explanation.
 
+### REC-011: Parser fixtures are a versioned executable contract
+
+**Choice:** `parser-fixtures/title-rules.v2.json` defines a reviewable matrix that
+expands to 320 complete output snapshots plus focused malformed cases. A separate
+deterministic Unicode gate exercises 512 arbitrary strings and NFKC-equivalent
+forms. Rule v2 bounds post-casefold series keys to 300 characters and accepts
+revision suffixes only from `V1` through `V999`.
+
+**Reason:** A list of hand-picked happy paths does not protect parser behavior
+across subtitle groups, localized titles, episode syntaxes, and media tags.
+Casefold can expand Unicode text, and an unbounded numeric revision can exceed
+database integer limits. Versioned data makes behavior changes reviewable while
+property invariants protect termination, determinism, and persistence bounds.
+
 ### SEC-001: Setup is a database compare-and-create operation
 
 **Choice:** A clean database exposes only setup, login, status, and health. The
@@ -899,7 +913,7 @@ truth; a row is complete only when code and proportionate evidence both exist.
 | Episode span coverage | `0015`, domain/integration/migration/frontend tests | Complete |
 | Subscription lifecycle | All legal commands, archived view, revision-only completed behavior, and archived-stop integration coverage | Complete |
 | Unsupported release handling | `0016`, durable manual task origin, idempotent API, audit evidence, release-page command, backend/frontend tests | Complete |
-| Parser regression contract | Deterministic bounded parser and focused fixtures | Build the planned 300+ golden corpus and Unicode/property gates |
+| Parser regression contract | `title-rules.v2`, 320-case golden matrix, focused malformed cases, and 512-case Unicode/property gates | Complete |
 | HTTP consistency | CSRF token and some optimistic versions exist | Apply mutation idempotency, resource preconditions, cursor pagination, structured errors, and correlation IDs consistently |
 | Browser-origin security | Double-submit CSRF exists | Add Origin/Host validation and rate limits for setup, login, and connection tests |
 | Password KDF | Versioned salted scrypt is implemented and documented | Record a formal ADR deviation or migrate the plan's Argon2id choice |
@@ -908,17 +922,18 @@ truth; a row is complete only when code and proportionate evidence both exist.
 | Stable engineering gates | lint, typecheck, unit/integration, OpenAPI generation, Compose acceptance | Add doctor, checked OpenAPI drift, security scan, clean-room, and release-evidence commands |
 | External acceptance | Durable seven-day evidence tooling exists | Configure two real feeds, two Bangumi subscriptions, qBittorrent, then complete seven natural days |
 
-The next implementation unit is the parser regression corpus. Security and
-release gates then proceed as independent reviewable units; the seven-day clock
-starts only after its external preflight is genuinely satisfied.
+The next implementation unit is HTTP consistency. Security and release gates
+then proceed as independent reviewable units; the seven-day clock starts only
+after its external preflight is genuinely satisfied.
 
 ## 7. Current Verification Evidence
 
-Verified on 2026-07-22 with `make verify` after migration `0016`:
+Verified on 2026-07-22 with `make verify` after migration `0016` and parser
+`title-rules.v2`:
 
 - Ruff formatting and lint: passed.
 - Pyright: passed with zero errors.
-- Backend: 81 tests passed, 88.42% statement coverage.
+- Backend: 85 tests passed, 88.54% statement coverage.
 - Frontend: ESLint and TypeScript passed; 12 Vitest tests passed.
 - Production Vite build: passed.
 - Disposable Compose lifecycle: passed for clean setup, operator backup,
@@ -972,6 +987,12 @@ Verified on 2026-07-22 with `make verify` after migration `0016`:
   instance verified successful BTIH submission, existing-queue status, disabled
   pure-BTMH actions, and the Release table at desktop and 390px widths with no
   horizontal overflow or console errors.
+- Parser-regression evidence covers 320 full-output golden combinations across
+  subtitle groups, localized titles, episode forms, and media profiles; focused
+  malformed and unsupported shapes; and 512 deterministic Unicode cases checked
+  for NFKC equivalence, repeatability, and persistence bounds. Rule v2 also
+  proves bounded casefold expansion, 4096-character input truncation, and safe
+  rejection of zero or oversized revisions.
 - Soak acceptance evidence covers incomplete-preflight refusal, idempotent start,
   the exact seven-day boundary, redacted reporting, cross-feed observation counts,
   and duplicate task identity signals.
