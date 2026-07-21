@@ -37,6 +37,24 @@ The feed-to-qBittorrent product path and self-hosted delivery layer are implemen
 The application is designed for one administrator and one process. Put it behind
 HTTPS before exposing it outside a trusted network and set
 `ANIME_RSS_AUTH_COOKIE_SECURE=true` when TLS terminates at the service origin.
+IP-address access and `localhost` work by default. A hostname or reverse proxy
+must also declare its browser boundary:
+
+```bash
+ANIME_RSS_BROWSER_TRUSTED_HOSTS="anime.home,anime.example" \
+ANIME_RSS_BROWSER_TRUSTED_ORIGINS="https://anime.example" \
+ANIME_RSS_AUTH_COOKIE_SECURE=true \
+docker compose up -d
+```
+
+Trusted hosts are comma-separated hostnames and may use a leading `*.` wildcard.
+Trusted origins are exact comma-separated HTTP(S) origins including any non-default
+port. Keep the proxy's original `Host` header. The service rejects untrusted Host,
+cross-origin writes, and cross-site Fetch Metadata before business commands run.
+Setup and login allow five attempts per five minutes per client address; feed,
+qBittorrent, and Webhook connection tests allow ten attempts per minute. Because
+forwarded client IP headers are not trusted, clients behind one proxy intentionally
+share its conservative limit bucket.
 
 ## Docker Compose
 

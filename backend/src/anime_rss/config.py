@@ -25,6 +25,12 @@ class Settings(BaseSettings):
     auth_enabled: bool = True
     auth_cookie_secure: bool = False
     auth_session_days: int = Field(default=30, ge=1, le=365)
+    browser_trusted_hosts: str = "localhost,testserver"
+    browser_trusted_origins: str = ""
+    auth_rate_limit_attempts: int = Field(default=5, ge=1, le=100)
+    auth_rate_limit_window_seconds: int = Field(default=300, ge=1, le=3600)
+    connection_test_rate_limit_attempts: int = Field(default=10, ge=1, le=100)
+    connection_test_rate_limit_window_seconds: int = Field(default=60, ge=1, le=3600)
     backup_interval_hours: int = Field(default=24, ge=1, le=168)
     backup_retention_count: int = Field(default=7, ge=1, le=365)
     backup_max_restore_bytes: int = Field(default=512 * 1024 * 1024, ge=1024)
@@ -42,3 +48,15 @@ class Settings(BaseSettings):
     @property
     def resolved_master_key_file(self) -> Path:
         return self.master_key_file or self.data_dir / "keys" / "master.key"
+
+    @property
+    def resolved_browser_trusted_hosts(self) -> tuple[str, ...]:
+        return tuple(
+            value.strip() for value in self.browser_trusted_hosts.split(",") if value.strip()
+        )
+
+    @property
+    def resolved_browser_trusted_origins(self) -> tuple[str, ...]:
+        return tuple(
+            value.strip() for value in self.browser_trusted_origins.split(",") if value.strip()
+        )

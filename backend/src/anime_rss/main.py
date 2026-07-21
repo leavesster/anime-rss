@@ -23,6 +23,12 @@ from anime_rss.infrastructure.api import (
     enrich_openapi_contract,
     error_response,
 )
+from anime_rss.infrastructure.browser_security import (
+    BrowserOriginPolicy,
+    BrowserSecurityError,
+    RateLimit,
+    RequestRateLimiter,
+)
 from anime_rss.infrastructure.database import create_database_engine, create_session_factory
 from anime_rss.infrastructure.events import EventDispatcher, RegisteredHandler
 from anime_rss.infrastructure.http import SafeHttpClient
@@ -359,6 +365,33 @@ def create_app(
         },
     )
     app.state.settings = runtime_settings
+    browser_origin_policy = BrowserOriginPolicy(
+        trusted_hosts=runtime_settings.resolved_browser_trusted_hosts,
+        trusted_origins=runtime_settings.resolved_browser_trusted_origins,
+    )
+    request_rate_limiter = RequestRateLimiter()
+    rate_limits = {
+        "/api/v1/auth/setup": RateLimit(
+            runtime_settings.auth_rate_limit_attempts,
+            runtime_settings.auth_rate_limit_window_seconds,
+        ),
+        "/api/v1/auth/login": RateLimit(
+            runtime_settings.auth_rate_limit_attempts,
+            runtime_settings.auth_rate_limit_window_seconds,
+        ),
+        "/api/v1/feeds/test": RateLimit(
+            runtime_settings.connection_test_rate_limit_attempts,
+            runtime_settings.connection_test_rate_limit_window_seconds,
+        ),
+        "/api/v1/downloads/config/test": RateLimit(
+            runtime_settings.connection_test_rate_limit_attempts,
+            runtime_settings.connection_test_rate_limit_window_seconds,
+        ),
+        "/api/v1/notifications/config/test": RateLimit(
+            runtime_settings.connection_test_rate_limit_attempts,
+            runtime_settings.connection_test_rate_limit_window_seconds,
+        ),
+    }
 
     @app.exception_handler(HTTPException)
     async def http_error_handler(  # pyright: ignore[reportUnusedFunction]
@@ -510,6 +543,24 @@ def create_app(
         return await call_next(request)
 
     @app.middleware("http")
+    async def rate_limit_boundary(  # pyright: ignore[reportUnusedFunction]
+        request: Request, call_next: Any
+    ) -> Any:
+        policy = rate_limits.get(request.url.path) if request.method == "POST" else None
+        if policy is not None:
+            client_host = request.client.host if request.client is not None else "unknown"
+            retry_after = request_rate_limiter.consume(f"{request.url.path}:{client_host}", policy)
+            if retry_after is not None:
+                return error_response(
+                    request,
+                    status_code=429,
+                    code="rate_limited",
+                    message="request rate limit exceeded",
+                    headers={"Retry-After": str(retry_after)},
+                )
+        return await call_next(request)
+
+    @app.middleware("http")
     async def authentication_boundary(  # pyright: ignore[reportUnusedFunction]
         request: Request, call_next: Any
     ) -> Any:
@@ -558,6 +609,21 @@ def create_app(
                     code="csrf_validation_failed",
                     message="csrf validation failed",
                 )
+        return await call_next(request)
+
+    @app.middleware("http")
+    async def browser_security_boundary(  # pyright: ignore[reportUnusedFunction]
+        request: Request, call_next: Any
+    ) -> Any:
+        try:
+            browser_origin_policy.validate(request)
+        except BrowserSecurityError as error:
+            return error_response(
+                request,
+                status_code=error.status_code,
+                code=error.code,
+                message=error.message,
+            )
         return await call_next(request)
 
     @app.middleware("http")

@@ -142,6 +142,8 @@ packaged as a first-run authenticated, recoverable Compose service.
   password-reset CLI, and explicit logout.
 - HTTP-only session cookie plus readable CSRF cookie; every authenticated mutation
   must echo the CSRF value in `X-CSRF-Token`.
+- Trusted Host, same-origin browser-write, Fetch Metadata, and bounded sensitive
+  endpoint rate-limit enforcement.
 - One structured API error envelope with machine code, message, details, and the
   request correlation ID.
 - Durable 24-hour mutation idempotency, mandatory optimistic preconditions for
@@ -627,6 +629,28 @@ every authenticated non-safe method.
 **Reason:** Browser forms cannot create authenticated mutations, and the frontend
 does not need access to the session credential.
 
+### SEC-004: Browser authority is explicit and rate limits are local
+
+**Choice:** Every request validates `Host`. IP literals, `localhost`, and configured
+exact or wildcard hostnames are accepted. Unsafe browser requests with `Origin`
+must match either the request authority or an explicitly configured exact HTTP(S)
+origin; `Sec-Fetch-Site: cross-site` is rejected. This supports an HTTPS reverse
+proxy without trusting `X-Forwarded-*` headers or silently accepting arbitrary DNS
+names.
+
+Setup and login use a sliding window of five attempts per five minutes,
+isolated by path and direct client address. Feed, qBittorrent, and Webhook connection
+tests each allow ten attempts per minute. Limits are configurable, process-local,
+thread-safe, and bounded to 10,000 client/path buckets. `Retry-After` accompanies
+429 responses. Forwarded client addresses are deliberately ignored, so a reverse
+proxy shares one conservative bucket.
+
+**Reason:** Double-submit CSRF alone does not prevent DNS rebinding, hostile browser
+origins, password guessing, or expensive connection-test amplification. The V1
+single-process deployment does not need distributed rate-limit state, and trusting
+forwarded headers without an explicit proxy trust chain would let clients forge
+their identity.
+
 ### API-001: Successful mutations can be replayed for 24 hours
 
 **Choice:** Every API mutation may carry `Idempotency-Key`. Migration `0017`
@@ -975,17 +999,16 @@ truth; a row is complete only when code and proportionate evidence both exist.
 | Unsupported release handling | `0016`, durable manual task origin, idempotent API, audit evidence, release-page command, backend/frontend tests | Complete |
 | Parser regression contract | `title-rules.v2`, 320-case golden matrix, focused malformed cases, and 512-case Unicode/property gates | Complete |
 | HTTP consistency | `0017`, durable replay/conflict tests, version/precondition tests, cursor traversal tests, structured error tests, and checked OpenAPI/TypeScript contract | Complete |
-| Browser-origin security | Double-submit CSRF exists | Add Origin/Host validation and rate limits for setup, login, and connection tests |
+| Browser-origin security | Host/IP and proxy-origin policy, Fetch Metadata rejection, bounded per-client setup/login and connection-test limits, deployment documentation, and security integration tests | Complete |
 | Password KDF | Versioned salted scrypt is implemented and documented | Record a formal ADR deviation or migrate the plan's Argon2id choice |
 | Startup migration safety | Alembic startup migration and portable backups exist | Add migration lock and automatic consistent pre-migration backup |
 | qBittorrent contract | Adapter unit tests cover idempotent add/retry paths | Prove supported real versions, two-success external removal, and upgrade cancellation ordering |
 | Stable engineering gates | lint, typecheck, unit/integration, OpenAPI generation, Compose acceptance | Add doctor, checked OpenAPI drift, security scan, clean-room, and release-evidence commands |
 | External acceptance | Durable seven-day evidence tooling exists | Configure two real feeds, two Bangumi subscriptions, qBittorrent, then complete seven natural days |
 
-The next implementation unit is browser-origin security, followed by password
-KDF and startup migration safety. Release gates then proceed as independent
-reviewable units; the seven-day clock starts only after its external preflight is
-genuinely satisfied.
+The next implementation unit is the password KDF decision, followed by startup
+migration safety. Release gates then proceed as independent reviewable units; the
+seven-day clock starts only after its external preflight is genuinely satisfied.
 
 ## 7. Current Verification Evidence
 
@@ -994,7 +1017,7 @@ Verified on 2026-07-22 with `make verify` after migration `0017` and parser
 
 - Ruff formatting and lint: passed.
 - Pyright: passed with zero errors.
-- Backend: 90 tests passed, 88.67% statement coverage.
+- Backend: 96 tests passed, 88.80% statement coverage.
 - Frontend: ESLint and TypeScript passed; 14 Vitest tests passed.
 - Production Vite build: passed.
 - Disposable Compose lifecycle: passed for clean setup, operator backup,
@@ -1061,6 +1084,10 @@ Verified on 2026-07-22 with `make verify` after migration `0017` and parser
   OpenAPI headers. Migration `0017` passed an
   `0016 -> head -> 0016 -> head` round trip, and the disposable Compose lifecycle
   passed setup, backup, in-place upgrade, clean restore, and rollback.
+- Browser-security evidence covers IP literals, exact and wildcard trusted hosts,
+  untrusted-host rejection, default same-origin writes, cross-origin and cross-site
+  Fetch Metadata rejection, explicit HTTPS proxy origins, per-route login and all
+  three connection-test limits, structured 429 responses, and `Retry-After`.
 - Soak acceptance evidence covers incomplete-preflight refusal, idempotent start,
   the exact seven-day boundary, redacted reporting, cross-feed observation counts,
   and duplicate task identity signals.
