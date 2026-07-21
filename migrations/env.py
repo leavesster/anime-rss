@@ -4,6 +4,7 @@ from alembic import context
 from anime_rss.infrastructure.database import Base
 from anime_rss.modules.audit import persistence as audit_persistence  # noqa: F401
 from anime_rss.modules.catalog import persistence as catalog_persistence  # noqa: F401
+from anime_rss.modules.downloads import persistence as download_persistence  # noqa: F401
 from anime_rss.modules.feeds import persistence as feed_persistence  # noqa: F401
 from anime_rss.modules.operations import persistence as operations_persistence  # noqa: F401
 from anime_rss.modules.recognition import persistence as recognition_persistence  # noqa: F401

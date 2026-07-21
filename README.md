@@ -21,9 +21,12 @@ The ingestion slice and its first management interface are implemented:
 - deterministic title recognition and same-episode candidate grouping
 - local/Bangumi anime catalog and lifecycle-aware subscriptions
 - deterministic hard filters, ordered preferences, fallback waits, and backfill decisions
+- encrypted qBittorrent configuration and connectivity validation
+- idempotent magnet/torrent submission, task reconciliation, and explicit retry
+- V2/V3 cancellation without deleting completed files
 - versioned implementation decision record for handoff and review
 
-Authentication and qBittorrent submission are later slices. The current
+Authentication and automatic feed scheduling are later slices. The current
 application is therefore a development build and must not be exposed publicly.
 
 ## Development
@@ -74,4 +77,10 @@ GET    /api/v1/selection/decisions
 POST   /api/v1/selection/process-due
 GET    /api/v1/selection/subscriptions/{subscription_id}/backfill-preview
 POST   /api/v1/selection/subscriptions/{subscription_id}/backfill-commit
+GET    /api/v1/downloads/config
+PUT    /api/v1/downloads/config
+POST   /api/v1/downloads/config/test
+GET    /api/v1/downloads/tasks
+POST   /api/v1/downloads/tasks/{task_id}/retry
+POST   /api/v1/downloads/process
 ```

@@ -1100,6 +1100,223 @@
           }
         }
       }
+    },
+    "/api/v1/downloads/config": {
+      "get": {
+        "tags": [
+          "downloads"
+        ],
+        "summary": "Get Download Config",
+        "operationId": "get_download_config_api_v1_downloads_config_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/DownloadConfigResponse"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Download Config Api V1 Downloads Config Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "downloads"
+        ],
+        "summary": "Configure Downloads",
+        "operationId": "configure_downloads_api_v1_downloads_config_put",
+        "parameters": [
+          {
+            "name": "if-match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DownloadConfigRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadConfigResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/downloads/config/test": {
+      "post": {
+        "tags": [
+          "downloads"
+        ],
+        "summary": "Test Download Connection",
+        "operationId": "test_download_connection_api_v1_downloads_config_test_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadConnectionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/downloads/tasks": {
+      "get": {
+        "tags": [
+          "downloads"
+        ],
+        "summary": "List Download Tasks",
+        "operationId": "list_download_tasks_api_v1_downloads_tasks_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 200,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DownloadTaskResponse"
+                  },
+                  "title": "Response List Download Tasks Api V1 Downloads Tasks Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/downloads/tasks/{task_id}/retry": {
+      "post": {
+        "tags": [
+          "downloads"
+        ],
+        "summary": "Retry Download Task",
+        "operationId": "retry_download_task_api_v1_downloads_tasks__task_id__retry_post",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadTaskResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/downloads/process": {
+      "post": {
+        "tags": [
+          "downloads"
+        ],
+        "summary": "Process Downloads",
+        "operationId": "process_downloads_api_v1_downloads_process_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadCycleResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1658,6 +1875,382 @@
           "created_at"
         ],
         "title": "DecisionResponse"
+      },
+      "DownloadConfigRequest": {
+        "properties": {
+          "base_url": {
+            "type": "string",
+            "maxLength": 2083,
+            "minLength": 1,
+            "format": "uri",
+            "title": "Base Url"
+          },
+          "username": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Username"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          },
+          "default_category": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Category"
+          },
+          "default_tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Default Tags"
+          }
+        },
+        "type": "object",
+        "required": [
+          "base_url",
+          "username"
+        ],
+        "title": "DownloadConfigRequest"
+      },
+      "DownloadConfigResponse": {
+        "properties": {
+          "adapter": {
+            "type": "string",
+            "title": "Adapter"
+          },
+          "base_url_redacted": {
+            "type": "string",
+            "title": "Base Url Redacted"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "default_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Category"
+          },
+          "default_tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Default Tags"
+          },
+          "password_configured": {
+            "type": "boolean",
+            "title": "Password Configured"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "last_tested_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Tested At"
+          },
+          "last_success_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success At"
+          },
+          "last_error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "adapter",
+          "base_url_redacted",
+          "username",
+          "default_category",
+          "default_tags",
+          "password_configured",
+          "version",
+          "last_tested_at",
+          "last_success_at",
+          "last_error_code"
+        ],
+        "title": "DownloadConfigResponse"
+      },
+      "DownloadConnectionResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "version"
+        ],
+        "title": "DownloadConnectionResponse"
+      },
+      "DownloadCycleResponse": {
+        "properties": {
+          "cancellations": {
+            "type": "integer",
+            "title": "Cancellations"
+          },
+          "submissions": {
+            "type": "integer",
+            "title": "Submissions"
+          },
+          "reconciled": {
+            "type": "integer",
+            "title": "Reconciled"
+          },
+          "dispatched_events": {
+            "type": "integer",
+            "title": "Dispatched Events"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cancellations",
+          "submissions",
+          "reconciled",
+          "dispatched_events"
+        ],
+        "title": "DownloadCycleResponse"
+      },
+      "DownloadTaskResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "decision_id": {
+            "type": "string",
+            "title": "Decision Id"
+          },
+          "release_id": {
+            "type": "string",
+            "title": "Release Id"
+          },
+          "subscription_id": {
+            "type": "string",
+            "title": "Subscription Id"
+          },
+          "info_hash": {
+            "type": "string",
+            "title": "Info Hash"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "requested_save_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested Save Path"
+          },
+          "actual_save_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Save Path"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "progress": {
+            "type": "number",
+            "title": "Progress"
+          },
+          "stale": {
+            "type": "boolean",
+            "title": "Stale"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "attempt_count": {
+            "type": "integer",
+            "title": "Attempt Count"
+          },
+          "next_retry_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Retry At"
+          },
+          "last_observed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Observed At"
+          },
+          "supersedes_decision_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Decision Id"
+          },
+          "superseded_by_decision_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Superseded By Decision Id"
+          },
+          "superseded_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Superseded At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "decision_id",
+          "release_id",
+          "subscription_id",
+          "info_hash",
+          "state",
+          "requested_save_path",
+          "actual_save_path",
+          "category",
+          "tags",
+          "progress",
+          "stale",
+          "error_code",
+          "attempt_count",
+          "next_retry_at",
+          "last_observed_at",
+          "supersedes_decision_id",
+          "superseded_by_decision_id",
+          "superseded_at",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "DownloadTaskResponse"
       },
       "EpisodeGroupResponse": {
         "properties": {

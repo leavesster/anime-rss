@@ -399,6 +399,7 @@ class SelectionService:
         now: datetime,
     ) -> str:
         decision_id = new_id()
+        supersedes_decision_id = slot.selected_decision_id if kind == "selected_upgrade" else None
         rules_snapshot = self._rules_snapshot(subscription)
         candidate_snapshot = {
             "source_title": candidate.source_title,
@@ -438,6 +439,15 @@ class SelectionService:
             name="DecisionCommitted.v1",
             payload={"decision_id": decision_id, "candidate_id": candidate.id},
         )
+        if supersedes_decision_id is not None:
+            append_event(
+                session,
+                name="DownloadCancellationRequested.v1",
+                payload={
+                    "decision_id": supersedes_decision_id,
+                    "replacement_decision_id": decision_id,
+                },
+            )
         append_event(
             session,
             name="DownloadRequested.v1",
@@ -445,6 +455,7 @@ class SelectionService:
                 "decision_id": decision_id,
                 "release_id": candidate.release_id,
                 "subscription_id": subscription.id,
+                "supersedes_decision_id": supersedes_decision_id,
             },
         )
         record_event(

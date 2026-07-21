@@ -51,6 +51,14 @@ class ReleaseRecognitionSource:
     automation_eligible: bool
 
 
+@dataclass(frozen=True, slots=True)
+class ReleaseDownloadSource:
+    release_id: str
+    info_hash: str
+    kind: str
+    content: bytes
+
+
 class ReleaseService:
     def __init__(
         self,
@@ -160,6 +168,30 @@ class ReleaseService:
                 published_at=entry.published_at,
                 first_seen_at=release.first_seen_at,
                 automation_eligible=release.automation_eligible,
+            )
+
+    def get_download_source(self, release_id: str) -> ReleaseDownloadSource | None:
+        with self._session_factory() as session:
+            release = session.get(ReleaseRecord, release_id)
+            if release is None or release.btih is None or not release.automation_eligible:
+                return None
+            payload = session.scalar(
+                select(ReleasePayloadRecord)
+                .where(ReleasePayloadRecord.release_id == release_id)
+                .order_by(ReleasePayloadRecord.created_at, ReleasePayloadRecord.id)
+                .limit(1)
+            )
+            if payload is None:
+                return None
+            content = self._cipher.decrypt(
+                payload.ciphertext,
+                purpose=f"release-payload:{payload.id}:content",
+            )
+            return ReleaseDownloadSource(
+                release_id=release.id,
+                info_hash=release.btih,
+                kind=payload.kind,
+                content=content,
             )
 
     def _resolve_identity(self, entry: FeedEntrySecret) -> tuple[TorrentIdentity, bytes, str]:

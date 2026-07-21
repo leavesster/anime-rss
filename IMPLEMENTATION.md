@@ -24,10 +24,14 @@ Configured RSS / Atom feed
   -> hard-filter and ordered-preference evaluation
   -> preferred decision or durable fallback wait
   -> immutable decision + DownloadRequested intent
+  -> durable download task + immutable idempotency key
+  -> query qBittorrent by info hash
+  -> submit magnet / torrent payload
+  -> reconcile external task state
 ```
 
-The application currently stops after committing a durable download intent. It
-does not yet contact qBittorrent.
+The application now completes the selected-release path through qBittorrent and
+keeps the local task projection synchronized with external runtime state.
 
 ## 2. Delivered Capabilities
 
@@ -79,7 +83,26 @@ does not yet contact qBittorrent.
 - Same-group, same-episode higher revisions create append-only upgrade
   decisions.
 - Every committed decision emits `DecisionCommitted.v1` and
-  `DownloadRequested.v1`; no downloader consumes the latter yet.
+  `DownloadRequested.v1`.
+
+### Downloads
+
+- Encrypted qBittorrent Web API endpoint, username, and password configuration.
+- Connectivity validation and version reporting without exposing credentials.
+- DB-first task planning, submission attempts, and immutable idempotency keys.
+- Query-by-info-hash before every add or retry, including timeout-after-success
+  recovery without duplicate submission.
+- Magnet and uploaded `.torrent` submission with subscription save path plus
+  configured category and tags.
+- Thirty-second background reconciliation and an explicit manual sync command.
+- qBittorrent-derived progress, pause, completion, path, category, and tag
+  state; connection failures preserve the last observation and mark it stale.
+- Confirmed external deletion becomes terminal until an administrator
+  explicitly retries the task.
+- Interrupted submissions recover at startup and query by hash before another
+  add.
+- Revision replacement cancels only incomplete old tasks with
+  `deleteFiles=false`; completed old files remain untouched.
 
 ### Interface
 
@@ -92,6 +115,8 @@ does not yet contact qBittorrent.
   preview, waiting-state summary, and immutable decision history.
 - In-page selection flow showing hard filters, comparison order, wait behavior,
   revision upgrades, and the explicit boundary of current manual operations.
+- qBittorrent configuration, connectivity status, download progress, external
+  state, manual reconciliation, and explicit retry controls.
 - Generated TypeScript API types from the checked OpenAPI contract.
 
 ## 3. Decision Log
@@ -264,6 +289,72 @@ implemented.
 **Reason:** Operators must be able to predict automatic behavior without
 mistaking a visible confirmation state for an available manual command.
 
+### DL-001: qBittorrent configuration is module-owned and encrypted
+
+**Choice:** `downloads` stores one qBittorrent Web API configuration. Endpoint,
+username, and password are encrypted with field-specific authenticated
+encryption purposes; only a redacted endpoint and username return through the
+API.
+
+**Reason:** Downloader credentials must not leak into settings files, logs,
+task rows, or browser responses while still remaining editable at runtime.
+
+### DL-002: Every external effect starts with a durable local task
+
+**Choice:** Consuming `DownloadRequested.v1` creates one task per decision with
+`download-request:{decision_id}:{release_id}:1` as its immutable idempotency key.
+The network call happens only after that transaction commits.
+
+**Reason:** A crash can lose a response, but it cannot lose the reason for the
+operation or create another local request for the same decision.
+
+### DL-003: Every add and retry queries by info hash first
+
+**Choice:** The adapter authenticates and queries qBittorrent before every add.
+If the torrent already exists, the local task links to that observation without
+submitting again.
+
+**Reason:** This closes the timeout-after-success window that a database-only
+idempotency key cannot close across an external API boundary.
+
+### DL-004: qBittorrent owns runtime state
+
+**Choice:** Reconciliation mirrors progress, pause, completion, save path,
+category, and tags. A network or authentication failure retains the last known
+state and marks it stale rather than interpreting an empty observation.
+
+**Reason:** Selection history belongs to this application, while actual torrent
+execution belongs to qBittorrent and may be changed there deliberately.
+
+### DL-005: External deletion is terminal by default
+
+**Choice:** A previously observed torrent that disappears becomes
+`externally_removed` and leaves the automatic work queue. Only the explicit
+retry command clears that boundary.
+
+**Reason:** Re-adding a torrent deleted by the administrator would fight the
+source of truth and could create an endless add/delete loop.
+
+### DL-006: Transient failures retry; interrupted effects reconcile first
+
+**Choice:** Submission failures classified as transient use bounded backoff.
+Tasks left in `submitting` or `canceling` recover after a stale interval; startup
+forces recovery immediately, then queries by hash before making an external
+change.
+
+**Reason:** Restarts and temporary qBittorrent downtime must be recoverable
+without treating an uncertain response as proof of failure.
+
+### DL-007: Revision replacement never deletes completed files
+
+**Choice:** An upgrade decision emits an explicit cancellation request for the
+previous decision. The new submission waits until that step resolves. An
+incomplete old torrent is removed with `deleteFiles=false`; a completed old
+torrent is only marked superseded.
+
+**Reason:** Replacement is a visible, retryable saga, and downloaded media is
+never removed as a side effect of choosing V2 or V3.
+
 ## 4. Parser v1 Contract
 
 Supported episode shapes:
@@ -301,23 +392,24 @@ attempts are not silently rewritten.
 - Per-episode manual candidate selection and replacement of an existing decision
   are not implemented; historical backfill confirmation is the only current
   manual selection action.
-- No qBittorrent adapter or content download exists yet.
-- `DownloadRequested.v1` events are durable intents with no consumer until the
-  download slice is installed.
+- Only qBittorrent Web API v2 is implemented; there is no alternate downloader
+  adapter or app-side pause/resume command.
+- qBittorrent category and tags are defaults captured when the task is planned;
+  later external edits are reflected rather than overwritten.
 - Authentication is not implemented; bind only to localhost or a trusted private
   network.
 
 ## 6. Next Planned Slice
 
-The next coherent delivery unit is the `downloads` slice:
+The next coherent delivery unit is the `operations + scheduler` slice:
 
-1. qBittorrent Web API adapter and connectivity validation.
-2. DB-first submission attempts with immutable idempotency keys.
-3. Query-by-info-hash before every add or retry.
-4. Task reconciliation, stale observations, external pause, and external
-   deletion behavior.
-5. Revision replacement cancellation saga without deleting completed files.
+1. Automatically claim and refresh due feeds through the existing durable job
+   lease instead of requiring a manual refresh.
+2. Persist scheduler runs, recovery, and next-run diagnostics.
+3. Add dependency status for feeds, Bangumi, qBittorrent, and background loops.
+4. Expose audit history and actionable failed-work summaries on the dashboard.
+5. Add manual confirmation and release-remap commands without weakening the
+   automatic matching boundary.
 
-The selection decision and its emitted download intent are already durable, so
-the next slice can add external effects without moving rule logic into the
-adapter.
+This makes the already durable ingestion, selection, and download slices operate
+continuously before administrator authentication and packaging are added.

@@ -92,6 +92,7 @@ h3 { font-size: 15px; letter-spacing: 0; }
 .status--neutral { color: #5f6965; background: #edf0ef; }
 
 .overview-band { display: grid; grid-template-columns: repeat(3, 1fr); margin: 0 0 30px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.overview-band--four { grid-template-columns: repeat(4, 1fr); }
 .overview-metric { min-height: 104px; display: flex; align-items: center; gap: 14px; padding: 20px 24px; border-right: 1px solid var(--soft-line); }
 .overview-metric:last-child { border-right: 0; }
 .metric-icon { width: 38px; height: 38px; flex: 0 0 38px; display: grid; place-items: center; border-radius: 7px; }
@@ -233,6 +234,23 @@ a.compact-row:hover { background: var(--surface-soft); }
 .backfill-row input { width: 16px; height: 16px; accent-color: var(--accent); }
 .backfill-row--disabled { opacity: .62; cursor: default; }
 
+.download-config { margin-bottom: 34px; padding: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.download-config__form { display: grid; grid-template-columns: minmax(220px, 1.4fr) minmax(140px, .8fr) minmax(160px, 1fr); gap: 14px; }
+.download-config__actions { display: flex; align-items: end; justify-content: flex-end; gap: 8px; }
+.download-task-section { margin-top: 4px; }
+.download-list { display: grid; overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.download-row { min-height: 78px; display: grid; grid-template-columns: minmax(190px, 1fr) 150px 120px 120px 112px 36px; align-items: center; gap: 16px; padding: 12px 15px; border-bottom: 1px solid var(--soft-line); }
+.download-row:last-child { border-bottom: 0; }
+.download-row__identity, .download-row__meta, .download-row__state, .download-row__time { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.download-row__identity strong { overflow: hidden; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.download-row__identity small, .download-row__meta small, .download-row__state small, .download-row__time small { overflow: hidden; color: var(--muted); font-size: 9px; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+.download-row__meta strong, .download-row__time strong { overflow: hidden; color: #46534e; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.download-progress { min-width: 0; display: flex; align-items: center; gap: 8px; }
+.download-progress > div { width: 100%; height: 6px; overflow: hidden; background: #e9eeeb; border-radius: 3px; }
+.download-progress span { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.download-progress small { width: 28px; color: var(--muted); font-size: 9px; text-align: right; }
+.download-row__spacer { width: 36px; }
+
 .toolbar { min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
 .search-field { width: min(430px, 100%); min-height: 40px; display: flex; align-items: center; gap: 9px; padding: 0 12px; color: #79847f; background: var(--surface); border: 1px solid #d6ddda; border-radius: 6px; }
 .search-field:focus-within { border-color: #6b9f8c; box-shadow: 0 0 0 3px rgba(25, 112, 82, .1); }
@@ -276,6 +294,8 @@ a.compact-row:hover { background: var(--surface-soft); }
   .selection-flow__arrow { display: none; }
   .manual-boundary > div { grid-template-columns: auto 1fr; }
   .manual-boundary p:last-child { grid-column: 1 / -1; }
+  .download-row { grid-template-columns: minmax(180px, 1fr) 130px 110px 104px 36px; }
+  .download-row__time { display: none; }
 }
 
 @media (max-width: 780px) {
@@ -288,7 +308,7 @@ a.compact-row:hover { background: var(--surface-soft); }
   .brand--mobile .brand__mark { width: 32px; height: 32px; flex-basis: 32px; }
   .brand--mobile strong { color: var(--ink); font-size: 14px; }
   .mobile-health { display: flex; align-items: center; gap: 5px; color: var(--accent); font-size: 10px; font-weight: 700; }
-  .mobile-nav { position: fixed; inset: auto 0 0; height: 64px; display: grid; grid-template-columns: repeat(5, 1fr); padding-bottom: env(safe-area-inset-bottom); background: #fff; border-top: 1px solid var(--line); z-index: 50; }
+  .mobile-nav { position: fixed; inset: auto 0 0; height: 64px; display: grid; grid-template-columns: repeat(6, 1fr); padding-bottom: env(safe-area-inset-bottom); background: #fff; border-top: 1px solid var(--line); z-index: 50; }
   .mobile-nav__link { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: #7d8884; font-size: 9px; font-weight: 650; }
   .mobile-nav__link--active { color: var(--accent); }
   .page-container { padding: 26px 18px 40px; }
@@ -319,6 +339,10 @@ a.compact-row:hover { background: var(--surface-soft); }
   .subscription-layout { grid-template-columns: 1fr; gap: 34px; }
   .subscription-row { grid-template-columns: minmax(190px, 1fr) 90px 76px auto; }
   .subscription-row .subscription-rule:nth-of-type(2) { display: none; }
+  .download-config__form { grid-template-columns: 1fr 1fr; }
+  .download-config__actions { grid-column: 1 / -1; }
+  .download-row { grid-template-columns: minmax(170px, 1fr) 120px 104px 36px; }
+  .download-row__meta { display: none; }
 }
 
 @media (max-width: 520px) {
@@ -363,6 +387,14 @@ a.compact-row:hover { background: var(--surface-soft); }
   .decision-list article .status { display: none; }
   .backfill-row { grid-template-columns: 18px 64px minmax(0, 1fr); }
   .backfill-row .eligibility { display: none; }
+  .download-config { padding: 16px; }
+  .download-config__form { grid-template-columns: 1fr; }
+  .download-config__actions { grid-column: 1; align-items: stretch; flex-direction: column-reverse; }
+  .download-config__actions .button { width: 100%; }
+  .download-row { grid-template-columns: minmax(0, 1fr) auto 36px; gap: 9px; }
+  .download-progress { display: none; }
+  .download-row__state { align-items: flex-end; }
+  .download-row__state small { max-width: 104px; }
   .result-count { align-self: flex-end; }
   .dialog-backdrop { align-items: end; padding: 0; }
   .dialog { width: 100%; max-height: 92vh; border-radius: 8px 8px 0 0; }

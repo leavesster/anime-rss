@@ -382,6 +382,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/downloads/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Download Config */
+        get: operations["get_download_config_api_v1_downloads_config_get"];
+        /** Configure Downloads */
+        put: operations["configure_downloads_api_v1_downloads_config_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/downloads/config/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Test Download Connection */
+        post: operations["test_download_connection_api_v1_downloads_config_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/downloads/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Download Tasks */
+        get: operations["list_download_tasks_api_v1_downloads_tasks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/downloads/tasks/{task_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry Download Task */
+        post: operations["retry_download_task_api_v1_downloads_tasks__task_id__retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/downloads/process": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Process Downloads */
+        post: operations["process_downloads_api_v1_downloads_process_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -555,6 +641,114 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** DownloadConfigRequest */
+        DownloadConfigRequest: {
+            /**
+             * Base Url
+             * Format: uri
+             */
+            base_url: string;
+            /** Username */
+            username: string;
+            /** Password */
+            password?: string | null;
+            /** Default Category */
+            default_category?: string | null;
+            /** Default Tags */
+            default_tags?: string[];
+        };
+        /** DownloadConfigResponse */
+        DownloadConfigResponse: {
+            /** Adapter */
+            adapter: string;
+            /** Base Url Redacted */
+            base_url_redacted: string;
+            /** Username */
+            username: string;
+            /** Default Category */
+            default_category: string | null;
+            /** Default Tags */
+            default_tags: string[];
+            /** Password Configured */
+            password_configured: boolean;
+            /** Version */
+            version: number;
+            /** Last Tested At */
+            last_tested_at: string | null;
+            /** Last Success At */
+            last_success_at: string | null;
+            /** Last Error Code */
+            last_error_code: string | null;
+        };
+        /** DownloadConnectionResponse */
+        DownloadConnectionResponse: {
+            /** Status */
+            status: string;
+            /** Version */
+            version: string;
+        };
+        /** DownloadCycleResponse */
+        DownloadCycleResponse: {
+            /** Cancellations */
+            cancellations: number;
+            /** Submissions */
+            submissions: number;
+            /** Reconciled */
+            reconciled: number;
+            /** Dispatched Events */
+            dispatched_events: number;
+        };
+        /** DownloadTaskResponse */
+        DownloadTaskResponse: {
+            /** Id */
+            id: string;
+            /** Decision Id */
+            decision_id: string;
+            /** Release Id */
+            release_id: string;
+            /** Subscription Id */
+            subscription_id: string;
+            /** Info Hash */
+            info_hash: string;
+            /** State */
+            state: string;
+            /** Requested Save Path */
+            requested_save_path: string | null;
+            /** Actual Save Path */
+            actual_save_path: string | null;
+            /** Category */
+            category: string | null;
+            /** Tags */
+            tags: string[];
+            /** Progress */
+            progress: number;
+            /** Stale */
+            stale: boolean;
+            /** Error Code */
+            error_code: string | null;
+            /** Attempt Count */
+            attempt_count: number;
+            /** Next Retry At */
+            next_retry_at: string | null;
+            /** Last Observed At */
+            last_observed_at: string | null;
+            /** Supersedes Decision Id */
+            supersedes_decision_id: string | null;
+            /** Superseded By Decision Id */
+            superseded_by_decision_id: string | null;
+            /** Superseded At */
+            superseded_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** EpisodeGroupResponse */
         EpisodeGroupResponse: {
@@ -1698,6 +1892,163 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_download_config_api_v1_downloads_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadConfigResponse"] | null;
+                };
+            };
+        };
+    };
+    configure_downloads_api_v1_downloads_config_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "if-match"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DownloadConfigRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadConfigResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_download_connection_api_v1_downloads_config_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadConnectionResponse"];
+                };
+            };
+        };
+    };
+    list_download_tasks_api_v1_downloads_tasks_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadTaskResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_download_task_api_v1_downloads_tasks__task_id__retry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadTaskResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    process_downloads_api_v1_downloads_process_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadCycleResponse"];
                 };
             };
         };

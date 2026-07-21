@@ -22,6 +22,11 @@ export type SubscriptionPatch = components["schemas"]["SubscriptionPatchRequest"
 export type EpisodeSlot = components["schemas"]["EpisodeSlotResponse"];
 export type Decision = components["schemas"]["DecisionResponse"];
 export type BackfillPreview = components["schemas"]["BackfillPreviewResponse"];
+export type DownloadConfig = components["schemas"]["DownloadConfigResponse"];
+export type DownloadConfigRequest = components["schemas"]["DownloadConfigRequest"];
+export type DownloadConnection = components["schemas"]["DownloadConnectionResponse"];
+export type DownloadTask = components["schemas"]["DownloadTaskResponse"];
+export type DownloadCycle = components["schemas"]["DownloadCycleResponse"];
 
 const client = createClient<paths>({ baseUrl: "" });
 
@@ -228,5 +233,45 @@ export async function commitBackfill(
         body: { episode_keys: episodeKeys },
       },
     ),
+  );
+}
+
+export async function getDownloadConfig(): Promise<DownloadConfig | null> {
+  return unwrap(await client.GET("/api/v1/downloads/config"));
+}
+
+export async function saveDownloadConfig(
+  payload: DownloadConfigRequest,
+  version?: number,
+): Promise<DownloadConfig> {
+  return unwrap(
+    await client.PUT("/api/v1/downloads/config", {
+      params: { header: { "if-match": version } },
+      body: payload,
+    }),
+  );
+}
+
+export async function testDownloadConnection(): Promise<DownloadConnection> {
+  return unwrap(await client.POST("/api/v1/downloads/config/test"));
+}
+
+export async function listDownloadTasks(): Promise<DownloadTask[]> {
+  return unwrap(
+    await client.GET("/api/v1/downloads/tasks", {
+      params: { query: { limit: 200 } },
+    }),
+  );
+}
+
+export async function processDownloads(): Promise<DownloadCycle> {
+  return unwrap(await client.POST("/api/v1/downloads/process"));
+}
+
+export async function retryDownloadTask(taskId: string): Promise<DownloadTask> {
+  return unwrap(
+    await client.POST("/api/v1/downloads/tasks/{task_id}/retry", {
+      params: { path: { task_id: taskId } },
+    }),
   );
 }

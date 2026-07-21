@@ -19,6 +19,9 @@ from anime_rss.kernel.time import Clock, utc_now
 from anime_rss.modules.catalog.adapters import BangumiClient
 from anime_rss.modules.catalog.api import CatalogService
 from anime_rss.modules.catalog.http import router as catalog_router
+from anime_rss.modules.downloads.adapters import QbittorrentClient
+from anime_rss.modules.downloads.api import DownloadService
+from anime_rss.modules.downloads.http import router as downloads_router
 from anime_rss.modules.feeds.adapters import FeedDocumentParser
 from anime_rss.modules.feeds.api import FeedEntryQueries, FeedService, Jitter
 from anime_rss.modules.feeds.http import router as feeds_router
@@ -44,12 +47,23 @@ async def _run_selection_deadlines(
             await asyncio.to_thread(selection.process_due)
 
 
+async def _run_download_cycles(
+    downloads: DownloadService, stop: asyncio.Event, interval_seconds: float
+) -> None:
+    while not stop.is_set():
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=interval_seconds)
+        except TimeoutError:
+            await asyncio.to_thread(downloads.process_cycle)
+
+
 def create_app(
     settings: Settings | None = None,
     *,
     feed_transport: httpx.BaseTransport | None = None,
     torrent_transport: httpx.BaseTransport | None = None,
     bangumi_transport: httpx.BaseTransport | None = None,
+    qbittorrent_transport: httpx.BaseTransport | None = None,
     clock: Clock = utc_now,
     jitter: Jitter | None = None,
 ) -> FastAPI:
@@ -77,6 +91,11 @@ def create_app(
             transport=torrent_transport or feed_transport,
         )
         bangumi_client = BangumiClient(transport=bangumi_transport)
+        qbittorrent_client = QbittorrentClient(
+            connect_timeout_seconds=runtime_settings.feed_connect_timeout_seconds,
+            read_timeout_seconds=runtime_settings.feed_read_timeout_seconds,
+            transport=qbittorrent_transport,
+        )
         feed_service_kwargs: dict[str, Any] = {"clock": clock}
         if jitter is not None:
             feed_service_kwargs["jitter"] = jitter
@@ -95,6 +114,14 @@ def create_app(
         catalog = CatalogService(session_factory, bangumi_client, clock=clock)
         subscriptions = SubscriptionService(session_factory, catalog, clock=clock)
         selection = SelectionService(session_factory, recognition, subscriptions, clock=clock)
+        downloads = DownloadService(
+            session_factory,
+            cipher,
+            qbittorrent_client,
+            releases,
+            subscriptions,
+            clock=clock,
+        )
         events = EventDispatcher(
             session_factory,
             {
@@ -116,6 +143,18 @@ def create_app(
                         handler=selection.handle_candidate_evaluated,
                     )
                 ],
+                "DownloadRequested.v1": [
+                    RegisteredHandler(
+                        consumer="downloads.request-planner.v1",
+                        handler=downloads.handle_download_requested,
+                    )
+                ],
+                "DownloadCancellationRequested.v1": [
+                    RegisteredHandler(
+                        consumer="downloads.cancellation-planner.v1",
+                        handler=downloads.handle_cancellation_requested,
+                    )
+                ],
             },
             clock=clock,
         )
@@ -124,29 +163,44 @@ def create_app(
             feed_http_client=feed_client,
             torrent_http_client=torrent_client,
             bangumi_client=bangumi_client,
+            qbittorrent_client=qbittorrent_client,
             feeds=feeds,
             releases=releases,
             recognition=recognition,
             catalog=catalog,
             subscriptions=subscriptions,
             selection=selection,
+            downloads=downloads,
             jobs=JobService(session_factory, clock=clock),
             events=events,
         )
         app.state.services = services
-        events.dispatch_until_idle(event_names={"ReleaseIdentified.v1", "CandidateEvaluated.v1"})
+        events.dispatch_until_idle(
+            event_names={
+                "ReleaseIdentified.v1",
+                "CandidateEvaluated.v1",
+                "DownloadRequested.v1",
+                "DownloadCancellationRequested.v1",
+            }
+        )
         selection.process_due()
+        downloads.recover_inflight(force=True)
+        downloads.process_cycle()
         deadline_stop = asyncio.Event()
         deadline_task = asyncio.create_task(
             _run_selection_deadlines(
                 selection, deadline_stop, runtime_settings.selection_poll_seconds
             )
         )
+        download_task = asyncio.create_task(
+            _run_download_cycles(downloads, deadline_stop, runtime_settings.download_poll_seconds)
+        )
         try:
             yield
         finally:
             deadline_stop.set()
             await deadline_task
+            await download_task
             services.close()
 
     app = FastAPI(
@@ -175,6 +229,7 @@ def create_app(
     api.include_router(catalog_router)
     api.include_router(subscriptions_router)
     api.include_router(selection_router)
+    api.include_router(downloads_router)
     app.include_router(api)
 
     repository_root = Path(__file__).resolve().parents[3]

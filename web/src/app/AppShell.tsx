@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Activity, BookOpenCheck, Database, Layers3, LayoutDashboard, Radio, Rss } from "lucide-react";
+import { Activity, BookOpenCheck, Database, Download, Layers3, LayoutDashboard, Radio, Rss } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
 
 import { getReadiness } from "../generated/api/client";
@@ -8,6 +8,7 @@ const navigation = [
   { to: "/", label: "概览", icon: LayoutDashboard, end: true },
   { to: "/feeds", label: "订阅源", icon: Rss },
   { to: "/subscriptions", label: "追番", icon: BookOpenCheck },
+  { to: "/downloads", label: "下载", icon: Download },
   { to: "/candidates", label: "剧集候选", icon: Layers3 },
   { to: "/releases", label: "发布条目", icon: Database },
 ];

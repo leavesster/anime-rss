@@ -6,6 +6,8 @@ from anime_rss.infrastructure.events import EventDispatcher
 from anime_rss.infrastructure.http import SafeHttpClient
 from anime_rss.modules.catalog.adapters import BangumiClient
 from anime_rss.modules.catalog.api import CatalogService
+from anime_rss.modules.downloads.adapters import QbittorrentClient
+from anime_rss.modules.downloads.api import DownloadService
 from anime_rss.modules.feeds.api import FeedService
 from anime_rss.modules.operations.api import JobService
 from anime_rss.modules.recognition.api import RecognitionService
@@ -20,12 +22,14 @@ class ServiceContainer:
     feed_http_client: SafeHttpClient
     torrent_http_client: SafeHttpClient
     bangumi_client: BangumiClient
+    qbittorrent_client: QbittorrentClient
     feeds: FeedService
     releases: ReleaseService
     recognition: RecognitionService
     catalog: CatalogService
     subscriptions: SubscriptionService
     selection: SelectionService
+    downloads: DownloadService
     jobs: JobService
     events: EventDispatcher
 
@@ -33,4 +37,5 @@ class ServiceContainer:
         self.feed_http_client.close()
         self.torrent_http_client.close()
         self.bangumi_client.close()
+        self.qbittorrent_client.close()
         self.engine.dispose()

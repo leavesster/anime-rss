@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import { DashboardPage } from "../features/dashboard/DashboardPage";
+import { DownloadsPage } from "../features/downloads/DownloadsPage";
 import { FeedDetailPage } from "../features/feeds/FeedDetailPage";
 import { FeedsPage } from "../features/feeds/FeedsPage";
 import { CandidatesPage } from "../features/recognition/CandidatesPage";
@@ -17,6 +18,7 @@ export function App() {
         <Route path="feeds/:feedId" element={<FeedDetailPage />} />
         <Route path="candidates" element={<CandidatesPage />} />
         <Route path="subscriptions" element={<SubscriptionsPage />} />
+        <Route path="downloads" element={<DownloadsPage />} />
         <Route path="releases" element={<ReleasesPage />} />
         <Route path="*" element={<Navigate replace to="/" />} />
       </Route>
