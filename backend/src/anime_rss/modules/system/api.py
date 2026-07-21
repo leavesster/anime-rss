@@ -1,15 +1,123 @@
 import base64
 import os
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Protocol
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from sqlalchemy.orm import Session, sessionmaker
+
+from anime_rss.kernel.time import Clock, utc_now
+from anime_rss.modules.system.persistence import InstanceSettingsRecord
+
+_SETTINGS_ID = "default"
+_LANGUAGES = {"zh-CN", "en"}
 
 
 class SecretCipher(Protocol):
     def encrypt(self, plaintext: bytes, *, purpose: str) -> bytes: ...
 
     def decrypt(self, envelope: bytes, *, purpose: str) -> bytes: ...
+
+
+@dataclass(frozen=True, slots=True)
+class InstanceSettings:
+    timezone: str
+    interface_language: str
+    missing_episode_grace_hours: int
+    setup_completed_steps: list[str]
+    setup_completed: bool
+    version: int
+    updated_at: datetime | None
+
+
+class InstanceSettingsService:
+    def __init__(
+        self,
+        session_factory: sessionmaker[Session],
+        *,
+        clock: Clock = utc_now,
+    ) -> None:
+        self._session_factory = session_factory
+        self._clock = clock
+
+    def get(self) -> InstanceSettings:
+        with self._session_factory() as session:
+            record = session.get(InstanceSettingsRecord, _SETTINGS_ID)
+            if record is None:
+                return InstanceSettings(
+                    timezone="Asia/Shanghai",
+                    interface_language="zh-CN",
+                    missing_episode_grace_hours=24,
+                    setup_completed_steps=[],
+                    setup_completed=False,
+                    version=0,
+                    updated_at=None,
+                )
+            return self._to_settings(record)
+
+    def update(
+        self,
+        *,
+        timezone: str,
+        interface_language: str,
+        missing_episode_grace_hours: int,
+        expected_version: int,
+    ) -> InstanceSettings:
+        timezone = timezone.strip()
+        try:
+            ZoneInfo(timezone)
+        except (ZoneInfoNotFoundError, ValueError) as error:
+            raise ValueError("unknown IANA timezone") from error
+        if interface_language not in _LANGUAGES:
+            raise ValueError("unsupported interface language")
+        if not 1 <= missing_episode_grace_hours <= 168:
+            raise ValueError("missing episode grace must be between 1 and 168 hours")
+        now = self._clock()
+        with self._session_factory.begin() as session:
+            record = session.get(InstanceSettingsRecord, _SETTINGS_ID)
+            if record is None:
+                if expected_version != 0:
+                    raise ValueError("instance settings version conflict")
+                record = InstanceSettingsRecord(
+                    id=_SETTINGS_ID,
+                    timezone=timezone,
+                    interface_language=interface_language,
+                    missing_episode_grace_hours=missing_episode_grace_hours,
+                    setup_completed_steps=["instance_preferences"],
+                    setup_completed=False,
+                    version=1,
+                    created_at=now,
+                    updated_at=now,
+                )
+                session.add(record)
+            else:
+                if record.version != expected_version:
+                    raise ValueError("instance settings version conflict")
+                steps = list(record.setup_completed_steps)
+                if "instance_preferences" not in steps:
+                    steps.append("instance_preferences")
+                record.timezone = timezone
+                record.interface_language = interface_language
+                record.missing_episode_grace_hours = missing_episode_grace_hours
+                record.setup_completed_steps = steps
+                record.version += 1
+                record.updated_at = now
+        return self.get()
+
+    @staticmethod
+    def _to_settings(record: InstanceSettingsRecord) -> InstanceSettings:
+        return InstanceSettings(
+            timezone=record.timezone,
+            interface_language=record.interface_language,
+            missing_episode_grace_hours=record.missing_episode_grace_hours,
+            setup_completed_steps=list(record.setup_completed_steps),
+            setup_completed=record.setup_completed,
+            version=record.version,
+            updated_at=record.updated_at,
+        )
 
 
 class AesGcmSecretCipher:

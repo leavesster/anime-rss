@@ -38,7 +38,11 @@ def test_catalog_search_is_cached_and_bangumi_anime_can_be_imported(tmp_path: Pa
             "date": "2026-07-01",
             "eps": 12,
             "images": {"large": "https://lain.bgm.tv/pic.jpg"},
-            "infobox": [{"key": "别名", "value": [{"v": "Mujikaku Seijo"}]}],
+            "infobox": [
+                {"key": "别名", "value": [{"v": "Mujikaku Seijo"}]},
+                {"key": "放送星期", "value": "星期三"},
+                {"key": "放送开始", "value": "2026-07-01 23:30"},
+            ],
         }
         if request.method == "POST":
             return httpx.Response(200, json={"data": [item]})
@@ -59,6 +63,9 @@ def test_catalog_search_is_cached_and_bangumi_anime_can_be_imported(tmp_path: Pa
         assert len([request for request in requests if request.method == "POST"]) == 1
         assert imported.status_code == 200
         assert imported.json()["bangumi_id"] == 123
+        assert imported.json()["schedule_timezone"] == "Asia/Tokyo"
+        assert imported.json()["airing_weekday"] == 2
+        assert imported.json()["airing_time"] == "23:30"
         assert {title["normalized"] for title in imported.json()["titles"]} >= {
             "无自觉圣女今天也无意识地释放力量",
             "mujikakuseijo",

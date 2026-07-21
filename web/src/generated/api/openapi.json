@@ -883,6 +883,58 @@
         }
       }
     },
+    "/api/v1/catalog/anime/{anime_id}/schedule": {
+      "put": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Update Schedule",
+        "operationId": "update_schedule_api_v1_catalog_anime__anime_id__schedule_put",
+        "parameters": [
+          {
+            "name": "anime_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Anime Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnimeScheduleUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnimeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/catalog/bangumi/search": {
       "get": {
         "tags": [
@@ -1916,6 +1968,177 @@
         }
       }
     },
+    "/api/v1/schedule/calendar": {
+      "get": {
+        "tags": [
+          "schedule"
+        ],
+        "summary": "Calendar",
+        "operationId": "calendar_api_v1_schedule_calendar_get",
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 8,
+              "title": "Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CalendarDayResponse"
+                  },
+                  "title": "Response Calendar Api V1 Schedule Calendar Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schedule/anime/{anime_id}/episodes": {
+      "get": {
+        "tags": [
+          "schedule"
+        ],
+        "summary": "Anime History",
+        "operationId": "anime_history_api_v1_schedule_anime__anime_id__episodes_get",
+        "parameters": [
+          {
+            "name": "anime_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Anime Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 200,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ExpectedEpisodeResponse"
+                  },
+                  "title": "Response Anime History Api V1 Schedule Anime  Anime Id  Episodes Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schedule/missing": {
+      "get": {
+        "tags": [
+          "schedule"
+        ],
+        "summary": "Missing",
+        "operationId": "missing_api_v1_schedule_missing_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ExpectedEpisodeResponse"
+                  },
+                  "title": "Response Missing Api V1 Schedule Missing Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schedule/sync": {
+      "post": {
+        "tags": [
+          "schedule"
+        ],
+        "summary": "Synchronize",
+        "operationId": "synchronize_api_v1_schedule_sync_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleSyncResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/operations/overview": {
       "get": {
         "tags": [
@@ -2362,6 +2585,77 @@
         }
       }
     },
+    "/api/v1/system/settings": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Get Settings",
+        "operationId": "get_settings_api_v1_system_settings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstanceSettingsResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Update Settings",
+        "operationId": "update_settings_api_v1_system_settings_put",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstanceSettingsUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstanceSettingsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/audit/events": {
       "get": {
         "tags": [
@@ -2514,6 +2808,62 @@
             ],
             "title": "Episode Count"
           },
+          "airing_weekday": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Airing Weekday"
+          },
+          "airing_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Airing Time"
+          },
+          "schedule_timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule Timezone"
+          },
+          "schedule_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule Source"
+          },
+          "schedule_updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule Updated At"
+          },
           "cover_url": {
             "anyOf": [
               {
@@ -2558,6 +2908,11 @@
           "summary",
           "air_date",
           "episode_count",
+          "airing_weekday",
+          "airing_time",
+          "schedule_timezone",
+          "schedule_source",
+          "schedule_updated_at",
           "cover_url",
           "source",
           "titles",
@@ -2565,6 +2920,69 @@
           "updated_at"
         ],
         "title": "AnimeResponse"
+      },
+      "AnimeScheduleUpdateRequest": {
+        "properties": {
+          "air_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Air Date"
+          },
+          "episode_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1000.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Episode Count"
+          },
+          "airing_weekday": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 6.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Airing Weekday"
+          },
+          "airing_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 5
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Airing Time"
+          },
+          "schedule_timezone": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Schedule Timezone",
+            "default": "Asia/Tokyo"
+          }
+        },
+        "type": "object",
+        "title": "AnimeScheduleUpdateRequest"
       },
       "AnimeTitleResponse": {
         "properties": {
@@ -2846,6 +3264,27 @@
           "aliases"
         ],
         "title": "BangumiAnimeResponse"
+      },
+      "CalendarDayResponse": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "episodes": {
+            "items": {
+              "$ref": "#/components/schemas/ExpectedEpisodeResponse"
+            },
+            "type": "array",
+            "title": "Episodes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "episodes"
+        ],
+        "title": "CalendarDayResponse"
       },
       "CandidateResponse": {
         "properties": {
@@ -3709,6 +4148,89 @@
         ],
         "title": "EpisodeSlotResponse"
       },
+      "ExpectedEpisodeResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "subscription_id": {
+            "type": "string",
+            "title": "Subscription Id"
+          },
+          "anime_id": {
+            "type": "string",
+            "title": "Anime Id"
+          },
+          "anime_title": {
+            "type": "string",
+            "title": "Anime Title"
+          },
+          "episode_key": {
+            "type": "string",
+            "title": "Episode Key"
+          },
+          "expected_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expected At"
+          },
+          "local_date": {
+            "type": "string",
+            "title": "Local Date"
+          },
+          "local_time": {
+            "type": "string",
+            "title": "Local Time"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "has_acceptable_candidate": {
+            "type": "boolean",
+            "title": "Has Acceptable Candidate"
+          },
+          "schedule_source": {
+            "type": "string",
+            "title": "Schedule Source"
+          },
+          "missing_notified_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Missing Notified At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "subscription_id",
+          "anime_id",
+          "anime_title",
+          "episode_key",
+          "expected_at",
+          "local_date",
+          "local_time",
+          "state",
+          "has_acceptable_candidate",
+          "schedule_source",
+          "missing_notified_at",
+          "updated_at"
+        ],
+        "title": "ExpectedEpisodeResponse"
+      },
       "FailedWorkResponse": {
         "properties": {
           "key": {
@@ -4183,6 +4705,89 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "InstanceSettingsResponse": {
+        "properties": {
+          "timezone": {
+            "type": "string",
+            "title": "Timezone"
+          },
+          "interface_language": {
+            "type": "string",
+            "title": "Interface Language"
+          },
+          "missing_episode_grace_hours": {
+            "type": "integer",
+            "title": "Missing Episode Grace Hours"
+          },
+          "setup_completed_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Setup Completed Steps"
+          },
+          "setup_completed": {
+            "type": "boolean",
+            "title": "Setup Completed"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "timezone",
+          "interface_language",
+          "missing_episode_grace_hours",
+          "setup_completed_steps",
+          "setup_completed",
+          "version",
+          "updated_at"
+        ],
+        "title": "InstanceSettingsResponse"
+      },
+      "InstanceSettingsUpdateRequest": {
+        "properties": {
+          "timezone": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Timezone"
+          },
+          "interface_language": {
+            "type": "string",
+            "maxLength": 16,
+            "minLength": 1,
+            "title": "Interface Language"
+          },
+          "missing_episode_grace_hours": {
+            "type": "integer",
+            "maximum": 168.0,
+            "minimum": 1.0,
+            "title": "Missing Episode Grace Hours"
+          }
+        },
+        "type": "object",
+        "required": [
+          "timezone",
+          "interface_language",
+          "missing_episode_grace_hours"
+        ],
+        "title": "InstanceSettingsUpdateRequest"
       },
       "JobRunResponse": {
         "properties": {
@@ -5020,6 +5625,34 @@
           "processed"
         ],
         "title": "RunNowResponse"
+      },
+      "ScheduleSyncResponse": {
+        "properties": {
+          "generated": {
+            "type": "integer",
+            "title": "Generated"
+          },
+          "acquired": {
+            "type": "integer",
+            "title": "Acquired"
+          },
+          "missing": {
+            "type": "integer",
+            "title": "Missing"
+          },
+          "notifications": {
+            "type": "integer",
+            "title": "Notifications"
+          }
+        },
+        "type": "object",
+        "required": [
+          "generated",
+          "acquired",
+          "missing",
+          "notifications"
+        ],
+        "title": "ScheduleSyncResponse"
       },
       "ScheduledJobResponse": {
         "properties": {

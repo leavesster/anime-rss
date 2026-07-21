@@ -410,7 +410,14 @@ class NotificationService:
         entity_id = next(
             (
                 payload.get(key)
-                for key in ("decision_id", "candidate_id", "release_id", "feed_id", "task_id")
+                for key in (
+                    "decision_id",
+                    "candidate_id",
+                    "release_id",
+                    "feed_id",
+                    "task_id",
+                    "expected_episode_id",
+                )
                 if isinstance(payload.get(key), str)
             ),
             None,
@@ -450,6 +457,16 @@ class NotificationService:
                 "订阅源已恢复",
                 "订阅源抓取恢复正常。",
                 "feed",
+            ),
+            "EpisodeMissing.v1": (
+                "episode_missing",
+                "warning",
+                "预期集数仍未出现",
+                (
+                    f"{payload.get('anime_title', '动画')} "
+                    f"第 {payload.get('episode_key', '?')} 集超过缺集阈值。"
+                ),
+                "expected_episode",
             ),
         }
         if event.name == "DownloadTaskChanged.v1":

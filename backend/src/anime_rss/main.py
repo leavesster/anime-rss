@@ -39,11 +39,13 @@ from anime_rss.modules.recognition.api import RecognitionService
 from anime_rss.modules.recognition.http import router as recognition_router
 from anime_rss.modules.releases.api import ReleaseService
 from anime_rss.modules.releases.http import router as releases_router
+from anime_rss.modules.schedule.api import ScheduleService
+from anime_rss.modules.schedule.http import router as schedule_router
 from anime_rss.modules.selection.api import SelectionService
 from anime_rss.modules.selection.http import router as selection_router
 from anime_rss.modules.subscriptions.api import SubscriptionService
 from anime_rss.modules.subscriptions.http import router as subscriptions_router
-from anime_rss.modules.system.api import FileSecretCipher
+from anime_rss.modules.system.api import FileSecretCipher, InstanceSettingsService
 from anime_rss.modules.system.auth import AuthService
 from anime_rss.modules.system.backup import BackupService
 from anime_rss.modules.system.backup_http import router as backup_router
@@ -54,6 +56,7 @@ from anime_rss.modules.system.http import (
 from anime_rss.modules.system.http import (
     router as auth_router,
 )
+from anime_rss.modules.system.settings_http import router as settings_router
 from anime_rss.runtime import ApplicationRuntime
 
 
@@ -141,6 +144,15 @@ def create_app(
         catalog = CatalogService(session_factory, bangumi_client, clock=clock)
         subscriptions = SubscriptionService(session_factory, catalog, clock=clock)
         selection = SelectionService(session_factory, recognition, subscriptions, clock=clock)
+        instance_settings = InstanceSettingsService(session_factory, clock=clock)
+        schedule = ScheduleService(
+            session_factory,
+            catalog,
+            subscriptions,
+            selection,
+            instance_settings,
+            clock=clock,
+        )
         downloads = DownloadService(
             session_factory,
             cipher,
@@ -164,6 +176,7 @@ def create_app(
                 "FeedRepeatedFailure.v1",
                 "FeedRecovered.v1",
                 "DownloadTaskChanged.v1",
+                "EpisodeMissing.v1",
             }
         }
         events = EventDispatcher(
@@ -212,6 +225,7 @@ def create_app(
             recognition=recognition,
             jobs=jobs,
             notifications=notifications,
+            schedule=schedule,
             backups=backups,
             clock=clock,
             selection_interval_seconds=max(1, int(runtime_settings.selection_poll_seconds)),
@@ -250,6 +264,8 @@ def create_app(
             scheduler=scheduler,
             auth=auth,
             notifications=notifications,
+            settings=instance_settings,
+            schedule=schedule,
             backups=backups,
             events=events,
         )
@@ -344,9 +360,11 @@ def create_app(
     api.include_router(subscriptions_router)
     api.include_router(selection_router)
     api.include_router(downloads_router)
+    api.include_router(schedule_router)
     api.include_router(operations_router)
     api.include_router(notifications_router)
     api.include_router(backup_router)
+    api.include_router(settings_router)
     api.include_router(audit_router)
     app.include_router(api)
 

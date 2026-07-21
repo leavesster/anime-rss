@@ -28,6 +28,11 @@ class AnimeResponse(BaseModel):
     summary: str | None
     air_date: str | None
     episode_count: int | None
+    airing_weekday: int | None
+    airing_time: str | None
+    schedule_timezone: str | None
+    schedule_source: str | None
+    schedule_updated_at: datetime | None
     cover_url: str | None
     source: str
     titles: list[AnimeTitleResponse]
@@ -42,6 +47,14 @@ class LocalAnimeCreateRequest(BaseModel):
 
 class AliasCreateRequest(BaseModel):
     alias: str = Field(min_length=1, max_length=300)
+
+
+class AnimeScheduleUpdateRequest(BaseModel):
+    air_date: str | None = Field(default=None, max_length=10)
+    episode_count: int | None = Field(default=None, ge=1, le=1000)
+    airing_weekday: int | None = Field(default=None, ge=0, le=6)
+    airing_time: str | None = Field(default=None, max_length=5)
+    schedule_timezone: str = Field(default="Asia/Tokyo", min_length=1, max_length=80)
 
 
 class BangumiAnimeResponse(BaseModel):
@@ -86,6 +99,26 @@ def create_local_anime(payload: LocalAnimeCreateRequest, request: Request) -> An
 def add_alias(anime_id: str, payload: AliasCreateRequest, request: Request) -> AnimeResponse:
     try:
         anime = _service(request).add_alias(anime_id, payload.alias)
+    except AnimeNotFoundError as error:
+        raise HTTPException(status_code=404, detail="anime not found") from error
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return AnimeResponse.model_validate(asdict(anime))
+
+
+@router.put("/anime/{anime_id}/schedule", response_model=AnimeResponse)
+def update_schedule(
+    anime_id: str, payload: AnimeScheduleUpdateRequest, request: Request
+) -> AnimeResponse:
+    try:
+        anime = _service(request).update_schedule(
+            anime_id,
+            air_date=payload.air_date,
+            episode_count=payload.episode_count,
+            airing_weekday=payload.airing_weekday,
+            airing_time=payload.airing_time,
+            schedule_timezone=payload.schedule_timezone,
+        )
     except AnimeNotFoundError as error:
         raise HTTPException(status_code=404, detail="anime not found") from error
     except ValueError as error:

@@ -330,6 +330,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/catalog/anime/{anime_id}/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Schedule */
+        put: operations["update_schedule_api_v1_catalog_anime__anime_id__schedule_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/catalog/bangumi/search": {
         parameters: {
             query?: never;
@@ -673,6 +690,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/schedule/calendar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Calendar */
+        get: operations["calendar_api_v1_schedule_calendar_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedule/anime/{anime_id}/episodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Anime History */
+        get: operations["anime_history_api_v1_schedule_anime__anime_id__episodes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedule/missing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Missing */
+        get: operations["missing_api_v1_schedule_missing_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedule/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Synchronize */
+        post: operations["synchronize_api_v1_schedule_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/overview": {
         parameters: {
             query?: never;
@@ -879,6 +964,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Settings */
+        get: operations["get_settings_api_v1_system_settings_get"];
+        /** Update Settings */
+        put: operations["update_settings_api_v1_system_settings_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit/events": {
         parameters: {
             query?: never;
@@ -925,6 +1028,16 @@ export interface components {
             air_date: string | null;
             /** Episode Count */
             episode_count: number | null;
+            /** Airing Weekday */
+            airing_weekday: number | null;
+            /** Airing Time */
+            airing_time: string | null;
+            /** Schedule Timezone */
+            schedule_timezone: string | null;
+            /** Schedule Source */
+            schedule_source: string | null;
+            /** Schedule Updated At */
+            schedule_updated_at: string | null;
             /** Cover Url */
             cover_url: string | null;
             /** Source */
@@ -941,6 +1054,22 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** AnimeScheduleUpdateRequest */
+        AnimeScheduleUpdateRequest: {
+            /** Air Date */
+            air_date?: string | null;
+            /** Episode Count */
+            episode_count?: number | null;
+            /** Airing Weekday */
+            airing_weekday?: number | null;
+            /** Airing Time */
+            airing_time?: string | null;
+            /**
+             * Schedule Timezone
+             * @default Asia/Tokyo
+             */
+            schedule_timezone: string;
         };
         /** AnimeTitleResponse */
         AnimeTitleResponse: {
@@ -1032,6 +1161,13 @@ export interface components {
             cover_url: string | null;
             /** Aliases */
             aliases: string[];
+        };
+        /** CalendarDayResponse */
+        CalendarDayResponse: {
+            /** Date */
+            date: string;
+            /** Episodes */
+            episodes: components["schemas"]["ExpectedEpisodeResponse"][];
         };
         /** CandidateResponse */
         CandidateResponse: {
@@ -1318,6 +1454,41 @@ export interface components {
              */
             updated_at: string;
         };
+        /** ExpectedEpisodeResponse */
+        ExpectedEpisodeResponse: {
+            /** Id */
+            id: string;
+            /** Subscription Id */
+            subscription_id: string;
+            /** Anime Id */
+            anime_id: string;
+            /** Anime Title */
+            anime_title: string;
+            /** Episode Key */
+            episode_key: string;
+            /**
+             * Expected At
+             * Format: date-time
+             */
+            expected_at: string;
+            /** Local Date */
+            local_date: string;
+            /** Local Time */
+            local_time: string;
+            /** State */
+            state: string;
+            /** Has Acceptable Candidate */
+            has_acceptable_candidate: boolean;
+            /** Schedule Source */
+            schedule_source: string;
+            /** Missing Notified At */
+            missing_notified_at: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** FailedWorkResponse */
         FailedWorkResponse: {
             /** Key */
@@ -1470,6 +1641,32 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** InstanceSettingsResponse */
+        InstanceSettingsResponse: {
+            /** Timezone */
+            timezone: string;
+            /** Interface Language */
+            interface_language: string;
+            /** Missing Episode Grace Hours */
+            missing_episode_grace_hours: number;
+            /** Setup Completed Steps */
+            setup_completed_steps: string[];
+            /** Setup Completed */
+            setup_completed: boolean;
+            /** Version */
+            version: number;
+            /** Updated At */
+            updated_at: string | null;
+        };
+        /** InstanceSettingsUpdateRequest */
+        InstanceSettingsUpdateRequest: {
+            /** Timezone */
+            timezone: string;
+            /** Interface Language */
+            interface_language: string;
+            /** Missing Episode Grace Hours */
+            missing_episode_grace_hours: number;
         };
         /** JobRunResponse */
         JobRunResponse: {
@@ -1726,6 +1923,17 @@ export interface components {
         RunNowResponse: {
             /** Processed */
             processed: number;
+        };
+        /** ScheduleSyncResponse */
+        ScheduleSyncResponse: {
+            /** Generated */
+            generated: number;
+            /** Acquired */
+            acquired: number;
+            /** Missing */
+            missing: number;
+            /** Notifications */
+            notifications: number;
         };
         /** ScheduledJobResponse */
         ScheduledJobResponse: {
@@ -2533,6 +2741,41 @@ export interface operations {
             };
         };
     };
+    update_schedule_api_v1_catalog_anime__anime_id__schedule_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                anime_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnimeScheduleUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnimeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     search_bangumi_api_v1_catalog_bangumi_search_get: {
         parameters: {
             query: {
@@ -3211,6 +3454,121 @@ export interface operations {
             };
         };
     };
+    calendar_api_v1_schedule_calendar_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarDayResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    anime_history_api_v1_schedule_anime__anime_id__episodes_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                anime_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpectedEpisodeResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    missing_api_v1_schedule_missing_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpectedEpisodeResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    synchronize_api_v1_schedule_sync_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleSyncResponse"];
+                };
+            };
+        };
+    };
     get_operations_overview_api_v1_operations_overview_get: {
         parameters: {
             query?: never;
@@ -3553,6 +3911,61 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RestoreResponse"];
+                };
+            };
+        };
+    };
+    get_settings_api_v1_system_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceSettingsResponse"];
+                };
+            };
+        };
+    };
+    update_settings_api_v1_system_settings_put: {
+        parameters: {
+            query?: never;
+            header: {
+                "If-Match": number;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstanceSettingsUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceSettingsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

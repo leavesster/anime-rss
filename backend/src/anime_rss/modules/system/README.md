@@ -11,6 +11,7 @@ plaintext credentials.
 - `FileSecretCipher.load_or_create`
 - `AuthService` first-run setup, login, logout, and session validation
 - `BackupService` online SQLite backup, retention, restore staging, and startup apply
+- `InstanceSettingsService` timezone, interface language, missing grace, and setup progress
 
 ## Invariants
 
@@ -18,6 +19,7 @@ plaintext credentials.
 - Mutating authenticated HTTP requests require a matching CSRF cookie and header.
 - A restore is validated and staged while live, then applied before migrations on restart.
 - Backup archives include the master key and are therefore sensitive credentials.
+- Instance-setting updates use optimistic versions and validated IANA timezones.
 
 ## Does not own
 

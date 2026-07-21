@@ -42,6 +42,12 @@ export type NotificationConfigRequest = components["schemas"]["NotificationConfi
 export type Notification = components["schemas"]["NotificationResponse"];
 export type Backup = components["schemas"]["BackupResponse"];
 export type Restore = components["schemas"]["RestoreResponse"];
+export type InstanceSettings = components["schemas"]["InstanceSettingsResponse"];
+export type InstanceSettingsUpdate = components["schemas"]["InstanceSettingsUpdateRequest"];
+export type AnimeScheduleUpdate = components["schemas"]["AnimeScheduleUpdateRequest"];
+export type ExpectedEpisode = components["schemas"]["ExpectedEpisodeResponse"];
+export type CalendarDay = components["schemas"]["CalendarDayResponse"];
+export type ScheduleSync = components["schemas"]["ScheduleSyncResponse"];
 
 const client = createClient<paths>({ baseUrl: "" });
 
@@ -242,6 +248,18 @@ export async function importBangumi(bangumiId: number): Promise<Anime> {
   return unwrap(
     await client.POST("/api/v1/catalog/bangumi/{bangumi_id}/import", {
       params: { path: { bangumi_id: bangumiId } },
+    }),
+  );
+}
+
+export async function updateAnimeSchedule(
+  animeId: string,
+  payload: AnimeScheduleUpdate,
+): Promise<Anime> {
+  return unwrap(
+    await client.PUT("/api/v1/catalog/anime/{anime_id}/schedule", {
+      params: { path: { anime_id: animeId } },
+      body: payload,
     }),
   );
 }
@@ -449,6 +467,42 @@ export async function runSchedulerNow(): Promise<{ processed: number }> {
   return unwrap(await client.POST("/api/v1/operations/run-now"));
 }
 
+export async function syncSchedule(): Promise<ScheduleSync> {
+  return unwrap(await client.POST("/api/v1/schedule/sync"));
+}
+
+export async function listScheduleCalendar(days = 8): Promise<CalendarDay[]> {
+  return unwrap(
+    await client.GET("/api/v1/schedule/calendar", { params: { query: { days } } }),
+  );
+}
+
+export async function listMissingEpisodes(): Promise<ExpectedEpisode[]> {
+  return unwrap(
+    await client.GET("/api/v1/schedule/missing", { params: { query: { limit: 100 } } }),
+  );
+}
+
+export async function listAnimeEpisodeHistory(animeId: string): Promise<ExpectedEpisode[]> {
+  return unwrap(
+    await client.GET("/api/v1/schedule/anime/{anime_id}/episodes", {
+      params: { path: { anime_id: animeId }, query: { limit: 200 } },
+    }),
+  );
+}
+
+export async function refreshSchedule(): Promise<{
+  calendar: CalendarDay[];
+  missing: ExpectedEpisode[];
+}> {
+  await syncSchedule();
+  const [calendar, missing] = await Promise.all([
+    listScheduleCalendar(),
+    listMissingEpisodes(),
+  ]);
+  return { calendar, missing };
+}
+
 export async function listAuditEvents(): Promise<AuditEvent[]> {
   return unwrap(
     await client.GET("/api/v1/audit/events", { params: { query: { limit: 100 } } }),
@@ -494,6 +548,22 @@ export async function markNotificationRead(notificationId: string): Promise<Noti
 
 export async function listBackups(): Promise<Backup[]> {
   return unwrap(await client.GET("/api/v1/system/backups"));
+}
+
+export async function getInstanceSettings(): Promise<InstanceSettings> {
+  return unwrap(await client.GET("/api/v1/system/settings"));
+}
+
+export async function saveInstanceSettings(
+  payload: InstanceSettingsUpdate,
+  version: number,
+): Promise<InstanceSettings> {
+  return unwrap(
+    await client.PUT("/api/v1/system/settings", {
+      params: { header: { "If-Match": version } },
+      body: payload,
+    }),
+  );
 }
 
 export async function createBackup(): Promise<Backup> {

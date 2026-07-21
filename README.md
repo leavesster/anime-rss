@@ -31,6 +31,7 @@ The feed-to-qBittorrent product path and self-hosted delivery layer are implemen
 - portable SQLite and master-key backups, retention, and restart-safe restore staging
 - production image, Compose data volume, readiness health check, and non-root runtime
 - versioned implementation decision record for handoff and review
+- advisory airing calendar, per-anime episode history, and one-time missing warnings
 
 The application is designed for one administrator and one process. Put it behind
 HTTPS before exposing it outside a trusted network and set
@@ -111,6 +112,7 @@ GET    /api/v1/catalog/anime
 POST   /api/v1/catalog/anime
 GET    /api/v1/catalog/bangumi/search
 POST   /api/v1/catalog/bangumi/{bangumi_id}/import
+PUT    /api/v1/catalog/anime/{anime_id}/schedule
 GET    /api/v1/subscriptions
 POST   /api/v1/subscriptions
 PATCH  /api/v1/subscriptions/{subscription_id}
@@ -132,6 +134,10 @@ POST   /api/v1/downloads/config/test
 GET    /api/v1/downloads/tasks
 POST   /api/v1/downloads/tasks/{task_id}/retry
 POST   /api/v1/downloads/process
+GET    /api/v1/schedule/calendar
+GET    /api/v1/schedule/missing
+GET    /api/v1/schedule/anime/{anime_id}/episodes
+POST   /api/v1/schedule/sync
 GET    /api/v1/operations/overview
 GET    /api/v1/operations/jobs
 GET    /api/v1/operations/runs
@@ -145,5 +151,7 @@ GET    /api/v1/system/backups
 POST   /api/v1/system/backups
 GET    /api/v1/system/backups/{filename}
 POST   /api/v1/system/backups/restore/stage
+GET    /api/v1/system/settings
+PUT    /api/v1/system/settings
 GET    /api/v1/audit/events
 ```

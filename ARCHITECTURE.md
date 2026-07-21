@@ -111,10 +111,11 @@ future extraction. Event handlers are idempotent.
 | `system` | administrator, sessions, installation state, timezone, secret references | setup, login/logout, session validation, settings, secret encryption | feed or downloader behavior |
 | `feeds` | feed configuration, fetch state, feed entries, fetch attempts | safe fetching, RSS/Atom normalization, cache validators, retry health | torrent identity or title interpretation |
 | `releases` | releases, source observations, torrent metadata and payload references | magnet normalization, torrent validation, info-hash identity, layered deduplication | anime matching or selection |
-| `catalog` | anime, external IDs, titles, aliases, metadata snapshots | Bangumi search/cache, local anime creation, user metadata overrides | automatic download decisions |
+| `catalog` | anime, external IDs, titles, aliases, metadata and airing snapshots | Bangumi search/cache, local anime creation, user metadata and airing overrides | automatic download decisions |
 | `recognition` | parsed-title results, match attempts, candidates, confidence, corrections | deterministic parsing, anime/episode matching, explanations | preferences or downloader tasks |
-| `subscriptions` | subscriptions, rule profiles, episode identities, activation cutoffs, lifecycle | effective rules, aliases linked to a subscription, expected/observed episodes, missing-state evaluation | candidate ranking decisions or schedule-driven downloads |
+| `subscriptions` | subscriptions, rule profiles, activation cutoffs, lifecycle | effective rules and aliases linked to a subscription | candidate ranking or schedule state |
 | `selection` | waiting state, decisions, manual overrides, rejections, upgrade plans | hard filters, lexicographic comparison, fallback timers, backfill preview, V2/V3 policy | external downloader calls |
+| `schedule` | expected episodes, calendar state, missing-notification markers | weekly expectation projection, timezone calendar, episode history, missing-state evaluation | candidates, decisions, or download requests |
 | `downloads` | submission attempts, idempotency keys, task links, observed qBittorrent state | adapter contract, submit/cancel/retry/reconcile | deciding which release should win |
 | `notifications` | notification intents, delivery attempts, in-app notifications | policy for when to notify, JSON webhook delivery and retry | originating business decisions |
 | `audit` | append-only administrator-facing events | searchable history and redacted diagnostic context | workflow coordination |
@@ -134,9 +135,10 @@ future extraction. Event handlers are idempotent.
   state but cannot reopen or erase the original decision.
 - `audit` receives redacted facts from every module. Business modules never
   query audit rows to make decisions.
-- `subscriptions` may derive a missing-episode warning from cached schedule and
-  candidate facts, but that warning only feeds UI and notification projections;
-  it cannot enter the selection state machine as a synthetic candidate.
+- `schedule` may derive a missing-episode warning from catalog, subscription,
+  and selection public facts, but that warning only feeds UI and notification
+  projections; it cannot enter the selection state machine as a synthetic
+  candidate or emit a download request.
 
 ## 6. Dependency Direction
 
@@ -151,12 +153,18 @@ flowchart LR
     Selection --> Downloads["downloads"]
     Selection --> Notifications["notifications"]
     Downloads --> Notifications
+    Catalog --> Schedule["schedule"]
+    Subscriptions --> Schedule
+    Selection --> Schedule
+    Schedule --> Notifications
 
     System["system"] -. "auth and settings ports" .-> Feeds
+    System -. "timezone and grace settings" .-> Schedule
     Operations["operations"] -. "schedules public commands" .-> Feeds
     Operations -.-> Catalog
     Operations -.-> Selection
     Operations -.-> Downloads
+    Operations -.-> Schedule
     Feeds -. "redacted events" .-> Audit["audit"]
     Selection -.-> Audit
     Downloads -.-> Audit
@@ -427,6 +435,7 @@ web/src/
     feeds/
     anime/
     subscriptions/
+    schedule/
     confirmation/
     releases/
     downloads/
@@ -610,7 +619,9 @@ stage order in `DESIGN.md`:
    idempotency, reconciliation, and failure recovery.
 5. **Product slice:** setup/auth, dashboard projections, exception workflows,
    responsive feature screens.
-6. **Operations slice:** notifications, backups, retention, diagnostics,
+6. **Schedule slice:** advisory airing metadata, expected episodes, calendar,
+   missing warnings, and timezone rendering.
+7. **Operations slice:** notifications, backups, retention, diagnostics,
    container images, Compose, and soak testing.
 
 Each slice includes its migrations, module README contracts, domain tests,

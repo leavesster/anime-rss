@@ -4,6 +4,7 @@ import {
   Check,
   Download,
   FileArchive,
+  Languages,
   LogOut,
   RefreshCw,
   RotateCcw,
@@ -16,11 +17,13 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   createBackup,
   getNotificationConfig,
+  getInstanceSettings,
   listBackups,
   listNotifications,
   logout,
   markNotificationRead,
   saveNotificationConfig,
+  saveInstanceSettings,
   stageRestore,
   testNotificationWebhook,
 } from "../../generated/api/client";
@@ -39,12 +42,16 @@ function formatBytes(value: number): string {
 export function SystemPage() {
   const queryClient = useQueryClient();
   const config = useQuery({ queryKey: ["notification-config"], queryFn: getNotificationConfig });
+  const instance = useQuery({ queryKey: ["instance-settings"], queryFn: getInstanceSettings });
   const notifications = useQuery({ queryKey: ["notifications"], queryFn: listNotifications, refetchInterval: 30_000 });
   const backups = useQuery({ queryKey: ["backups"], queryFn: listBackups });
   const [webhookEnabled, setWebhookEnabled] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState("");
   const [bearerToken, setBearerToken] = useState("");
   const [restorePending, setRestorePending] = useState(false);
+  const [timezone, setTimezone] = useState("Asia/Shanghai");
+  const [interfaceLanguage, setInterfaceLanguage] = useState("zh-CN");
+  const [missingGraceHours, setMissingGraceHours] = useState(24);
   const restoreInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -52,6 +59,13 @@ export function SystemPage() {
     setWebhookEnabled(config.data.webhook_enabled);
     setWebhookUrl(config.data.webhook_url_redacted ?? "");
   }, [config.data]);
+
+  useEffect(() => {
+    if (!instance.data) return;
+    setTimezone(instance.data.timezone);
+    setInterfaceLanguage(instance.data.interface_language);
+    setMissingGraceHours(instance.data.missing_episode_grace_hours);
+  }, [instance.data]);
 
   const refreshNotifications = async () => {
     await Promise.all([
@@ -71,6 +85,22 @@ export function SystemPage() {
     onSuccess: async () => { setBearerToken(""); await refreshNotifications(); },
   });
   const testWebhook = useMutation({ mutationFn: testNotificationWebhook, onSuccess: refreshNotifications });
+  const saveInstance = useMutation({
+    mutationFn: () => saveInstanceSettings(
+      {
+        timezone,
+        interface_language: interfaceLanguage,
+        missing_episode_grace_hours: missingGraceHours,
+      },
+      instance.data?.version ?? 0,
+    ),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["instance-settings"] }),
+        queryClient.invalidateQueries({ queryKey: ["schedule-calendar"] }),
+      ]);
+    },
+  });
   const markRead = useMutation({
     mutationFn: markNotificationRead,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
@@ -94,12 +124,16 @@ export function SystemPage() {
     event.preventDefault();
     saveConfig.mutate();
   };
+  const submitInstance = (event: FormEvent) => {
+    event.preventDefault();
+    saveInstance.mutate();
+  };
   const onRestore = () => {
     const file = restoreInput.current?.files?.[0];
     if (file) restore.mutate(file);
   };
-  const hasError = config.isError || notifications.isError || backups.isError
-    || saveConfig.isError || testWebhook.isError || makeBackup.isError || restore.isError;
+  const hasError = config.isError || instance.isError || notifications.isError || backups.isError
+    || saveConfig.isError || saveInstance.isError || testWebhook.isError || makeBackup.isError || restore.isError;
 
   return (
     <>
@@ -111,9 +145,44 @@ export function SystemPage() {
       />
       {hasError && <ErrorBanner message="系统设置操作未完成，请检查输入和服务状态。" />}
       {restorePending && <div className="notice-strip"><RotateCcw size={17} /><span>恢复文件已验证并暂存，重启服务后生效。</span></div>}
-      {(config.isLoading || notifications.isLoading || backups.isLoading) && <LoadingState label="正在读取系统设置" />}
-      {!config.isLoading && !notifications.isLoading && !backups.isLoading && (
+      {(config.isLoading || instance.isLoading || notifications.isLoading || backups.isLoading) && <LoadingState label="正在读取系统设置" />}
+      {!config.isLoading && !instance.isLoading && !notifications.isLoading && !backups.isLoading && (
         <div className="system-layout">
+          <section className="system-section">
+            <div className="section-heading">
+              <div><h2>地区与缺集判断</h2><p>所有存储时间保持 UTC，界面按这里转换</p></div>
+              <Languages size={18} />
+            </div>
+            <form className="system-form" onSubmit={submitInstance}>
+              <label className="field">
+                <span>时区</span>
+                <input list="timezone-options" value={timezone} onChange={(event) => setTimezone(event.target.value)} />
+                <datalist id="timezone-options">
+                  <option value="Asia/Shanghai" />
+                  <option value="Asia/Tokyo" />
+                  <option value="Asia/Hong_Kong" />
+                  <option value="Asia/Taipei" />
+                  <option value="UTC" />
+                </datalist>
+              </label>
+              <label className="field">
+                <span>界面语言</span>
+                <select value={interfaceLanguage} onChange={(event) => setInterfaceLanguage(event.target.value)}>
+                  <option value="zh-CN">简体中文</option>
+                  <option value="en">English</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>缺集宽限时间</span>
+                <input type="number" min={1} max={168} value={missingGraceHours} onChange={(event) => setMissingGraceHours(Number(event.target.value))} />
+                <small>预计播出后等待小时数</small>
+              </label>
+              <div className="system-actions">
+                <Button type="submit" size="small" variant="primary" icon={<Save size={15} />} disabled={saveInstance.isPending}>保存</Button>
+              </div>
+            </form>
+          </section>
+
           <section className="system-section">
             <div className="section-heading">
               <div><h2>通知</h2><p>站内消息与 Webhook 投递</p></div>

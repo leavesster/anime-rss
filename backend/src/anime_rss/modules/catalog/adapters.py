@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -18,6 +19,8 @@ class BangumiAnime:
     episode_count: int | None
     cover_url: str | None
     aliases: tuple[str, ...] = ()
+    airing_weekday: int | None = None
+    airing_time: str | None = None
 
 
 class BangumiClient:
@@ -81,6 +84,8 @@ class BangumiClient:
         images = cast(dict[str, object], images_value) if isinstance(images_value, dict) else None
         cover_url: object = images.get("large") if images is not None else None
         aliases: list[str] = []
+        airing_weekday: int | None = None
+        airing_time: str | None = None
         infobox_value: object = payload.get("infobox")
         if isinstance(infobox_value, list):
             infobox = cast(list[object], infobox_value)
@@ -88,9 +93,16 @@ class BangumiClient:
                 if not isinstance(item, dict):
                     continue
                 typed_item = cast(dict[str, object], item)
-                if typed_item.get("key") not in {"别名", "別名"}:
-                    continue
+                key = typed_item.get("key")
                 value = typed_item.get("value")
+                if key in {"放送星期", "播放星期"}:
+                    airing_weekday = BangumiClient._parse_weekday(value)
+                    continue
+                if key in {"放送开始", "播放开始", "首播"}:
+                    airing_time = BangumiClient._parse_time(value)
+                    continue
+                if key not in {"别名", "別名"}:
+                    continue
                 values = cast(list[object], value) if isinstance(value, list) else [value]
                 for raw_alias in values:
                     alias: object = raw_alias
@@ -107,4 +119,50 @@ class BangumiClient:
             episode_count=(payload.get("eps") if isinstance(payload.get("eps"), int) else None),
             cover_url=cover_url if isinstance(cover_url, str) else None,
             aliases=tuple(dict.fromkeys(aliases)),
+            airing_weekday=airing_weekday,
+            airing_time=airing_time,
         )
+
+    @staticmethod
+    def _parse_weekday(value: object) -> int | None:
+        if isinstance(value, list) and value:
+            value = cast(list[object], value)[0]
+        if isinstance(value, dict):
+            value = cast(dict[str, object], value).get("v")
+        if not isinstance(value, str):
+            return None
+        normalized = value.strip().lower()
+        names = {
+            "一": 0,
+            "二": 1,
+            "三": 2,
+            "四": 3,
+            "五": 4,
+            "六": 5,
+            "日": 6,
+            "天": 6,
+            "monday": 0,
+            "tuesday": 1,
+            "wednesday": 2,
+            "thursday": 3,
+            "friday": 4,
+            "saturday": 5,
+            "sunday": 6,
+        }
+        for name, weekday in names.items():
+            if name in normalized:
+                return weekday
+        return None
+
+    @staticmethod
+    def _parse_time(value: object) -> str | None:
+        if isinstance(value, list) and value:
+            value = cast(list[object], value)[0]
+        if isinstance(value, dict):
+            value = cast(dict[str, object], value).get("v")
+        if not isinstance(value, str):
+            return None
+        match = re.search(r"(?<!\d)([01]?\d|2[0-3]):([0-5]\d)(?!\d)", value)
+        if match is None:
+            return None
+        return f"{int(match.group(1)):02d}:{match.group(2)}"

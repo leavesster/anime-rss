@@ -58,8 +58,8 @@ export function SelectionLogicPanel() {
         <span className="manual-boundary__icon"><Hand size={17} /></span>
         <div>
           <strong>人工处理边界</strong>
-          <p><CheckCircle2 size={14} />已支持历史回填逐集确认。</p>
-          <p>中置信度放行、同集人工改选和撤换既有决策将在后续阶段实现。</p>
+          <p><CheckCircle2 size={14} />已支持标题确认、历史回填和逐集改选。</p>
+          <p>人工替换保留旧决策；重置不会删除 qBittorrent 中已有任务。</p>
         </div>
       </div>
     </section>

@@ -43,6 +43,11 @@ class Anime:
     summary: str | None
     air_date: str | None
     episode_count: int | None
+    airing_weekday: int | None
+    airing_time: str | None
+    schedule_timezone: str | None
+    schedule_source: str | None
+    schedule_updated_at: datetime | None
     cover_url: str | None
     source: str
     titles: list[AnimeTitle]
@@ -125,6 +130,11 @@ class CatalogService:
             record.summary = external.summary
             record.air_date = external.air_date
             record.episode_count = external.episode_count
+            record.airing_weekday = external.airing_weekday
+            record.airing_time = external.airing_time
+            record.schedule_timezone = "Asia/Tokyo"
+            record.schedule_source = "bangumi"
+            record.schedule_updated_at = now
             record.cover_url = external.cover_url
             record.source = "bangumi"
             record.updated_at = now
@@ -174,6 +184,60 @@ class CatalogService:
                 entity_type="anime",
                 entity_id=anime_id,
                 payload={"alias": value[:300]},
+            )
+        return self.get_anime(anime_id)
+
+    def update_schedule(
+        self,
+        anime_id: str,
+        *,
+        air_date: str | None,
+        episode_count: int | None,
+        airing_weekday: int | None,
+        airing_time: str | None,
+        schedule_timezone: str,
+    ) -> Anime:
+        from datetime import date, time
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+        if air_date is not None:
+            try:
+                date.fromisoformat(air_date)
+            except ValueError as error:
+                raise ValueError("air date must use YYYY-MM-DD") from error
+        if episode_count is not None and not 1 <= episode_count <= 1000:
+            raise ValueError("episode count must be between 1 and 1000")
+        if airing_weekday is not None and not 0 <= airing_weekday <= 6:
+            raise ValueError("airing weekday must be between 0 and 6")
+        if airing_time is not None:
+            try:
+                time.fromisoformat(airing_time)
+            except ValueError as error:
+                raise ValueError("airing time must use HH:MM") from error
+            airing_time = airing_time[:5]
+        try:
+            ZoneInfo(schedule_timezone)
+        except (ZoneInfoNotFoundError, ValueError) as error:
+            raise ValueError("unknown schedule timezone") from error
+        now = self._clock()
+        with self._session_factory.begin() as session:
+            record = session.get(AnimeRecord, anime_id)
+            if record is None:
+                raise AnimeNotFoundError(anime_id)
+            record.air_date = air_date
+            record.episode_count = episode_count
+            record.airing_weekday = airing_weekday
+            record.airing_time = airing_time
+            record.schedule_timezone = schedule_timezone
+            record.schedule_source = "manual"
+            record.schedule_updated_at = now
+            record.updated_at = now
+            record_event(
+                session,
+                event_type="catalog.schedule_updated",
+                entity_type="anime",
+                entity_id=anime_id,
+                payload={"source": "manual"},
             )
         return self.get_anime(anime_id)
 
@@ -253,6 +317,11 @@ class CatalogService:
                 summary=record.summary,
                 air_date=record.air_date,
                 episode_count=record.episode_count,
+                airing_weekday=record.airing_weekday,
+                airing_time=record.airing_time,
+                schedule_timezone=record.schedule_timezone,
+                schedule_source=record.schedule_source,
+                schedule_updated_at=record.schedule_updated_at,
                 cover_url=record.cover_url,
                 source=record.source,
                 titles=[

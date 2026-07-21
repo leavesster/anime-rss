@@ -17,10 +17,10 @@ describe("selection logic panel", () => {
     ]);
   });
 
-  it("distinguishes available backfill from future manual selection", () => {
+  it("shows the implemented manual correction boundary", () => {
     render(<SelectionLogicPanel />);
 
-    expect(screen.getByText("已支持历史回填逐集确认。")).toBeInTheDocument();
-    expect(screen.getByText(/同集人工改选和撤换既有决策将在后续阶段实现/)).toBeInTheDocument();
+    expect(screen.getByText("已支持标题确认、历史回填和逐集改选。")).toBeInTheDocument();
+    expect(screen.getByText(/人工替换保留旧决策/)).toBeInTheDocument();
   });
 });

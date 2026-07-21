@@ -16,3 +16,4 @@ consumes integration events and never participates in selection decisions.
 - Webhook credentials are encrypted and never returned by the API.
 - Delivery is idempotent by notification ID and uses bounded retry.
 - A delivery failure cannot roll back or alter the originating business action.
+- `EpisodeMissing.v1` is presented once per expected-episode source event.

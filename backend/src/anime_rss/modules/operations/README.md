@@ -29,5 +29,6 @@ own module; a job only invokes a public command when that deadline is due.
 
 - Feed retry policy or next-fetch state
 - Selection fallback deadlines
+- Expected-episode and missing-state evaluation
 - Download retry and reconciliation state
 - Cross-module business failure state

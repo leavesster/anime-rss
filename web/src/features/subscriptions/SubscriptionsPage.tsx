@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, Clock3, History, ListTree, Pause, Play, Plus, Sparkles } from "lucide-react";
+import { BookOpen, CalendarClock, Clock3, History, ListTree, Pause, Play, Plus, Sparkles } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -8,6 +8,7 @@ import {
   listSelectionSlots,
   listSubscriptions,
   type Subscription,
+  type Anime,
   updateSubscription,
 } from "../../generated/api/client";
 import { EmptyState } from "../../shared/components/EmptyState";
@@ -21,6 +22,7 @@ import { CreateSubscriptionDialog } from "./CreateSubscriptionDialog";
 import { EpisodeControlDialog } from "./EpisodeControlDialog";
 import { GlobalPreferencesPanel } from "./GlobalPreferencesPanel";
 import { SelectionLogicPanel } from "./SelectionLogicPanel";
+import { ScheduleDialog } from "./ScheduleDialog";
 
 const decisionLabels: Record<string, string> = {
   selected_preferred: "首选",
@@ -37,6 +39,7 @@ export function SubscriptionsPage() {
   const [showSubscription, setShowSubscription] = useState(false);
   const [backfill, setBackfill] = useState<Subscription | null>(null);
   const [episodeControl, setEpisodeControl] = useState<Subscription | null>(null);
+  const [scheduleAnime, setScheduleAnime] = useState<Anime | null>(null);
   const anime = useQuery({ queryKey: ["anime"], queryFn: listAnime });
   const subscriptions = useQuery({ queryKey: ["subscriptions"], queryFn: listSubscriptions });
   const slots = useQuery({ queryKey: ["selection-slots"], queryFn: () => listSelectionSlots() });
@@ -72,7 +75,7 @@ export function SubscriptionsPage() {
               <div className="subscription-rule"><small>{subscription.uses_global_rules ? "全局字幕组优先级" : "单独字幕组优先级"}</small><strong>{subscription.rules.preferred_groups?.join(" › ") || "不限制"}</strong></div>
               <div className="subscription-rule"><small>备选等待</small><strong>{subscription.rules.fallback_wait_minutes ?? 120} 分钟</strong></div>
               <StatusBadge status={subscription.state} />
-              <div className="feed-actions"><button className="button button--ghost button--small" onClick={() => setEpisodeControl(subscription)}><ListTree size={15} />剧集</button><button className="button button--ghost button--small" onClick={() => setBackfill(subscription)}><History size={15} />回填</button><button className="icon-button" aria-label={subscription.state === "following" ? "暂停追番" : "恢复追番"} onClick={() => lifecycle.mutate({ subscription, state: subscription.state === "following" ? "paused" : "following" })}>{subscription.state === "following" ? <Pause size={16} /> : <Play size={16} />}</button></div>
+              <div className="feed-actions"><button className="button button--ghost button--small" onClick={() => setEpisodeControl(subscription)}><ListTree size={15} />剧集</button><button className="button button--ghost button--small" onClick={() => setScheduleAnime(anime.data.find((item) => item.id === subscription.anime_id) ?? null)}><CalendarClock size={15} />播出</button><button className="button button--ghost button--small" onClick={() => setBackfill(subscription)}><History size={15} />回填</button><button className="icon-button" aria-label={subscription.state === "following" ? "暂停追番" : "恢复追番"} onClick={() => lifecycle.mutate({ subscription, state: subscription.state === "following" ? "paused" : "following" })}>{subscription.state === "following" ? <Pause size={16} /> : <Play size={16} />}</button></div>
             </article>)}</div>}
           </section>
 
@@ -89,6 +92,7 @@ export function SubscriptionsPage() {
       {showSubscription && anime.data && subscriptions.data && <CreateSubscriptionDialog anime={anime.data} unavailableAnimeIds={new Set(subscriptions.data.map((item) => item.anime_id))} onClose={() => setShowSubscription(false)} />}
       {backfill && <BackfillDialog subscription={backfill} onClose={() => setBackfill(null)} />}
       {episodeControl && <EpisodeControlDialog subscription={episodeControl} onClose={() => setEpisodeControl(null)} />}
+      {scheduleAnime && <ScheduleDialog anime={scheduleAnime} onClose={() => setScheduleAnime(null)} />}
     </>
   );
 }

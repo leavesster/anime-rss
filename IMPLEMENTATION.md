@@ -50,6 +50,7 @@ packaged as a first-run authenticated, recoverable Compose service.
   deadlines, and download reconciliation.
 - Persisted scheduler heartbeats, leases, attempts, execution history, and
   expired-run recovery.
+- Hourly `schedule.sync` projection refresh with durable expected-episode rows.
 
 ### Recognition
 
@@ -76,6 +77,23 @@ packaged as a first-run authenticated, recoverable Compose service.
   optimistic updates.
 - Explicit hard filters, ordered preferences, and a configurable fallback wait.
 - One versioned global preference profile with explicit per-subscription overrides.
+- Imported or manually editable weekly airing date, time, timezone, and episode
+  count metadata.
+
+### Schedule and missing episodes
+
+- One independently readable `schedule` module that consumes catalog,
+  subscription, selection, and instance-setting public query DTOs only.
+- Durable expected episodes generated from the first air date at seven-day
+  intervals, bounded by the known episode count and current subscription epoch.
+- UTC schedule storage with calendar rendering in the administrator-selected
+  IANA timezone.
+- Today plus seven-day calendar and per-anime expected-episode history.
+- `scheduled`, `acquired`, and `missing` states derived from selection facts;
+  an acceptable fallback prevents a missing classification.
+- One-time `EpisodeMissing.v1` emission after the configurable grace period.
+- Schedule synchronization cannot emit `DownloadRequested.v1` or create a
+  synthetic candidate.
 
 ### Selection
 
@@ -130,6 +148,8 @@ packaged as a first-run authenticated, recoverable Compose service.
   validation, restart-safe staging, and automatic pre-restore backup.
 - React setup/login gate plus system view for notifications, Webhook settings,
   backup download, restore upload, and logout.
+- Versioned instance settings for timezone, interface language, missing-episode
+  grace, and guided-setup progress.
 - Multi-stage Docker build, non-root Python runtime, one Uvicorn worker, readiness
   health check, and a named Compose data volume.
 
@@ -151,6 +171,8 @@ packaged as a first-run authenticated, recoverable Compose service.
   work, and audit history.
 - Dashboard failed-work summary plus candidate confirmation and release-mapping
   controls.
+- Eight-day airing calendar, missing-episode warning list, editable airing
+  metadata, per-anime episode history, and instance locale settings.
 
 ## 3. Decision Log
 
@@ -570,6 +592,46 @@ port, and probes database readiness.
 one portable volume, and avoids process-manager behavior that could duplicate the
 embedded scheduler.
 
+### SCH-001: Schedule is a downstream projection, never an acquisition source
+
+**Choice:** `schedule` reads catalog metadata, subscriptions, selection slots,
+decisions, and instance settings through public APIs. It owns expected-episode
+rows and may emit only `EpisodeMissing.v1`.
+
+**Reason:** A broadcast plan is advisory and can be incomplete or wrong. Keeping
+it outside recognition and selection makes it structurally impossible for a
+calendar row to create a downloader task.
+
+### SCH-002: Weekly expectations are anchored to the first air date
+
+**Choice:** The stored first air date and source-local airtime define episode 1;
+subsequent numeric episodes are seven days apart, stop at the known episode
+count, and begin no earlier than the subscription activation epoch. Bangumi
+times use `Asia/Tokyo`; manual schedules require an explicit IANA timezone.
+
+**Tradeoff:** Split cours, postponements, double episodes, and specials require a
+manual schedule correction or future provider episode data. The generator does
+not guess irregular broadcasts.
+
+### SCH-003: Missing means no acquisition and no acceptable fallback
+
+**Choice:** A decision or `acquired_elsewhere` state marks the expected episode
+acquired. A waiting fallback is acceptable and suppresses a warning. Otherwise a
+following subscription becomes missing after the instance grace period, once.
+
+**Reason:** The alert should identify absent usable releases, not pressure a
+still-running selection wait or repeatedly notify on every scheduler cycle.
+
+### SYS-001: Locale and missing threshold are versioned instance settings
+
+**Choice:** Timezone, interface language, grace hours, completed setup steps, and
+setup completion live in one optimistic-lock settings row. Stored timestamps
+remain UTC; only query projections convert them.
+
+**Reason:** One instance-owned source keeps UI rendering and background missing
+evaluation consistent while leaving setup progress durable for the remaining
+guided-wizard work.
+
 ## 4. Parser v1 Contract
 
 Supported episode shapes:
@@ -609,15 +671,35 @@ attempts are not silently rewritten.
 - Restore requires an explicit service restart after upload.
 - The Webhook adapter emits generic JSON; provider-specific message formats are
   not implemented.
+- Weekly schedule generation does not model postponements, split cours, specials,
+  or provider episode-level overrides yet.
 
 ## 6. Next Planned Slice
 
-The next coherent delivery unit is `release acceptance + remaining product views`:
+The next coherent delivery unit is `guided setup + release acceptance`:
 
-1. Add an airing calendar and per-anime episode history without allowing schedule
-   metadata to trigger downloads.
-2. Run disposable Compose acceptance for first setup, backup into a clean volume,
+1. Complete guided setup steps 2-8 using the persisted setup-progress record.
+2. Prevent duplicate feed URLs and add reassignment of recognized releases that
+   already have candidates or decisions.
+3. Implement data/log retention and structured correlation IDs.
+4. Run disposable Compose acceptance for first setup, backup into a clean volume,
    restore, upgrade, and rollback.
-3. Add multi-architecture image CI and published image provenance.
-4. Start and record the seven-day real-feed soak required by `DESIGN.md`; this is
+5. Add multi-architecture image CI and published image provenance.
+6. Start and record the seven-day real-feed soak required by `DESIGN.md`; this is
    elapsed-time validation and is not claimed by the current automated suite.
+
+## 7. Current Verification Evidence
+
+Verified on 2026-07-22 with `make verify` after migration `0009`:
+
+- Ruff formatting and lint: passed.
+- Pyright: passed with zero errors.
+- Backend: 60 tests passed, 88.38% statement coverage.
+- Frontend: ESLint and TypeScript passed; 5 Vitest tests passed.
+- Production Vite build: passed.
+- Schedule integration evidence covers UTC-to-instance-timezone rendering,
+  one-time missing notification, acquired-elsewhere recovery, and the absence of
+  download tasks from schedule processing.
+
+The seven-day real-feed soak and disposable Compose lifecycle remain
+elapsed/runtime acceptance work and are not inferred from this automated suite.

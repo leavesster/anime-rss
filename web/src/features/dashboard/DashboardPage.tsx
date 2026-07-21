@@ -1,8 +1,20 @@
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, Database, Plus, Rss, ServerCog } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
+  Database,
+  Plus,
+  RefreshCw,
+  Rss,
+  ServerCog,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 
-import { getOperationsOverview, listReleases } from "../../generated/api/client";
+import { getOperationsOverview, listReleases, refreshSchedule } from "../../generated/api/client";
+import { Button } from "../../shared/components/Button";
 import { EmptyState } from "../../shared/components/EmptyState";
 import { ErrorBanner, LoadingState } from "../../shared/components/Feedback";
 import { PageHeader } from "../../shared/components/PageHeader";
@@ -14,8 +26,9 @@ export function DashboardPage() {
   const feeds = useQuery(feedsQuery);
   const releases = useQuery({ queryKey: ["releases"], queryFn: listReleases });
   const operations = useQuery({ queryKey: ["operations-overview"], queryFn: getOperationsOverview, refetchInterval: 15_000 });
-  const isLoading = feeds.isLoading || releases.isLoading || operations.isLoading;
-  const hasError = feeds.isError || releases.isError || operations.isError;
+  const schedule = useQuery({ queryKey: ["schedule-calendar"], queryFn: refreshSchedule, staleTime: 5 * 60_000 });
+  const isLoading = feeds.isLoading || releases.isLoading || operations.isLoading || schedule.isLoading;
+  const hasError = feeds.isError || releases.isError || operations.isError || schedule.isError;
   const healthyFeeds = feeds.data?.filter((feed) => feed.health === "healthy").length ?? 0;
   const attentionFeeds = feeds.data?.filter((feed) => !["healthy", "never_fetched"].includes(feed.health)) ?? [];
 
@@ -29,9 +42,53 @@ export function DashboardPage() {
           <section className="overview-band overview-band--four" aria-label="运行指标">
             <div className="overview-metric"><span className="metric-icon metric-icon--green"><CheckCircle2 size={19} /></span><div><small>健康订阅源</small><strong>{healthyFeeds}<span> / {feeds.data?.length ?? 0}</span></strong></div></div>
             <div className="overview-metric"><span className="metric-icon metric-icon--blue"><Database size={19} /></span><div><small>唯一发布</small><strong>{releases.data?.length ?? 0}</strong></div></div>
-            <div className="overview-metric"><span className={`metric-icon ${operations.data?.failed_work.length ? "metric-icon--red" : "metric-icon--gray"}`}><AlertTriangle size={19} /></span><div><small>需要处理</small><strong>{operations.data?.failed_work.length ?? attentionFeeds.length}</strong></div></div>
+            <div className="overview-metric"><span className={`metric-icon ${(operations.data?.failed_work.length ?? 0) + (schedule.data?.missing.length ?? 0) ? "metric-icon--red" : "metric-icon--gray"}`}><AlertTriangle size={19} /></span><div><small>需要处理</small><strong>{(operations.data?.failed_work.length ?? attentionFeeds.length) + (schedule.data?.missing.length ?? 0)}</strong></div></div>
             <div className="overview-metric"><span className="metric-icon metric-icon--gray"><ServerCog size={19} /></span><div><small>后台调度</small><strong>{operations.data?.scheduler?.state ?? "启动中"}</strong></div></div>
           </section>
+
+          {schedule.data && (
+            <section className="dashboard-section schedule-section">
+              <div className="section-heading">
+                <div><h2>播出日历</h2><p>今天起八天，时间按实例时区显示</p></div>
+                <Button size="icon" variant="ghost" title="刷新日历" aria-label="刷新日历" icon={<RefreshCw size={16} />} disabled={schedule.isFetching} onClick={() => schedule.refetch()} />
+              </div>
+              <div className="schedule-calendar">
+                {schedule.data.calendar.map((day) => (
+                  <div className="schedule-day" key={day.date}>
+                    <div className="schedule-day__header">
+                      <strong>{new Intl.DateTimeFormat("zh-CN", { weekday: "short" }).format(new Date(`${day.date}T12:00:00`))}</strong>
+                      <span>{day.date.slice(5).replace("-", "/")}</span>
+                    </div>
+                    <div className="schedule-day__episodes">
+                      {day.episodes.length === 0 && <small className="schedule-empty">无播出</small>}
+                      {day.episodes.map((episode) => (
+                        <article className={`schedule-episode schedule-episode--${episode.state}`} key={episode.id}>
+                          <div><strong>{episode.anime_title}</strong><small>第 {episode.episode_key} 集</small></div>
+                          <time>{episode.local_time}</time>
+                        </article>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {schedule.data && schedule.data.missing.length > 0 && (
+            <section className="dashboard-section dashboard-attention">
+              <div className="section-heading"><div><h2>缺集告警</h2><p>超过配置阈值且尚无可接受候选</p></div><CalendarDays size={18} /></div>
+              <div className="compact-list">
+                {schedule.data.missing.slice(0, 8).map((episode) => (
+                  <Link className="compact-row" to="/subscriptions" key={episode.id}>
+                    <span className="compact-row__icon compact-row__icon--danger"><AlertTriangle size={17} /></span>
+                    <div><strong>{episode.anime_title} · 第 {episode.episode_key} 集</strong><small>预计 {episode.local_date} {episode.local_time}</small></div>
+                    <StatusBadge status="missing" />
+                    <ArrowRight className="compact-row__arrow" size={16} />
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
 
           {operations.data && operations.data.failed_work.length > 0 && <section className="dashboard-section dashboard-attention"><div className="section-heading"><div><h2>需要处理</h2><p>按最近发生时间汇总</p></div><Link to="/operations">查看运行中心<ArrowRight size={15} /></Link></div><div className="compact-list">{operations.data.failed_work.slice(0, 5).map((item) => <Link className="compact-row" to={item.action_path ?? "/operations"} key={item.key}><span className="compact-row__icon compact-row__icon--danger"><AlertTriangle size={17} /></span><div><strong>{item.title}</strong><small>{item.detail}{item.error_code ? ` · ${item.error_code}` : ""}</small></div><StatusBadge status="failed" /><ArrowRight className="compact-row__arrow" size={16} /></Link>)}</div></section>}
 

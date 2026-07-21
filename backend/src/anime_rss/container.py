@@ -17,8 +17,10 @@ from anime_rss.modules.operations.ports import DiagnosticsSource
 from anime_rss.modules.operations.worker import Scheduler
 from anime_rss.modules.recognition.api import RecognitionService
 from anime_rss.modules.releases.api import ReleaseService
+from anime_rss.modules.schedule.api import ScheduleService
 from anime_rss.modules.selection.api import SelectionService
 from anime_rss.modules.subscriptions.api import SubscriptionService
+from anime_rss.modules.system.api import InstanceSettingsService
 from anime_rss.modules.system.auth import AuthService
 from anime_rss.modules.system.backup import BackupService
 
@@ -44,6 +46,8 @@ class ServiceContainer:
     scheduler: Scheduler
     auth: AuthService
     notifications: NotificationService
+    settings: InstanceSettingsService
+    schedule: ScheduleService
     backups: BackupService
     events: EventDispatcher
 

@@ -14,6 +14,7 @@ from anime_rss.modules.operations.ports import (
     JobSchedule,
 )
 from anime_rss.modules.recognition.api import RecognitionService
+from anime_rss.modules.schedule.api import ScheduleService
 from anime_rss.modules.selection.api import SelectionService
 from anime_rss.modules.system.backup import BackupService
 
@@ -31,12 +32,14 @@ class ApplicationRuntime:
         recognition: RecognitionService,
         jobs: JobService,
         notifications: NotificationService,
+        schedule: ScheduleService,
         backups: BackupService,
         clock: Clock = utc_now,
         event_interval_seconds: int = 5,
         selection_interval_seconds: int = 10,
         download_interval_seconds: int = 30,
         backup_interval_hours: int = 24,
+        schedule_interval_minutes: int = 60,
     ) -> None:
         self._feeds = feeds
         self._events = events
@@ -45,12 +48,14 @@ class ApplicationRuntime:
         self._recognition = recognition
         self._jobs = jobs
         self._notifications = notifications
+        self._schedule = schedule
         self._backups = backups
         self._clock = clock
         self._event_interval_seconds = event_interval_seconds
         self._selection_interval_seconds = selection_interval_seconds
         self._download_interval_seconds = download_interval_seconds
         self._backup_interval_hours = backup_interval_hours
+        self._schedule_interval_minutes = schedule_interval_minutes
 
     @property
     def handlers(self) -> dict[str, JobHandler]:
@@ -60,6 +65,7 @@ class ApplicationRuntime:
             "selection.process_due": self._process_selection,
             "downloads.process_cycle": self._process_downloads,
             "notifications.process_deliveries": self._process_notifications,
+            "schedule.sync": self._sync_schedule,
             "system.backup": self._create_backup,
         }
 
@@ -70,6 +76,7 @@ class ApplicationRuntime:
             JobSchedule("selection.process_due", "singleton", now),
             JobSchedule("downloads.process_cycle", "singleton", now),
             JobSchedule("notifications.process_deliveries", "singleton", now),
+            JobSchedule("schedule.sync", "singleton", now),
             JobSchedule("system.backup", "daily", now),
         ]
         schedules.extend(
@@ -267,6 +274,20 @@ class ApplicationRuntime:
         return JobResult(
             self._clock() + timedelta(seconds=30),
             {"delivered": result.delivered, "failed": result.failed},
+        )
+
+    def _sync_schedule(self, job: ClaimedJob) -> JobResult:
+        result = self._schedule.synchronize()
+        dispatched = self._events.dispatch_until_idle()
+        return JobResult(
+            self._clock() + timedelta(minutes=self._schedule_interval_minutes),
+            {
+                "generated": result.generated,
+                "acquired": result.acquired,
+                "missing": result.missing,
+                "notifications": result.notifications,
+                "dispatched_events": dispatched,
+            },
         )
 
     def _create_backup(self, job: ClaimedJob) -> JobResult:
