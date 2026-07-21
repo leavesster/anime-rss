@@ -34,6 +34,9 @@ class CandidateResponse(BaseModel):
     confidence: str
     recognition_eligible: bool
     first_seen_at: datetime
+    supersedes_candidate_id: str | None
+    superseded_by_candidate_id: str | None
+    superseded_at: datetime | None
 
 
 class EpisodeGroupResponse(BaseModel):

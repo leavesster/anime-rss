@@ -9,7 +9,6 @@ import {
   remapRelease,
   type Candidate,
   type ReleaseRemap,
-  type UnmatchedRelease,
 } from "../../generated/api/client";
 import { Button } from "../../shared/components/Button";
 import { EmptyState } from "../../shared/components/EmptyState";
@@ -19,6 +18,15 @@ import { StatusBadge } from "../../shared/components/StatusBadge";
 import { formatDate } from "../../shared/lib/format";
 
 type CandidateTab = "grouped" | "unmatched";
+type RemapTarget = {
+  release_id: string;
+  source_title: string;
+  series_title?: string;
+  episode_start?: string;
+  episode_end?: string | null;
+  season?: number | null;
+  release_group?: string | null;
+};
 
 function mediaSummary(candidate: Candidate): string {
   return [candidate.resolution, candidate.video_codec, candidate.subtitle_language]
@@ -30,7 +38,7 @@ export function CandidatesPage() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<CandidateTab>("grouped");
   const [search, setSearch] = useState("");
-  const [remapTarget, setRemapTarget] = useState<UnmatchedRelease | null>(null);
+  const [remapTarget, setRemapTarget] = useState<RemapTarget | null>(null);
   const groups = useQuery({ queryKey: ["episode-groups"], queryFn: listEpisodeGroups });
   const unmatched = useQuery({ queryKey: ["unmatched-releases"], queryFn: listUnmatchedReleases });
   const filteredGroups = useMemo(() => {
@@ -90,7 +98,10 @@ export function CandidatesPage() {
                   <span className="revision-label">V{candidate.revision}</span>
                   <StatusBadge status={candidate.confidence} />
                   <span className={candidate.recognition_eligible ? "eligibility eligibility--yes" : "eligibility"}><CheckCircle2 size={16} />{candidate.recognition_eligible ? "可参与选择" : "需确认"}</span>
-                  {!candidate.recognition_eligible ? <Button aria-label="确认候选" title="确认候选" size="icon" variant="ghost" icon={<ShieldCheck size={16} />} disabled={confirm.isPending} onClick={() => confirm.mutate(candidate.id)} /> : <span className="candidate-action-spacer" />}
+                  <div className="candidate-actions">
+                    {!candidate.recognition_eligible && <Button aria-label="确认候选" title="确认候选" size="icon" variant="ghost" icon={<ShieldCheck size={16} />} disabled={confirm.isPending} onClick={() => confirm.mutate(candidate.id)} />}
+                    <Button aria-label="修正映射" title="修正映射" size="icon" variant="ghost" icon={<PencilLine size={16} />} onClick={() => setRemapTarget(candidate)} />
+                  </div>
                 </div>
               ))}</div>
             </article>
@@ -105,12 +116,12 @@ export function CandidatesPage() {
   );
 }
 
-function RemapDialog({ release, pending, onClose, onSubmit }: { release: UnmatchedRelease; pending: boolean; onClose: () => void; onSubmit: (payload: ReleaseRemap) => void }) {
-  const [seriesTitle, setSeriesTitle] = useState("");
-  const [episodeStart, setEpisodeStart] = useState("");
-  const [episodeEnd, setEpisodeEnd] = useState("");
-  const [season, setSeason] = useState("");
-  const [releaseGroup, setReleaseGroup] = useState("");
+function RemapDialog({ release, pending, onClose, onSubmit }: { release: RemapTarget; pending: boolean; onClose: () => void; onSubmit: (payload: ReleaseRemap) => void }) {
+  const [seriesTitle, setSeriesTitle] = useState(release.series_title ?? "");
+  const [episodeStart, setEpisodeStart] = useState(release.episode_start ?? "");
+  const [episodeEnd, setEpisodeEnd] = useState(release.episode_end ?? "");
+  const [season, setSeason] = useState(release.season?.toString() ?? "");
+  const [releaseGroup, setReleaseGroup] = useState(release.release_group ?? "");
   const submit = (event: FormEvent) => {
     event.preventDefault();
     onSubmit({

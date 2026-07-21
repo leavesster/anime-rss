@@ -8,6 +8,7 @@ plaintext credentials.
 ## Public surface
 
 - `SecretCipher.encrypt` and `SecretCipher.decrypt`
+- `SecretCipher.blind_index` for purpose-bound deterministic secret comparison
 - `FileSecretCipher.load_or_create`
 - `AuthService` first-run setup, login, logout, and session validation
 - `BackupService` online SQLite backup, retention, restore staging, and startup apply

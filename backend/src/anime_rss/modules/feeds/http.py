@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 from anime_rss.infrastructure.events import EventDispatcher
 from anime_rss.infrastructure.http import HttpFetchError
-from anime_rss.modules.feeds.api import FeedNotFoundError, FeedService
+from anime_rss.modules.feeds.api import FeedConflictError, FeedNotFoundError, FeedService
 
 router = APIRouter(prefix="/feeds", tags=["feeds"])
 
@@ -106,6 +106,8 @@ def create_feed(payload: FeedCreateRequest, request: Request) -> FeedResponse:
             interval_seconds=payload.interval_seconds,
             headers=payload.headers,
         )
+    except FeedConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     return FeedResponse.model_validate(feed)
@@ -134,6 +136,8 @@ def update_feed(
         )
     except FeedNotFoundError as error:
         raise HTTPException(status_code=404, detail="feed not found") from error
+    except FeedConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     except ValueError as error:
         code = 409 if str(error) == "feed version conflict" else 422
         raise HTTPException(status_code=code, detail=str(error)) from error

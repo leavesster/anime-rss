@@ -135,6 +135,55 @@ class SelectionService:
         for subscription in self._subscriptions.list_matching_for_selection(candidate.series_key):
             self._evaluate_automatic(subscription, candidate)
 
+    def handle_candidate_remapped(self, event: IntegrationEvent) -> None:
+        if event.name != "CandidateRemapped.v1" or event.version != 1:
+            return
+        previous_id = event.payload.get("previous_candidate_id")
+        candidate_id = event.payload.get("candidate_id")
+        release_id = event.payload.get("release_id")
+        if not all(isinstance(value, str) for value in (previous_id, candidate_id, release_id)):
+            return
+        now = self._clock()
+        with self._session_factory.begin() as session:
+            slots = list(
+                session.scalars(
+                    select(EpisodeSlotRecord).where(
+                        EpisodeSlotRecord.best_candidate_id == previous_id
+                    )
+                )
+            )
+            for slot in slots:
+                action = (
+                    "candidate_reassigned_after_decision"
+                    if slot.selected_decision_id is not None
+                    else "candidate_reassigned"
+                )
+                session.add(
+                    ManualActionRecord(
+                        id=new_id(),
+                        subscription_id=slot.subscription_id,
+                        slot_id=slot.id,
+                        episode_key=slot.episode_key,
+                        candidate_id=candidate_id,
+                        release_id=release_id,
+                        action=action,
+                        reason={
+                            "previous_candidate_id": previous_id,
+                            "candidate_id": candidate_id,
+                            "previous_series_key": event.payload.get("previous_series_key"),
+                            "previous_episode_key": event.payload.get("previous_episode_key"),
+                            "episode_key": event.payload.get("episode_key"),
+                        },
+                        created_at=now,
+                    )
+                )
+                if slot.selected_decision_id is None:
+                    slot.state = "open"
+                    slot.best_candidate_id = None
+                    slot.fallback_deadline = None
+                    slot.version += 1
+                    slot.updated_at = now
+
     def process_due(self, *, limit: int = 100) -> int:
         now = self._clock()
         with self._session_factory() as session:

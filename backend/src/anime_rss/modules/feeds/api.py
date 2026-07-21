@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.engine import CursorResult
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from anime_rss.infrastructure.events import append_event
@@ -32,6 +33,10 @@ from anime_rss.modules.system.api import SecretCipher
 
 
 class FeedNotFoundError(LookupError):
+    pass
+
+
+class FeedConflictError(RuntimeError):
     pass
 
 
@@ -138,6 +143,7 @@ class FeedService:
         self._parser = parser
         self._clock = clock
         self._jitter = jitter
+        self._backfill_url_fingerprints()
 
     def create_feed(
         self,
@@ -148,12 +154,14 @@ class FeedService:
         headers: dict[str, str] | None = None,
     ) -> Feed:
         self._validate_configuration(name=name, url=url, interval_seconds=interval_seconds)
+        fingerprint = self._url_fingerprint(url)
         feed_id = new_id()
         now = self._clock()
         record = FeedRecord(
             id=feed_id,
             name=name.strip(),
             url_redacted=redact_url(url),
+            url_fingerprint=fingerprint,
             endpoint_ciphertext=self._cipher.encrypt(
                 url.encode(), purpose=f"feed:{feed_id}:endpoint"
             ),
@@ -163,18 +171,47 @@ class FeedService:
             created_at=now,
             updated_at=now,
         )
-        with self._session_factory.begin() as session:
-            session.add(record)
-            record_event(
-                session,
-                event_type="feed.created",
-                entity_type="feed",
-                entity_id=feed_id,
-                payload={"url": record.url_redacted, "interval_seconds": interval_seconds},
-            )
+        try:
+            with self._session_factory.begin() as session:
+                if session.scalar(
+                    select(FeedRecord.id).where(FeedRecord.url_fingerprint == fingerprint)
+                ):
+                    raise FeedConflictError("feed URL is already configured")
+                session.add(record)
+                record_event(
+                    session,
+                    event_type="feed.created",
+                    entity_type="feed",
+                    entity_id=feed_id,
+                    payload={"url": record.url_redacted, "interval_seconds": interval_seconds},
+                )
+        except IntegrityError as error:
+            raise FeedConflictError("feed URL is already configured") from error
         return self._to_feed(record)
 
     def update_feed(
+        self,
+        feed_id: str,
+        *,
+        name: str | None = None,
+        url: str | None = None,
+        interval_seconds: int | None = None,
+        headers: dict[str, str] | None = None,
+        expected_version: int | None = None,
+    ) -> Feed:
+        try:
+            return self._update_feed(
+                feed_id,
+                name=name,
+                url=url,
+                interval_seconds=interval_seconds,
+                headers=headers,
+                expected_version=expected_version,
+            )
+        except IntegrityError as error:
+            raise FeedConflictError("feed URL is already configured") from error
+
+    def _update_feed(
         self,
         feed_id: str,
         *,
@@ -196,10 +233,20 @@ class FeedService:
             self._validate_configuration(
                 name=next_name, url=next_url, interval_seconds=next_interval
             )
+            next_fingerprint = self._url_fingerprint(next_url)
+            duplicate = session.scalar(
+                select(FeedRecord.id).where(
+                    FeedRecord.url_fingerprint == next_fingerprint,
+                    FeedRecord.id != feed_id,
+                )
+            )
+            if duplicate is not None:
+                raise FeedConflictError("feed URL is already configured")
             record.name = next_name
             record.interval_seconds = next_interval
             if url is not None:
                 record.url_redacted = redact_url(url)
+                record.url_fingerprint = next_fingerprint
                 record.endpoint_ciphertext = self._cipher.encrypt(
                     url.encode(), purpose=f"feed:{feed_id}:endpoint"
                 )
@@ -219,6 +266,23 @@ class FeedService:
                 payload={"url": record.url_redacted, "version": record.version},
             )
         return self._to_feed(record)
+
+    def _backfill_url_fingerprints(self) -> None:
+        with self._session_factory.begin() as session:
+            records = list(
+                session.scalars(select(FeedRecord).order_by(FeedRecord.created_at, FeedRecord.id))
+            )
+            claimed = {
+                record.url_fingerprint for record in records if record.url_fingerprint is not None
+            }
+            for record in records:
+                if record.url_fingerprint is not None:
+                    continue
+                fingerprint = self._url_fingerprint(self._decrypt_endpoint(record))
+                if fingerprint in claimed:
+                    continue
+                record.url_fingerprint = fingerprint
+                claimed.add(fingerprint)
 
     def delete_feed(self, feed_id: str) -> None:
         with self._session_factory.begin() as session:
@@ -548,6 +612,9 @@ class FeedService:
         return self._cipher.decrypt(
             record.endpoint_ciphertext, purpose=f"feed:{record.id}:endpoint"
         ).decode()
+
+    def _url_fingerprint(self, url: str) -> str:
+        return self._cipher.blind_index(url.strip().encode(), purpose="feed:endpoint")
 
     @staticmethod
     def _required_feed(session: Session, feed_id: str) -> FeedRecord:

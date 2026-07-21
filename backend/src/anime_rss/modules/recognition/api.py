@@ -54,6 +54,9 @@ class Candidate:
     confidence: str
     recognition_eligible: bool
     first_seen_at: datetime
+    supersedes_candidate_id: str | None
+    superseded_by_candidate_id: str | None
+    superseded_at: datetime | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,7 +150,10 @@ class RecognitionService:
             )
             if not result.rowcount:
                 return session.scalar(
-                    select(CandidateRecord.id).where(CandidateRecord.release_id == release_id)
+                    select(CandidateRecord.id).where(
+                        CandidateRecord.release_id == release_id,
+                        CandidateRecord.superseded_by_candidate_id.is_(None),
+                    )
                 )
 
             candidate_id = self._create_candidate(
@@ -226,7 +232,10 @@ class RecognitionService:
                     recognition_eligible=recognition_eligible,
                     first_seen_at=first_seen_at,
                 )
-                .on_conflict_do_nothing(index_elements=["release_id"])
+                .on_conflict_do_nothing(
+                    index_elements=["release_id"],
+                    index_where=CandidateRecord.superseded_by_candidate_id.is_(None),
+                )
             ),
         )
         if result.rowcount:
@@ -247,7 +256,10 @@ class RecognitionService:
                 )
             return candidate_id
         return session.scalar(
-            select(CandidateRecord.id).where(CandidateRecord.release_id == release_id)
+            select(CandidateRecord.id).where(
+                CandidateRecord.release_id == release_id,
+                CandidateRecord.superseded_by_candidate_id.is_(None),
+            )
         )
 
     def list_episode_groups(self, *, limit: int = 100) -> list[EpisodeGroup]:
@@ -255,6 +267,7 @@ class RecognitionService:
             records = list(
                 session.scalars(
                     select(CandidateRecord)
+                    .where(CandidateRecord.superseded_by_candidate_id.is_(None))
                     .order_by(CandidateRecord.first_seen_at.desc(), CandidateRecord.id)
                     .limit(min(max(limit, 1), 500) * 20)
                 )
@@ -298,7 +311,7 @@ class RecognitionService:
         now = self._clock()
         with self._session_factory.begin() as session:
             record = session.get(CandidateRecord, candidate_id)
-            if record is None:
+            if record is None or record.superseded_by_candidate_id is not None:
                 raise CandidateNotFoundError(candidate_id)
             if not record.recognition_eligible or record.confidence != MatchConfidence.HIGH.value:
                 previous_confidence = record.confidence
@@ -358,10 +371,12 @@ class RecognitionService:
         episode_key = f"{start}-{end}" if end else start
         now = self._clock()
         with self._session_factory.begin() as session:
-            if session.scalar(
-                select(CandidateRecord.id).where(CandidateRecord.release_id == release_id)
-            ):
-                raise ReleaseRemapError("release already has a candidate")
+            previous = session.scalar(
+                select(CandidateRecord).where(
+                    CandidateRecord.release_id == release_id,
+                    CandidateRecord.superseded_by_candidate_id.is_(None),
+                )
+            )
             attempt = session.scalar(
                 select(MatchAttemptRecord)
                 .where(MatchAttemptRecord.release_id == release_id)
@@ -373,11 +388,15 @@ class RecognitionService:
             if source is None:
                 raise CandidateNotFoundError(release_id)
             candidate_id = new_id()
+            if previous is not None:
+                previous.superseded_by_candidate_id = candidate_id
+                previous.superseded_at = now
             session.add(
                 CandidateRecord(
                     id=candidate_id,
                     release_id=release_id,
                     attempt_id=attempt.id,
+                    supersedes_candidate_id=previous.id if previous is not None else None,
                     source_title=attempt.source_title,
                     series_title=title,
                     series_key=series_key,
@@ -403,6 +422,13 @@ class RecognitionService:
                     attempt_id=attempt.id,
                     action="remapped",
                     payload={
+                        "supersedes_candidate_id": previous.id if previous is not None else None,
+                        "previous_series_key": previous.series_key
+                        if previous is not None
+                        else None,
+                        "previous_episode_key": previous.episode_key
+                        if previous is not None
+                        else None,
                         "series_title": title,
                         "series_key": series_key,
                         "season": season,
@@ -412,6 +438,19 @@ class RecognitionService:
                     created_at=now,
                 )
             )
+            if previous is not None:
+                append_event(
+                    session,
+                    name="CandidateRemapped.v1",
+                    payload={
+                        "release_id": release_id,
+                        "previous_candidate_id": previous.id,
+                        "candidate_id": candidate_id,
+                        "previous_series_key": previous.series_key,
+                        "previous_episode_key": previous.episode_key,
+                        "episode_key": episode_key,
+                    },
+                )
             append_event(
                 session,
                 name="CandidateEvaluated.v1",
@@ -427,7 +466,11 @@ class RecognitionService:
                 event_type="recognition.release_remapped",
                 entity_type="release",
                 entity_id=release_id,
-                payload={"candidate_id": candidate_id, "episode_key": episode_key},
+                payload={
+                    "candidate_id": candidate_id,
+                    "supersedes_candidate_id": previous.id if previous is not None else None,
+                    "episode_key": episode_key,
+                },
             )
         candidate = self.get_candidate(candidate_id)
         assert candidate is not None
@@ -445,7 +488,10 @@ class RecognitionService:
             records = list(
                 session.scalars(
                     select(CandidateRecord)
-                    .where(CandidateRecord.series_key.in_(series_keys))
+                    .where(
+                        CandidateRecord.series_key.in_(series_keys),
+                        CandidateRecord.superseded_by_candidate_id.is_(None),
+                    )
                     .order_by(CandidateRecord.first_seen_at, CandidateRecord.id)
                 )
             )
@@ -492,4 +538,7 @@ class RecognitionService:
             confidence=record.confidence,
             recognition_eligible=record.recognition_eligible,
             first_seen_at=record.first_seen_at,
+            supersedes_candidate_id=record.supersedes_candidate_id,
+            superseded_by_candidate_id=record.superseded_by_candidate_id,
+            superseded_at=record.superseded_at,
         )

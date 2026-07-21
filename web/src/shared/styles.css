@@ -216,7 +216,7 @@ a.compact-row:hover { background: var(--surface-soft); }
 .episode-number { min-width: 68px; padding: 6px 9px; color: var(--accent-dark); background: var(--accent-soft); border-radius: 5px; font-size: 11px; font-weight: 800; text-align: center; }
 .candidate-count { color: var(--muted); font-size: 11px; font-weight: 650; white-space: nowrap; }
 .candidate-list { display: grid; }
-.candidate-row { min-height: 70px; display: grid; grid-template-columns: minmax(230px, 1fr) 180px 42px 70px 108px 36px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--soft-line); }
+.candidate-row { min-height: 70px; display: grid; grid-template-columns: minmax(230px, 1fr) 180px 42px 70px 108px 76px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--soft-line); }
 .candidate-row:last-child { border-bottom: 0; }
 .candidate-group { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
 .candidate-group strong { font-size: 13px; }
@@ -231,6 +231,7 @@ a.compact-row:hover { background: var(--surface-soft); }
 .unmatched-list small { color: var(--muted); font-size: 9px; }
 .unmatched-list article > .reason-code { margin-left: auto; }
 .candidate-action-spacer { width: 36px; }
+.candidate-actions { display: flex; justify-content: flex-end; gap: 4px; }
 .remap-fields { display: grid; grid-template-columns: .65fr 1fr 1fr; gap: 12px; }
 
 .subscription-layout { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px, .75fr); gap: 28px; }

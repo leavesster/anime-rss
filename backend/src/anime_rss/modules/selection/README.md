@@ -8,3 +8,7 @@ It consumes recognition and subscription DTOs through their public `api.py`
 surfaces. It never reparses titles and never calls a downloader. A committed
 decision emits `DownloadRequested.v1`; replacement also emits
 `DownloadCancellationRequested.v1`, leaving external effects to downloads.
+
+Recognition remaps append selection correction actions. Undecided slots using
+the old candidate reopen; decided slots retain their immutable decision snapshot
+while the replacement candidate is evaluated through the normal path.

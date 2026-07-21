@@ -3444,6 +3444,40 @@
             "type": "string",
             "format": "date-time",
             "title": "First Seen At"
+          },
+          "supersedes_candidate_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Candidate Id"
+          },
+          "superseded_by_candidate_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Superseded By Candidate Id"
+          },
+          "superseded_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Superseded At"
           }
         },
         "type": "object",
@@ -3465,7 +3499,10 @@
           "content_kind",
           "confidence",
           "recognition_eligible",
-          "first_seen_at"
+          "first_seen_at",
+          "supersedes_candidate_id",
+          "superseded_by_candidate_id",
+          "superseded_at"
         ],
         "title": "CandidateResponse"
       },

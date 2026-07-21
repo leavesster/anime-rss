@@ -176,6 +176,16 @@ packaged as a first-run authenticated, recoverable Compose service.
 
 ## 3. Decision Log
 
+### ING-001: Feed URL uniqueness uses a key-derived blind index
+
+**Choice:** Exact configured endpoint bytes are indexed with purpose-bound HMAC
+under the instance master key. The index is unique and API create/update map a
+collision to HTTP 409. During upgrade, the first copy of an existing URL claims
+the index; already duplicated rows remain intact but cannot be multiplied.
+
+**Reason:** Private token URLs need deterministic duplicate prevention without
+storing plaintext endpoints or an unkeyed digest that can be guessed offline.
+
 ### REC-001: Release deduplication and episode grouping are separate
 
 **Choice:** Preserve every distinct info hash as a Release. Group Releases only
@@ -486,15 +496,18 @@ DTOs. `operations` does not query another module's tables.
 **Reason:** The dashboard needs one actionable queue, but that read requirement
 must not erode table ownership or create hidden cross-module write logic.
 
-### REC-004: Manual recognition actions preserve parser evidence
+### REC-009: Manual recognition actions preserve parser and decision evidence
 
 **Choice:** Confirming a medium-confidence candidate promotes that candidate for
-re-evaluation. Mapping a low-confidence release requires structured series and
-episode fields and is allowed only while no candidate exists. Both actions are
-stored separately and emit a new candidate-evaluation event.
+re-evaluation. Mapping any release requires structured series and episode fields.
+If an active candidate exists, a new candidate supersedes it and both remain in
+history. Undecided selection slots reopen; decided slots keep their decision and
+candidate snapshot while a correction action is appended. The new candidate is
+then evaluated normally.
 
 **Reason:** Administrators can unblock real releases without silently rewriting
-what parser v1 originally observed or invalidating existing decisions.
+what parser v1 originally observed, destroying prior candidate evidence, or
+mutating an existing selection decision after external work may have occurred.
 
 ### SEC-001: Setup is a database compare-and-create operation
 
@@ -678,11 +691,10 @@ attempts are not silently rewritten.
 
 ## 5. Known Boundaries
 
-- Identical RSS URLs can still be configured twice.
 - Provisional recognition grouping remains visible before a catalog identity is
   linked through a subscription alias snapshot.
-- Manual mapping is limited to releases without a candidate; parser re-run and
-  reassignment of already-decided candidates are not implemented.
+- Parser re-run is not implemented; mapping corrections are explicit manual
+  supersession records instead.
 - Only qBittorrent Web API v2 is implemented; there is no alternate downloader
   adapter or app-side pause/resume command.
 - qBittorrent save path, category, and tags are defaults captured when the task
@@ -700,24 +712,26 @@ attempts are not silently rewritten.
 
 The next coherent delivery unit is `release acceptance hardening`:
 
-1. Prevent duplicate feed URLs and add reassignment of recognized releases that
-   already have candidates or decisions.
-2. Implement data/log retention and structured correlation IDs.
-3. Run disposable Compose acceptance for first setup, backup into a clean volume,
+1. Implement data/log retention and structured correlation IDs.
+2. Run disposable Compose acceptance for first setup, backup into a clean volume,
    restore, upgrade, and rollback.
-4. Add multi-architecture image CI and published image provenance.
-5. Start and record the seven-day real-feed soak required by `DESIGN.md`; this is
+3. Add multi-architecture image CI and published image provenance.
+4. Start and record the seven-day real-feed soak required by `DESIGN.md`; this is
    elapsed-time validation and is not claimed by the current automated suite.
 
 ## 7. Current Verification Evidence
 
-Verified on 2026-07-22 with `make verify` after migration `0010`:
+Verified on 2026-07-22 with `make verify` after migration `0011`:
 
 - Ruff formatting and lint: passed.
 - Pyright: passed with zero errors.
-- Backend: 62 tests passed, 88.35% statement coverage.
+- Backend: 64 tests passed, 88.27% statement coverage.
 - Frontend: ESLint and TypeScript passed; 6 Vitest tests passed.
 - Production Vite build: passed.
+- Feed and recognition integration evidence covers private-URL duplicate
+  rejection, distinct tokenized URLs, encrypted-at-rest URL handling, candidate
+  supersession, immutable prior decisions, and normal evaluation of the corrected
+  candidate.
 - Guided-setup integration evidence covers clean administrator setup, ordered and
   idempotent progress, existing-install migration, default download-path capture,
   and a read-only final candidate preview.

@@ -456,6 +456,10 @@ The setup feature is an application-level coordinator: it invokes public HTTP
 operations owned by each capability, then records an idempotent system step. It
 does not import another feature's forms or reproduce backend domain decisions.
 
+Recognition corrections use candidate supersession. The previous candidate and
+every decision snapshot remain immutable; a versioned event lets selection reopen
+only undecided slots and append correction evidence for already-decided slots.
+
 ## 15. Proposed Repository Layout
 
 ```text

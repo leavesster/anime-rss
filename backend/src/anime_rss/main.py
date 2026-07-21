@@ -200,6 +200,12 @@ def create_app(
                         handler=selection.handle_candidate_evaluated,
                     )
                 ],
+                "CandidateRemapped.v1": [
+                    RegisteredHandler(
+                        consumer="selection.candidate-remapped.v1",
+                        handler=selection.handle_candidate_remapped,
+                    )
+                ],
                 "DownloadRequested.v1": [
                     RegisteredHandler(
                         consumer="downloads.request-planner.v1",

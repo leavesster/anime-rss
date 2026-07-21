@@ -182,3 +182,40 @@ def test_feed_test_update_history_and_delete_flow(tmp_path: Path) -> None:
         deleted = client.delete(f"/api/v1/feeds/{created['id']}")
         assert deleted.status_code == 204
         assert client.get(f"/api/v1/feeds/{created['id']}/entries").status_code == 404
+
+
+def test_duplicate_feed_urls_are_rejected_without_exposing_private_tokens(tmp_path: Path) -> None:
+    handler = httpx.MockTransport(lambda request: httpx.Response(200, content=_rss("dedupe")))
+
+    with _app(tmp_path, handler) as client:
+        first = client.post(
+            "/api/v1/feeds",
+            json={"name": "First", "url": "https://feed.test/rss?token=private-one"},
+        )
+        duplicate = client.post(
+            "/api/v1/feeds",
+            json={
+                "name": "Duplicate",
+                "url": "https://feed.test/rss?token=private-one",
+                "headers": {"X-Feed": "different"},
+            },
+        )
+        distinct_token = client.post(
+            "/api/v1/feeds",
+            json={"name": "Second", "url": "https://feed.test/rss?token=private-two"},
+        )
+
+        assert first.status_code == 201
+        assert duplicate.status_code == 409
+        assert duplicate.json()["detail"] == "feed URL is already configured"
+        assert distinct_token.status_code == 201
+        update_collision = client.patch(
+            f"/api/v1/feeds/{distinct_token.json()['id']}",
+            headers={"If-Match": str(distinct_token.json()["version"])},
+            json={"url": "https://feed.test/rss?token=private-one"},
+        )
+        assert update_collision.status_code == 409
+
+    database_bytes = (tmp_path / "test.sqlite3").read_bytes()
+    assert b"private-one" not in database_bytes
+    assert b"private-two" not in database_bytes

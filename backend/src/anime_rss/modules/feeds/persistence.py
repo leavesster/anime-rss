@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, ForeignKey, LargeBinary, String, UniqueConstraint
+from sqlalchemy import CheckConstraint, ForeignKey, Index, LargeBinary, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from anime_rss.infrastructure.database import Base, UTCDateTime
@@ -16,11 +16,13 @@ class FeedRecord(Base):
             "interval_seconds >= 300 AND interval_seconds <= 3600",
             name="ck_feed_interval",
         ),
+        Index("uq_feed_url_fingerprint", "url_fingerprint", unique=True),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     name: Mapped[str] = mapped_column(String(120))
     url_redacted: Mapped[str] = mapped_column(String(2048))
+    url_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
     endpoint_ciphertext: Mapped[bytes] = mapped_column(LargeBinary)
     headers_ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     interval_seconds: Mapped[int] = mapped_column(default=600)

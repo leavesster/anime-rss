@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import JSON, Boolean, ForeignKey, Index, Integer, String, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from anime_rss.infrastructure.database import Base, UTCDateTime
@@ -41,15 +41,29 @@ class MatchAttemptRecord(Base):
 
 class CandidateRecord(Base):
     __tablename__ = "match_candidates"
-    __table_args__ = (UniqueConstraint("release_id", name="uq_match_candidate_release"),)
+    __table_args__ = (
+        Index(
+            "uq_match_candidate_active_release",
+            "release_id",
+            unique=True,
+            sqlite_where=text("superseded_by_candidate_id IS NULL"),
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     release_id: Mapped[str] = mapped_column(
         ForeignKey("release_releases.id", ondelete="CASCADE"), index=True
     )
     attempt_id: Mapped[str] = mapped_column(
-        ForeignKey("match_attempts.id", ondelete="CASCADE"), unique=True
+        ForeignKey("match_attempts.id", ondelete="CASCADE"), index=True
     )
+    supersedes_candidate_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
+    superseded_by_candidate_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
+    superseded_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     source_title: Mapped[str] = mapped_column(String(4096))
     series_title: Mapped[str] = mapped_column(String(300))
     series_key: Mapped[str] = mapped_column(String(300), index=True)

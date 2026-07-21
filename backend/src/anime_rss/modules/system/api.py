@@ -1,4 +1,6 @@
 import base64
+import hashlib
+import hmac
 import os
 from dataclasses import dataclass
 from datetime import datetime
@@ -30,6 +32,8 @@ class SecretCipher(Protocol):
     def encrypt(self, plaintext: bytes, *, purpose: str) -> bytes: ...
 
     def decrypt(self, envelope: bytes, *, purpose: str) -> bytes: ...
+
+    def blind_index(self, plaintext: bytes, *, purpose: str) -> str: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,6 +178,7 @@ class AesGcmSecretCipher:
     def __init__(self, key: bytes) -> None:
         if len(key) != 32:
             raise ValueError("master key must contain exactly 32 bytes")
+        self._key = key
         self._cipher = AESGCM(key)
 
     def encrypt(self, plaintext: bytes, *, purpose: str) -> bytes:
@@ -188,6 +193,10 @@ class AesGcmSecretCipher:
         if len(payload) < 13:
             raise ValueError("invalid secret envelope")
         return self._cipher.decrypt(payload[:12], payload[12:], purpose.encode("utf-8"))
+
+    def blind_index(self, plaintext: bytes, *, purpose: str) -> str:
+        message = purpose.encode("utf-8") + b"\x00" + plaintext
+        return hmac.new(self._key, message, hashlib.sha256).hexdigest()
 
 
 class FileSecretCipher(AesGcmSecretCipher):

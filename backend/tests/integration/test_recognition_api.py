@@ -182,3 +182,59 @@ def test_manual_remap_turns_unmatched_release_into_candidate(tmp_path: Path) -> 
         assert remapped.json()["recognition_eligible"] is True
         assert client.get("/api/v1/recognition/unmatched").json() == []
         assert client.get("/api/v1/selection/episodes").json()[0]["state"] == "decided"
+
+
+def test_remap_supersedes_existing_candidate_without_rewriting_decision(tmp_path: Path) -> None:
+    info_hash = "7" * 40
+    rss = (
+        '<?xml version="1.0"?><rss version="2.0"><channel><item>'
+        "<guid>candidate-remap</guid><title>[Group] Corrected Anime - 01 [1080p AVC][CHS]</title>"
+        f'<enclosure url="magnet:?xt=urn:btih:{info_hash}" '
+        'type="application/x-bittorrent" /></item></channel></rss>'
+    ).encode()
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, content=rss))
+
+    with TestClient(create_app(_settings(tmp_path), feed_transport=transport)) as client:
+        anime = client.post("/api/v1/catalog/anime", json={"title": "Corrected Anime"}).json()
+        client.post(
+            "/api/v1/subscriptions",
+            json={
+                "anime_id": anime["id"],
+                "rules": {
+                    "allowed_subtitles": [],
+                    "allowed_resolutions": [],
+                    "allowed_codecs": [],
+                    "fallback_wait_minutes": 0,
+                },
+            },
+        )
+        feed = client.post(
+            "/api/v1/feeds", json={"name": "Correction", "url": "https://feed.test/rss"}
+        ).json()
+        client.post(f"/api/v1/feeds/{feed['id']}/refresh")
+        previous = client.get("/api/v1/recognition/episode-groups").json()[0]["candidates"][0]
+        decisions_before = client.get("/api/v1/selection/decisions").json()
+
+        remapped = client.post(
+            f"/api/v1/recognition/releases/{previous['release_id']}/remap",
+            json={
+                "series_title": "Corrected Anime",
+                "episode_start": "2",
+                "season": 1,
+                "release_group": "Corrected Group",
+            },
+        )
+
+        assert remapped.status_code == 200
+        corrected = remapped.json()
+        assert corrected["id"] != previous["id"]
+        assert corrected["supersedes_candidate_id"] == previous["id"]
+        assert corrected["episode_key"] == "2"
+        groups = client.get("/api/v1/recognition/episode-groups").json()
+        assert [group["episode_key"] for group in groups] == ["2"]
+        decisions_after = client.get("/api/v1/selection/decisions").json()
+        assert {item["episode_key"] for item in decisions_after} == {"1", "2"}
+        assert decisions_before[0] in decisions_after
+        actions = client.get("/api/v1/selection/manual-actions").json()
+        assert actions[0]["action"] == "candidate_reassigned_after_decision"
+        assert actions[0]["reason"]["previous_candidate_id"] == previous["id"]

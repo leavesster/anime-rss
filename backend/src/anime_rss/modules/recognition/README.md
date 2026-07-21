@@ -17,13 +17,14 @@ consumes `ReleaseIdentified.v1` and reads release observations only through the
 
 - Parser output is determined by title plus `PARSER_VERSION`.
 - Episode numbers use canonical decimal strings, never floating point.
-- A release has at most one canonical candidate.
+- A release has one active candidate; remapping supersedes rather than rewrites
+  the previous candidate.
 - Series grouping uses an exact normalized key; fuzzy matching is forbidden.
 - Every source observation produces an immutable parse attempt.
-- Manual confirmation and unmatched mapping append action records; they never
+- Manual confirmation and release mapping append action records; they never
   rewrite the parser attempt that required intervention.
-- Release mapping only creates a missing candidate. Reassigning a candidate
-  that may already have downstream decisions is rejected.
+- Superseded candidates remain addressable for historical decisions but are
+  excluded from current grouping and automatic selection queries.
 
 ## Does not own
 

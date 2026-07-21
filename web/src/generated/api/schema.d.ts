@@ -1227,6 +1227,12 @@ export interface components {
              * Format: date-time
              */
             first_seen_at: string;
+            /** Supersedes Candidate Id */
+            supersedes_candidate_id: string | null;
+            /** Superseded By Candidate Id */
+            superseded_by_candidate_id: string | null;
+            /** Superseded At */
+            superseded_at: string | null;
         };
         /** CandidateSelectRequest */
         CandidateSelectRequest: {

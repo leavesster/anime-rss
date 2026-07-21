@@ -13,6 +13,8 @@ stored.
 ## Invariants
 
 - Endpoint URLs, custom headers, and torrent references are encrypted at rest.
+- A key-derived blind index prevents duplicate endpoint URLs without storing a
+  plaintext or directly guessable URL digest.
 - API responses and audit events contain only redacted URLs.
 - `(feed_id, guid_hash)` is unique even if concurrent refreshes overlap.
 - HTTP 401/403 enters `auth_failed` without automatic retry.
