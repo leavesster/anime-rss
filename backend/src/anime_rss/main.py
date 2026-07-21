@@ -1,5 +1,6 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -12,6 +13,7 @@ from anime_rss.infrastructure.database import create_database_engine, create_ses
 from anime_rss.infrastructure.events import EventDispatcher, RegisteredHandler
 from anime_rss.infrastructure.http import SafeHttpClient
 from anime_rss.infrastructure.migrations import run_migrations
+from anime_rss.infrastructure.web import SpaStaticFiles
 from anime_rss.kernel.time import Clock, utc_now
 from anime_rss.modules.feeds.adapters import FeedDocumentParser
 from anime_rss.modules.feeds.api import FeedEntryQueries, FeedService, Jitter
@@ -117,6 +119,11 @@ def create_app(
     api.include_router(feeds_router)
     api.include_router(releases_router)
     app.include_router(api)
+
+    repository_root = Path(__file__).resolve().parents[3]
+    web_dist_dir = runtime_settings.web_dist_dir or repository_root / "web" / "dist"
+    if (web_dist_dir / "index.html").is_file():
+        app.mount("/", SpaStaticFiles(directory=web_dist_dir, html=True), name="web")
     return app
 
 

@@ -6,7 +6,7 @@ in `ARCHITECTURE.md`.
 
 ## Current implementation status
 
-The first backend slice is implemented:
+The ingestion slice and its first management interface are implemented:
 
 - FastAPI application and SQLite/Alembic runtime
 - encrypted feed URLs, headers, magnet links, and torrent payloads
@@ -15,25 +15,32 @@ The first backend slice is implemented:
 - exact raw bencoded `info` hashing for v1, hybrid, and pure v2 torrents
 - cross-feed release deduplication through durable integration events
 - durable scheduler job leases
+- responsive React dashboard, feed management, fetch history, and release library
+- generated TypeScript API types and production static asset serving
 
-Authentication, anime metadata, title recognition, subscription decisions,
-qBittorrent submission, and the React interface are later slices. The current
-API is therefore a development build and must not be exposed publicly.
+Authentication, anime metadata, title recognition, subscription decisions, and
+qBittorrent submission are later slices. The current application is therefore a
+development build and must not be exposed publicly.
 
 ## Development
 
 Python 3.13 is required.
+Node.js 22 is required for frontend development.
 
 ```bash
 python3 -m venv .venv
 make bootstrap
+make bootstrap-web
 make verify
 make migrate
 make run
 ```
 
-The development API listens on `http://127.0.0.1:8080`; OpenAPI is available at
-`/docs`. Runtime data defaults to `./data` and is ignored by Git.
+Build the web application with `make build-web`. The backend then serves both
+the interface and API at `http://127.0.0.1:8080`; OpenAPI remains available at
+`/docs`. During frontend development, run `make run-web` in a second terminal
+and open `http://127.0.0.1:5173`; Vite proxies API calls to the backend. Runtime
+data defaults to `./data` and is ignored by Git.
 
 ## Implemented API
 

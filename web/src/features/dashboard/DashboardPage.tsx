@@ -1,0 +1,51 @@
+import { useQuery } from "@tanstack/react-query";
+import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, Database, Plus, Rss } from "lucide-react";
+import { Link } from "react-router-dom";
+
+import { listReleases } from "../../generated/api/client";
+import { EmptyState } from "../../shared/components/EmptyState";
+import { ErrorBanner, LoadingState } from "../../shared/components/Feedback";
+import { PageHeader } from "../../shared/components/PageHeader";
+import { StatusBadge } from "../../shared/components/StatusBadge";
+import { formatRelative, truncateHash } from "../../shared/lib/format";
+import { feedsQuery } from "../feeds/queries";
+
+export function DashboardPage() {
+  const feeds = useQuery(feedsQuery);
+  const releases = useQuery({ queryKey: ["releases"], queryFn: listReleases });
+  const isLoading = feeds.isLoading || releases.isLoading;
+  const hasError = feeds.isError || releases.isError;
+  const healthyFeeds = feeds.data?.filter((feed) => feed.health === "healthy").length ?? 0;
+  const attentionFeeds = feeds.data?.filter((feed) => !["healthy", "never_fetched"].includes(feed.health)) ?? [];
+
+  return (
+    <>
+      <PageHeader eyebrow="运行概览" title="今天的追番状态" description="从异常开始处理，正常运行的订阅源保持安静。" actions={<Link className="button button--primary button--regular" to="/feeds"><Plus size={17} />添加订阅源</Link>} />
+      {isLoading && <LoadingState label="正在汇总运行状态" />}
+      {hasError && <ErrorBanner message="部分运行数据暂时无法加载。" />}
+      {!isLoading && !hasError && (
+        <>
+          <section className="overview-band" aria-label="运行指标">
+            <div className="overview-metric"><span className="metric-icon metric-icon--green"><CheckCircle2 size={19} /></span><div><small>健康订阅源</small><strong>{healthyFeeds}<span> / {feeds.data?.length ?? 0}</span></strong></div></div>
+            <div className="overview-metric"><span className="metric-icon metric-icon--blue"><Database size={19} /></span><div><small>唯一发布</small><strong>{releases.data?.length ?? 0}</strong></div></div>
+            <div className="overview-metric"><span className={`metric-icon ${attentionFeeds.length ? "metric-icon--red" : "metric-icon--gray"}`}><AlertTriangle size={19} /></span><div><small>需要处理</small><strong>{attentionFeeds.length}</strong></div></div>
+          </section>
+
+          <div className="dashboard-grid">
+            <section className="dashboard-section">
+              <div className="section-heading"><div><h2>订阅源状态</h2><p>按最近抓取状态排列</p></div><Link to="/feeds">查看全部<ArrowRight size={15} /></Link></div>
+              {feeds.data?.length === 0 && <EmptyState icon={Rss} title="从订阅源开始" description="连接 RSS 或 Atom 后，这里会显示抓取健康状态。" action={<Link className="button button--primary button--small" to="/feeds"><Plus size={16} />添加订阅源</Link>} />}
+              {feeds.data && feeds.data.length > 0 && <div className="compact-list">{feeds.data.slice(0, 6).map((feed) => <Link className="compact-row" to={`/feeds/${feed.id}`} key={feed.id}><span className="compact-row__icon"><Rss size={17} /></span><div><strong>{feed.name}</strong><small>{feed.last_success_at ? `成功抓取于${formatRelative(feed.last_success_at)}` : "等待首次抓取"}</small></div><StatusBadge status={feed.health} /><ArrowRight className="compact-row__arrow" size={16} /></Link>)}</div>}
+            </section>
+
+            <section className="dashboard-section">
+              <div className="section-heading"><div><h2>最近识别的发布</h2><p>跨来源去重后的内容身份</p></div><Link to="/releases">查看全部<ArrowRight size={15} /></Link></div>
+              {releases.data?.length === 0 && <EmptyState icon={Clock3} title="等待发布条目" description="完成一次订阅源刷新后，识别结果会出现在这里。" />}
+              {releases.data && releases.data.length > 0 && <div className="compact-list">{releases.data.slice(0, 6).map((release) => <div className="compact-row" key={release.id}><span className="compact-row__icon"><Database size={17} /></span><div><strong className="hash-value">{truncateHash(release.identity_value)}</strong><small>{release.source_count} 个来源 · {formatRelative(release.first_seen_at)}</small></div><span className={release.automation_eligible ? "eligibility eligibility--yes" : "eligibility"}>{release.automation_eligible ? "可用" : "待确认"}</span></div>)}</div>}
+            </section>
+          </div>
+        </>
+      )}
+    </>
+  );
+}

@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     master_key_file: Path | None = None
     log_level: str = "INFO"
     auto_migrate: bool = True
+    web_dist_dir: Path | None = None
 
     feed_connect_timeout_seconds: float = Field(default=10.0, gt=0)
     feed_read_timeout_seconds: float = Field(default=30.0, gt=0)

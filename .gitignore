@@ -8,6 +8,8 @@ htmlcov/
 __pycache__/
 *.py[cod]
 data/
+node_modules/
+*.tsbuildinfo
 dist/
 build/
 *.egg-info/
