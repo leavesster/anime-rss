@@ -1,0 +1,17 @@
+services:
+  anime-rss:
+    build:
+      context: .
+    image: anime-rss-service:local
+    restart: unless-stopped
+    ports:
+      - "${ANIME_RSS_PORT:-8080}:8080"
+    environment:
+      ANIME_RSS_DATA_DIR: /data
+      ANIME_RSS_AUTH_COOKIE_SECURE: "${ANIME_RSS_AUTH_COOKIE_SECURE:-false}"
+      ANIME_RSS_LOG_LEVEL: "${ANIME_RSS_LOG_LEVEL:-INFO}"
+    volumes:
+      - anime-rss-data:/data
+
+volumes:
+  anime-rss-data:

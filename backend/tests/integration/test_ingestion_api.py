@@ -30,6 +30,7 @@ def _app(tmp_path: Path, handler: httpx.MockTransport) -> TestClient:
         data_dir=tmp_path,
         database_url=f"sqlite:///{tmp_path / 'test.sqlite3'}",
         master_key_file=tmp_path / "master.key",
+        auth_enabled=False,
     )
     app = create_app(settings, feed_transport=handler, jitter=lambda maximum: 0)
     return TestClient(app)

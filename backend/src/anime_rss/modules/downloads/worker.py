@@ -358,6 +358,11 @@ class DownloadWorker:
             attempt.status = "succeeded"
             attempt.details = {"observed": False}
             attempt.finished_at = now
+            append_event(
+                session,
+                name="DownloadTaskChanged.v1",
+                payload={"task_id": task.id, "state": task.state},
+            )
 
     def _finish_failure(
         self,
@@ -384,6 +389,11 @@ class DownloadWorker:
             attempt.status = "failed"
             attempt.details = {"error_code": code, "transient": transient}
             attempt.finished_at = now
+            append_event(
+                session,
+                name="DownloadTaskChanged.v1",
+                payload={"task_id": task.id, "state": task.state, "error_code": code},
+            )
         if config_error:
             self._record_config_result(now=now, error_code=code, tested=False)
 
@@ -405,6 +415,15 @@ class DownloadWorker:
             attempt.status = "failed"
             attempt.details = {"error_code": error.code, "transient": error.transient}
             attempt.finished_at = now
+            append_event(
+                session,
+                name="DownloadTaskChanged.v1",
+                payload={
+                    "task_id": task.id,
+                    "state": task.state,
+                    "error_code": error.code,
+                },
+            )
         self._record_config_result(now=now, error_code=error.code, tested=False)
 
     @staticmethod

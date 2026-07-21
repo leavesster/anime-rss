@@ -1,8 +1,8 @@
 # Anime RSS Service Architecture
 
-Status: Proposed architecture for the first public release
+Status: Implemented modular-monolith baseline
 
-Date: 2026-07-17
+Date: 2026-07-21
 
 Source: `DESIGN.md`
 

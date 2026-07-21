@@ -32,8 +32,38 @@ export type ScheduledJob = components["schemas"]["ScheduledJobResponse"];
 export type JobRun = components["schemas"]["JobRunResponse"];
 export type AuditEvent = components["schemas"]["AuditEventResponse"];
 export type ReleaseRemap = components["schemas"]["ReleaseRemapRequest"];
+export type AuthStatus = components["schemas"]["AuthStatusResponse"];
+export type Session = components["schemas"]["SessionResponse"];
+export type NotificationConfig = components["schemas"]["NotificationConfigResponse"];
+export type NotificationConfigRequest = components["schemas"]["NotificationConfigRequest"];
+export type Notification = components["schemas"]["NotificationResponse"];
+export type Backup = components["schemas"]["BackupResponse"];
+export type Restore = components["schemas"]["RestoreResponse"];
 
 const client = createClient<paths>({ baseUrl: "" });
+
+function cookieValue(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const prefix = `${encodeURIComponent(name)}=`;
+  const value = document.cookie.split("; ").find((item) => item.startsWith(prefix));
+  return value ? decodeURIComponent(value.slice(prefix.length)) : null;
+}
+
+client.use({
+  onRequest({ request }) {
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method)) {
+      const token = cookieValue("anime_rss_csrf");
+      if (token) request.headers.set("x-csrf-token", token);
+    }
+    return request;
+  },
+  onResponse({ response }) {
+    if ([401, 428].includes(response.status) && typeof window !== "undefined") {
+      window.dispatchEvent(new Event("anime-rss-auth-required"));
+    }
+    return response;
+  },
+});
 
 export class ApiError extends Error {
   constructor(
@@ -64,6 +94,25 @@ function unwrap<T>(result: { data?: T; error?: unknown; response: Response }): T
 
 export async function getReadiness(): Promise<Record<string, string>> {
   return unwrap(await client.GET("/api/v1/health/ready"));
+}
+
+export async function getAuthStatus(): Promise<AuthStatus> {
+  return unwrap(await client.GET("/api/v1/auth/status"));
+}
+
+export async function setupAdministrator(username: string, password: string): Promise<Session> {
+  return unwrap(await client.POST("/api/v1/auth/setup", { body: { username, password } }));
+}
+
+export async function login(username: string, password: string): Promise<Session> {
+  return unwrap(await client.POST("/api/v1/auth/login", { body: { username, password } }));
+}
+
+export async function logout(): Promise<void> {
+  const result = await client.POST("/api/v1/auth/logout");
+  if (!result.response.ok) {
+    throw new ApiError("退出登录失败", result.response.status);
+  }
 }
 
 export async function listFeeds(): Promise<Feed[]> {
@@ -322,4 +371,65 @@ export async function listAuditEvents(): Promise<AuditEvent[]> {
   return unwrap(
     await client.GET("/api/v1/audit/events", { params: { query: { limit: 100 } } }),
   );
+}
+
+export async function getNotificationConfig(): Promise<NotificationConfig | null> {
+  return unwrap(await client.GET("/api/v1/notifications/config"));
+}
+
+export async function saveNotificationConfig(
+  payload: NotificationConfigRequest,
+  version?: number,
+): Promise<NotificationConfig> {
+  return unwrap(
+    await client.PUT("/api/v1/notifications/config", {
+      params: { header: { "if-match": version } },
+      body: payload,
+    }),
+  );
+}
+
+export async function testNotificationWebhook(): Promise<void> {
+  const result = await client.POST("/api/v1/notifications/config/test");
+  if (!result.response.ok) {
+    throw new ApiError("Webhook 测试失败", result.response.status);
+  }
+}
+
+export async function listNotifications(): Promise<Notification[]> {
+  return unwrap(
+    await client.GET("/api/v1/notifications", { params: { query: { limit: 100 } } }),
+  );
+}
+
+export async function markNotificationRead(notificationId: string): Promise<Notification> {
+  return unwrap(
+    await client.POST("/api/v1/notifications/{notification_id}/read", {
+      params: { path: { notification_id: notificationId } },
+    }),
+  );
+}
+
+export async function listBackups(): Promise<Backup[]> {
+  return unwrap(await client.GET("/api/v1/system/backups"));
+}
+
+export async function createBackup(): Promise<Backup> {
+  return unwrap(await client.POST("/api/v1/system/backups"));
+}
+
+export async function stageRestore(file: File): Promise<Restore> {
+  const headers = new Headers({ "content-type": "application/zip" });
+  const csrf = cookieValue("anime_rss_csrf");
+  if (csrf) headers.set("x-csrf-token", csrf);
+  const response = await fetch("/api/v1/system/backups/restore/stage", {
+    method: "POST",
+    headers,
+    body: file,
+  });
+  if (!response.ok) {
+    const error = (await response.json().catch(() => null)) as unknown;
+    throw new ApiError(errorMessage(error), response.status);
+  }
+  return (await response.json()) as Restore;
 }

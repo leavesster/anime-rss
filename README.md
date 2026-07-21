@@ -7,7 +7,7 @@ in `ARCHITECTURE.md`; implemented behavior and concrete choices are tracked in
 
 ## Current implementation status
 
-The ingestion slice and its first management interface are implemented:
+The feed-to-qBittorrent product path and self-hosted delivery layer are implemented:
 
 - FastAPI application and SQLite/Alembic runtime
 - encrypted feed URLs, headers, magnet links, and torrent payloads
@@ -26,10 +26,44 @@ The ingestion slice and its first management interface are implemented:
 - V2/V3 cancellation without deleting completed files
 - dependency health, failed-work aggregation, and append-only audit history
 - manual candidate confirmation and unmatched-release mapping
+- first-run administrator setup, session cookies, and CSRF-protected mutations
+- in-application notifications and encrypted Webhook delivery with durable retry
+- portable SQLite and master-key backups, retention, and restart-safe restore staging
+- production image, Compose data volume, readiness health check, and non-root runtime
 - versioned implementation decision record for handoff and review
 
-Authentication is a later slice. The current application operates continuously
-but remains a trusted-network development build and must not be exposed publicly.
+The application is designed for one administrator and one process. Put it behind
+HTTPS before exposing it outside a trusted network and set
+`ANIME_RSS_AUTH_COOKIE_SECURE=true` when TLS terminates at the service origin.
+
+## Docker Compose
+
+```bash
+docker compose up -d --build
+```
+
+Open `http://127.0.0.1:8080` and complete the administrator setup. Compose stores
+the database, encryption key, and backup archives in the `anime-rss-data` volume.
+Do not delete or recreate that volume during an image upgrade.
+
+Create an operator backup before upgrades either in the system page or with:
+
+```bash
+docker compose exec anime-rss anime-rss backup --data-dir /data
+docker compose build --pull
+docker compose up -d
+docker compose ps
+```
+
+Migrations run before HTTP and scheduled work starts. To roll back application
+data, upload a `.backup` archive in the system page and restart the container:
+
+```bash
+docker compose restart anime-rss
+```
+
+Restore archives contain the master encryption key and must be protected like
+credentials. Applying a staged restore creates a `pre-restore` archive first.
 
 ## Development
 
@@ -56,6 +90,10 @@ data defaults to `./data` and is ignored by Git.
 ```text
 GET    /api/v1/health/live
 GET    /api/v1/health/ready
+GET    /api/v1/auth/status
+POST   /api/v1/auth/setup
+POST   /api/v1/auth/login
+POST   /api/v1/auth/logout
 POST   /api/v1/feeds
 GET    /api/v1/feeds
 PATCH  /api/v1/feeds/{feed_id}
@@ -91,5 +129,14 @@ GET    /api/v1/operations/overview
 GET    /api/v1/operations/jobs
 GET    /api/v1/operations/runs
 POST   /api/v1/operations/run-now
+GET    /api/v1/notifications
+POST   /api/v1/notifications/{notification_id}/read
+GET    /api/v1/notifications/config
+PUT    /api/v1/notifications/config
+POST   /api/v1/notifications/config/test
+GET    /api/v1/system/backups
+POST   /api/v1/system/backups
+GET    /api/v1/system/backups/{filename}
+POST   /api/v1/system/backups/restore/stage
 GET    /api/v1/audit/events
 ```

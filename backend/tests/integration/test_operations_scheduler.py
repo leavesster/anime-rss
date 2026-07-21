@@ -19,6 +19,7 @@ def test_scheduler_refreshes_due_feed_and_exposes_diagnostics(tmp_path: Path) ->
         database_url=f"sqlite:///{tmp_path / 'scheduler.sqlite3'}",
         master_key_file=tmp_path / "master.key",
         scheduler_poll_seconds=60,
+        auth_enabled=False,
     )
     transport = httpx.MockTransport(lambda request: httpx.Response(200, content=rss))
 

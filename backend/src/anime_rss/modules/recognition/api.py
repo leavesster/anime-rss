@@ -158,6 +158,12 @@ class RecognitionService:
                 source_automation_eligible=source.automation_eligible,
                 first_seen_at=source.first_seen_at,
             )
+            if candidate_id is None:
+                append_event(
+                    session,
+                    name="ReleaseMappingRequired.v1",
+                    payload={"release_id": release_id, "reason_code": parsed.reason_code},
+                )
             record_event(
                 session,
                 event_type="release.recognized",
@@ -233,6 +239,12 @@ class RecognitionService:
                     "episode_key": parsed.episode_key,
                 },
             )
+            if not recognition_eligible:
+                append_event(
+                    session,
+                    name="ManualConfirmationRequired.v1",
+                    payload={"candidate_id": candidate_id, "release_id": release_id},
+                )
             return candidate_id
         return session.scalar(
             select(CandidateRecord.id).where(CandidateRecord.release_id == release_id)

@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { Activity, BookOpenCheck, Database, Download, Layers3, LayoutDashboard, Radio, Rss, ServerCog } from "lucide-react";
+import { Activity, BookOpenCheck, Database, Download, Layers3, LayoutDashboard, Radio, Rss, ServerCog, Settings2 } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
 
-import { getReadiness } from "../generated/api/client";
+import { getReadiness, listNotifications } from "../generated/api/client";
 
 const navigation = [
   { to: "/", label: "概览", icon: LayoutDashboard, end: true },
@@ -12,10 +12,13 @@ const navigation = [
   { to: "/candidates", label: "剧集候选", icon: Layers3 },
   { to: "/releases", label: "发布条目", icon: Database },
   { to: "/operations", label: "运行", icon: ServerCog },
+  { to: "/system", label: "系统", icon: Settings2 },
 ];
 
 export function AppShell() {
   const health = useQuery({ queryKey: ["readiness"], queryFn: getReadiness, refetchInterval: 30_000 });
+  const notifications = useQuery({ queryKey: ["notifications"], queryFn: listNotifications, refetchInterval: 30_000 });
+  const unread = notifications.data?.filter((item) => !item.read_at).length ?? 0;
 
   return (
     <div className="app-shell">
@@ -29,6 +32,7 @@ export function AppShell() {
             <NavLink key={to} end={end} to={to} className={({ isActive }) => isActive ? "nav-link nav-link--active" : "nav-link"}>
               <Icon size={18} />
               <span>{label}</span>
+              {to === "/system" && unread > 0 && <small className="nav-count">{Math.min(unread, 99)}</small>}
             </NavLink>
           ))}
         </nav>
@@ -51,6 +55,7 @@ export function AppShell() {
           <NavLink key={to} end={end} to={to} className={({ isActive }) => isActive ? "mobile-nav__link mobile-nav__link--active" : "mobile-nav__link"}>
             <Icon size={20} />
             <span>{label}</span>
+            {to === "/system" && unread > 0 && <small className="mobile-nav__count">{Math.min(unread, 99)}</small>}
           </NavLink>
         ))}
       </nav>

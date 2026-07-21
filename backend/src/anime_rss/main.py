@@ -1,4 +1,5 @@
 import asyncio
+import hmac
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
@@ -6,6 +7,7 @@ from typing import Any
 
 import httpx
 from fastapi import APIRouter, FastAPI, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from anime_rss.config import Settings
@@ -27,6 +29,9 @@ from anime_rss.modules.downloads.http import router as downloads_router
 from anime_rss.modules.feeds.adapters import FeedDocumentParser
 from anime_rss.modules.feeds.api import FeedEntryQueries, FeedService, Jitter
 from anime_rss.modules.feeds.http import router as feeds_router
+from anime_rss.modules.notifications.adapters import WebhookClient
+from anime_rss.modules.notifications.api import NotificationService
+from anime_rss.modules.notifications.http import router as notifications_router
 from anime_rss.modules.operations.api import JobService
 from anime_rss.modules.operations.http import router as operations_router
 from anime_rss.modules.operations.worker import Scheduler
@@ -39,6 +44,16 @@ from anime_rss.modules.selection.http import router as selection_router
 from anime_rss.modules.subscriptions.api import SubscriptionService
 from anime_rss.modules.subscriptions.http import router as subscriptions_router
 from anime_rss.modules.system.api import FileSecretCipher
+from anime_rss.modules.system.auth import AuthService
+from anime_rss.modules.system.backup import BackupService
+from anime_rss.modules.system.backup_http import router as backup_router
+from anime_rss.modules.system.http import (
+    CSRF_COOKIE,
+    SESSION_COOKIE,
+)
+from anime_rss.modules.system.http import (
+    router as auth_router,
+)
 from anime_rss.runtime import ApplicationRuntime
 
 
@@ -61,6 +76,7 @@ def create_app(
     torrent_transport: httpx.BaseTransport | None = None,
     bangumi_transport: httpx.BaseTransport | None = None,
     qbittorrent_transport: httpx.BaseTransport | None = None,
+    webhook_transport: httpx.BaseTransport | None = None,
     clock: Clock = utc_now,
     jitter: Jitter | None = None,
 ) -> FastAPI:
@@ -69,6 +85,15 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         runtime_settings.data_dir.mkdir(parents=True, exist_ok=True)
+        backups = BackupService(
+            database_url=runtime_settings.resolved_database_url,
+            master_key_file=runtime_settings.resolved_master_key_file,
+            data_dir=runtime_settings.data_dir,
+            retention_count=runtime_settings.backup_retention_count,
+            max_restore_bytes=runtime_settings.backup_max_restore_bytes,
+            clock=clock,
+        )
+        backups.apply_pending_restore()
         if runtime_settings.auto_migrate:
             run_migrations(runtime_settings.resolved_database_url)
 
@@ -92,6 +117,11 @@ def create_app(
             connect_timeout_seconds=runtime_settings.feed_connect_timeout_seconds,
             read_timeout_seconds=runtime_settings.feed_read_timeout_seconds,
             transport=qbittorrent_transport,
+        )
+        webhook_client = WebhookClient(
+            connect_timeout_seconds=runtime_settings.feed_connect_timeout_seconds,
+            read_timeout_seconds=runtime_settings.feed_read_timeout_seconds,
+            transport=webhook_transport,
         )
         feed_service_kwargs: dict[str, Any] = {"clock": clock}
         if jitter is not None:
@@ -119,6 +149,23 @@ def create_app(
             subscriptions,
             clock=clock,
         )
+        notifications = NotificationService(session_factory, cipher, webhook_client, clock=clock)
+        notification_handlers = {
+            event_name: [
+                RegisteredHandler(
+                    consumer="notifications.integration-events.v1",
+                    handler=notifications.handle_event,
+                )
+            ]
+            for event_name in {
+                "DecisionCommitted.v1",
+                "ManualConfirmationRequired.v1",
+                "ReleaseMappingRequired.v1",
+                "FeedRepeatedFailure.v1",
+                "FeedRecovered.v1",
+                "DownloadTaskChanged.v1",
+            }
+        }
         events = EventDispatcher(
             session_factory,
             {
@@ -152,6 +199,7 @@ def create_app(
                         handler=downloads.handle_cancellation_requested,
                     )
                 ],
+                **notification_handlers,
             },
             clock=clock,
         )
@@ -163,9 +211,12 @@ def create_app(
             downloads=downloads,
             recognition=recognition,
             jobs=jobs,
+            notifications=notifications,
+            backups=backups,
             clock=clock,
             selection_interval_seconds=max(1, int(runtime_settings.selection_poll_seconds)),
             download_interval_seconds=max(1, int(runtime_settings.download_poll_seconds)),
+            backup_interval_hours=runtime_settings.backup_interval_hours,
         )
         scheduler = Scheduler(
             jobs,
@@ -174,12 +225,18 @@ def create_app(
             clock=clock,
             lease_seconds=runtime_settings.scheduler_lease_seconds,
         )
+        auth = AuthService(
+            session_factory,
+            clock=clock,
+            session_days=runtime_settings.auth_session_days,
+        )
         services = ServiceContainer(
             engine=engine,
             feed_http_client=feed_client,
             torrent_http_client=torrent_client,
             bangumi_client=bangumi_client,
             qbittorrent_client=qbittorrent_client,
+            webhook_client=webhook_client,
             feeds=feeds,
             releases=releases,
             recognition=recognition,
@@ -191,6 +248,9 @@ def create_app(
             audit=AuditService(session_factory),
             diagnostics=runtime,
             scheduler=scheduler,
+            auth=auth,
+            notifications=notifications,
+            backups=backups,
             events=events,
         )
         app.state.services = services
@@ -223,6 +283,44 @@ def create_app(
         version="0.1.0",
         lifespan=lifespan,
     )
+    app.state.settings = runtime_settings
+
+    @app.middleware("http")
+    async def authentication_boundary(  # pyright: ignore[reportUnusedFunction]
+        request: Request, call_next: Any
+    ) -> Any:
+        if not runtime_settings.auth_enabled or not request.url.path.startswith("/api/v1"):
+            return await call_next(request)
+        public_paths = {
+            "/api/v1/health/live",
+            "/api/v1/health/ready",
+            "/api/v1/auth/status",
+            "/api/v1/auth/setup",
+            "/api/v1/auth/login",
+        }
+        if request.url.path in public_paths:
+            return await call_next(request)
+        services: ServiceContainer = request.app.state.services
+        state = services.auth.status()
+        if state.setup_required:
+            return JSONResponse(status_code=428, content={"detail": "administrator setup required"})
+        token = request.cookies.get(SESSION_COOKIE)
+        authenticated = services.auth.authenticate(token)
+        if authenticated is None:
+            return JSONResponse(status_code=401, content={"detail": "authentication required"})
+        request.state.auth_session = authenticated
+        if request.method not in {"GET", "HEAD", "OPTIONS"}:
+            csrf_cookie = request.cookies.get(CSRF_COOKIE)
+            csrf_header = request.headers.get("x-csrf-token")
+            if (
+                csrf_cookie is None
+                or csrf_header is None
+                or not hmac.compare_digest(csrf_cookie, csrf_header)
+                or not services.auth.validate_csrf(authenticated.id, csrf_header)
+            ):
+                return JSONResponse(status_code=403, content={"detail": "csrf validation failed"})
+        return await call_next(request)
+
     api = APIRouter(prefix="/api/v1")
 
     @api.get("/health/live", tags=["health"])
@@ -239,6 +337,7 @@ def create_app(
         return {"status": "ready"}
 
     api.include_router(feeds_router)
+    api.include_router(auth_router)
     api.include_router(releases_router)
     api.include_router(recognition_router)
     api.include_router(catalog_router)
@@ -246,6 +345,8 @@ def create_app(
     api.include_router(selection_router)
     api.include_router(downloads_router)
     api.include_router(operations_router)
+    api.include_router(notifications_router)
+    api.include_router(backup_router)
     api.include_router(audit_router)
     app.include_router(api)
 

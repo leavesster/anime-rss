@@ -48,6 +48,7 @@ def _settings(tmp_path: Path) -> Settings:
         data_dir=tmp_path,
         database_url=f"sqlite:///{tmp_path / 'recognition.sqlite3'}",
         master_key_file=tmp_path / "master.key",
+        auth_enabled=False,
     )
 
 

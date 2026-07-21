@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     download_poll_seconds: float = Field(default=30.0, ge=1.0, le=300.0)
     scheduler_poll_seconds: float = Field(default=5.0, ge=1.0, le=60.0)
     scheduler_lease_seconds: int = Field(default=60, ge=10, le=600)
+    auth_enabled: bool = True
+    auth_cookie_secure: bool = False
+    auth_session_days: int = Field(default=30, ge=1, le=365)
+    backup_interval_hours: int = Field(default=24, ge=1, le=168)
+    backup_retention_count: int = Field(default=14, ge=1, le=365)
+    backup_max_restore_bytes: int = Field(default=512 * 1024 * 1024, ge=1024)
 
     @property
     def resolved_database_url(self) -> str:

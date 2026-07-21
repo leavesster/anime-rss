@@ -41,6 +41,9 @@ const labels: Record<string, string> = {
   not_configured: "未配置",
   unknown: "待检查",
   recovered: "已恢复",
+  error: "错误",
+  warning: "提醒",
+  info: "信息",
 };
 
 export function statusLabel(status: string): string {
@@ -50,8 +53,8 @@ export function statusLabel(status: string): string {
 export function statusTone(status: string): StatusTone {
   if (["healthy", "success", "ready", "resolved", "strong", "following", "decided", "completed", "connected", "idle", "recovered"].includes(status)) return "positive";
   if (status === "high") return "positive";
-  if (["auth_failed", "failed", "failing", "externally_removed", "degraded"].includes(status)) return "danger";
-  if (["never_fetched", "pending", "weak", "medium", "low", "waiting_fallback", "needs_confirmation", "retrying", "submitting", "submitted", "canceling", "starting", "unknown"].includes(status)) return "warning";
-  if (["not_modified", "planned", "downloading", "running", "on_demand", "not_configured"].includes(status)) return "info";
+  if (["auth_failed", "failed", "failing", "externally_removed", "degraded", "error"].includes(status)) return "danger";
+  if (["never_fetched", "pending", "weak", "medium", "low", "waiting_fallback", "needs_confirmation", "retrying", "submitting", "submitted", "canceling", "starting", "unknown", "warning"].includes(status)) return "warning";
+  if (["not_modified", "planned", "downloading", "running", "on_demand", "not_configured", "info"].includes(status)) return "info";
   return "neutral";
 }

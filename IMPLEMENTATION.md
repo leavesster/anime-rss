@@ -2,7 +2,7 @@
 
 Status: Living implementation and decision record
 
-Updated: 2026-07-22
+Updated: 2026-07-21
 
 This document records what the repository actually implements and the choices
 made while turning `DESIGN.md` and `ARCHITECTURE.md` into code. It is intended
@@ -31,7 +31,8 @@ Configured RSS / Atom feed
 ```
 
 The application now completes the selected-release path through qBittorrent and
-keeps the local task projection synchronized with external runtime state.
+keeps the local task projection synchronized with external runtime state. It is
+packaged as a first-run authenticated, recoverable Compose service.
 
 ## 2. Delivered Capabilities
 
@@ -109,6 +110,25 @@ keeps the local task projection synchronized with external runtime state.
   add.
 - Revision replacement cancels only incomplete old tasks with
   `deleteFiles=false`; completed old files remain untouched.
+
+### Product hardening and delivery
+
+- First-run administrator setup, salted scrypt password storage, opaque sessions,
+  password-reset CLI, and explicit logout.
+- HTTP-only session cookie plus readable CSRF cookie; every authenticated mutation
+  must echo the CSRF value in `X-CSRF-Token`.
+- In-app notifications derived from durable integration events without changing
+  any selection, feed, or download outcome.
+- Optional encrypted generic JSON Webhook configuration, idempotency key, delivery
+  attempts, bounded retry, and stale-attempt recovery.
+- Portable `.backup` archives containing a consistent SQLite snapshot, manifest,
+  and the matching encryption master key.
+- Manual and daily scheduled backup creation, count-based retention, restore
+  validation, restart-safe staging, and automatic pre-restore backup.
+- React setup/login gate plus system view for notifications, Webhook settings,
+  backup download, restore upload, and logout.
+- Multi-stage Docker build, non-root Python runtime, one Uvicorn worker, readiness
+  health check, and a named Compose data volume.
 
 ### Interface
 
@@ -421,6 +441,111 @@ stored separately and emit a new candidate-evaluation event.
 **Reason:** Administrators can unblock real releases without silently rewriting
 what parser v1 originally observed or invalidating existing decisions.
 
+### SEC-001: Setup is a database compare-and-create operation
+
+**Choice:** A clean database exposes only setup, login, status, and health. The
+first valid setup request creates the fixed administrator account and an
+authenticated session; later setup requests conflict.
+
+**Reason:** A container image does not need a baked-in password or environment
+secret, and setup state remains part of the restored application state.
+
+### SEC-002: Sessions are opaque and revocable
+
+**Choice:** Passwords use salted scrypt. Session and CSRF tokens use independent
+random values, and only SHA-256 hashes are stored. Password reset revokes every
+session.
+
+**Reason:** Database disclosure does not reveal reusable browser tokens, while a
+single-user operator retains a direct recovery command.
+
+### SEC-003: Mutations use double-submit CSRF validation
+
+**Choice:** The session cookie is HTTP-only and SameSite=Lax. A separate readable
+SameSite cookie must match `X-CSRF-Token` and the session-bound stored hash for
+every authenticated non-safe method.
+
+**Reason:** Browser forms cannot create authenticated mutations, and the frontend
+does not need access to the session credential.
+
+### NOTIFY-001: Notifications are downstream facts only
+
+**Choice:** `notifications` consumes versioned integration events after the
+originating transaction. A notification or Webhook failure never changes feed
+retry, recognition, selection, or download state.
+
+**Reason:** Operator visibility must not become a second business-decision path.
+
+### NOTIFY-002: Webhook delivery has its own durable retry state
+
+**Choice:** One channel attempt is created per notification when Webhook delivery
+is enabled. The notification ID is the external idempotency key; transient network,
+429, and 5xx failures retry with bounded exponential delay for at most eight
+attempts. Interrupted deliveries become retryable after five minutes.
+
+**Reason:** External delivery is recoverable across restarts without replaying the
+originating action or issuing an unbounded request stream.
+
+### NOTIFY-003: The external contract is generic JSON
+
+**Choice:** The first adapter sends a stable JSON envelope with kind, level,
+message, entity, time, and optional encrypted bearer token. Provider-specific
+Slack, Feishu, or Telegram formatting is not embedded in the core module.
+
+**Reason:** A neutral contract works with automation relays now and leaves each
+provider adapter independently extractable later.
+
+### BACKUP-001: A backup includes encrypted data and its key
+
+**Choice:** Each versioned ZIP archive contains an SQLite online-backup snapshot,
+manifest, and the exact 32-byte master key. Archives are not encrypted by the app
+and are documented as credentials.
+
+**Reason:** Copying only SQLite would restore ciphertext that a clean container
+cannot decrypt. Operator-controlled storage is a clearer boundary than inventing
+a second key-management password in the first release.
+
+### BACKUP-002: Live restore stages; startup applies
+
+**Choice:** Upload validates the archive, SQLite integrity, application schema,
+and master key, then stages files under the data volume. The next startup creates
+a pre-restore archive, atomically replaces database and key, and runs migrations.
+
+**Reason:** Replacing a database while services and scheduler sessions are live is
+not a safe recovery primitive. A required restart makes the cutover explicit and
+keeps every module on one database generation.
+
+### BACKUP-003: Retention is count-based and scheduler-owned
+
+**Choice:** The generic scheduler creates one backup every 24 hours by default and
+keeps the newest 14 archives. Manual and pre-restore archives participate in the
+same configurable count.
+
+**Reason:** Count retention is predictable on small NAS volumes and does not add a
+second timer loop or a hidden file owner.
+
+### UI-002: Security and recovery live behind one application gate
+
+**Choice:** The React root resolves authentication before mounting any product
+route. One system view owns Webhook configuration, messages, backups, restore,
+and logout; the shared API client attaches CSRF headers to all mutations. A
+successful logout clears the in-memory query cache and reloads the document.
+
+**Reason:** Feature pages remain unaware of session mechanics, and operator tasks
+have one discoverable surface on desktop and mobile. Reloading at the logout
+boundary removes protected projections and prevents stale credential form state
+from surviving the authenticated application.
+
+### PKG-001: Production is one non-root process and one data volume
+
+**Choice:** A multi-stage image builds React assets and runs Python as an
+unprivileged user with one Uvicorn worker. Compose mounts `/data`, publishes one
+port, and probes database readiness.
+
+**Reason:** This matches SQLite's single-writer workload, keeps install state in
+one portable volume, and avoids process-manager behavior that could duplicate the
+embedded scheduler.
+
 ## 4. Parser v1 Contract
 
 Supported episode shapes:
@@ -458,22 +583,23 @@ attempts are not silently rewritten.
   adapter or app-side pause/resume command.
 - qBittorrent category and tags are defaults captured when the task is planned;
   later external edits are reflected rather than overwritten.
-- Authentication is not implemented; bind only to localhost or a trusted private
-  network.
+- The service does not terminate TLS; secure-cookie mode requires an HTTPS reverse
+  proxy with one consistent browser origin.
+- Backup archives are portable but unencrypted and contain the master key.
+- Restore requires an explicit service restart after upload.
+- The Webhook adapter emits generic JSON; provider-specific message formats are
+  not implemented.
 
 ## 6. Next Planned Slice
 
-The next coherent delivery unit is the `product hardening + packaging` slice:
+The next coherent delivery unit is `release acceptance + remaining product views`:
 
-1. Add first-run administrator setup, session authentication, and CSRF-safe
-   mutation handling.
-2. Add notification channels with durable delivery attempts and retry policy.
-3. Add SQLite backup/restore, retention jobs, and operator-facing validation.
-4. Add container images, Compose configuration, data-volume documentation, and
-   upgrade/rollback checks.
-5. Run restart, outage, and long-running soak scenarios against the complete
-   feed-to-qBittorrent path.
-
-This turns the continuously operating modular monolith into a deployable,
-recoverable single-user product without changing the established domain
-boundaries.
+1. Add an airing calendar and per-anime episode history without allowing schedule
+   metadata to trigger downloads.
+2. Add explicit per-episode candidate selection and controlled replacement of an
+   existing decision.
+3. Run disposable Compose acceptance for first setup, backup into a clean volume,
+   restore, upgrade, and rollback.
+4. Add multi-architecture image CI and published image provenance.
+5. Start and record the seven-day real-feed soak required by `DESIGN.md`; this is
+   elapsed-time validation and is not claimed by the current automated suite.

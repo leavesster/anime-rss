@@ -4,6 +4,7 @@ from anime_rss.infrastructure.events import EventDispatcher
 from anime_rss.kernel.time import Clock, utc_now
 from anime_rss.modules.downloads.api import DownloadService
 from anime_rss.modules.feeds.api import FeedNotFoundError, FeedService
+from anime_rss.modules.notifications.api import NotificationService
 from anime_rss.modules.operations.api import ClaimedJob, JobService
 from anime_rss.modules.operations.ports import (
     DependencyStatus,
@@ -14,6 +15,7 @@ from anime_rss.modules.operations.ports import (
 )
 from anime_rss.modules.recognition.api import RecognitionService
 from anime_rss.modules.selection.api import SelectionService
+from anime_rss.modules.system.backup import BackupService
 
 
 class ApplicationRuntime:
@@ -28,10 +30,13 @@ class ApplicationRuntime:
         downloads: DownloadService,
         recognition: RecognitionService,
         jobs: JobService,
+        notifications: NotificationService,
+        backups: BackupService,
         clock: Clock = utc_now,
         event_interval_seconds: int = 5,
         selection_interval_seconds: int = 10,
         download_interval_seconds: int = 30,
+        backup_interval_hours: int = 24,
     ) -> None:
         self._feeds = feeds
         self._events = events
@@ -39,10 +44,13 @@ class ApplicationRuntime:
         self._downloads = downloads
         self._recognition = recognition
         self._jobs = jobs
+        self._notifications = notifications
+        self._backups = backups
         self._clock = clock
         self._event_interval_seconds = event_interval_seconds
         self._selection_interval_seconds = selection_interval_seconds
         self._download_interval_seconds = download_interval_seconds
+        self._backup_interval_hours = backup_interval_hours
 
     @property
     def handlers(self) -> dict[str, JobHandler]:
@@ -51,6 +59,8 @@ class ApplicationRuntime:
             "events.dispatch": self._dispatch_events,
             "selection.process_due": self._process_selection,
             "downloads.process_cycle": self._process_downloads,
+            "notifications.process_deliveries": self._process_notifications,
+            "system.backup": self._create_backup,
         }
 
     def schedules(self) -> list[JobSchedule]:
@@ -59,6 +69,8 @@ class ApplicationRuntime:
             JobSchedule("events.dispatch", "singleton", now),
             JobSchedule("selection.process_due", "singleton", now),
             JobSchedule("downloads.process_cycle", "singleton", now),
+            JobSchedule("notifications.process_deliveries", "singleton", now),
+            JobSchedule("system.backup", "daily", now),
         ]
         schedules.extend(
             JobSchedule(
@@ -248,4 +260,18 @@ class ApplicationRuntime:
                 "cancellations": result.cancellations,
                 "reconciled": result.reconciled,
             },
+        )
+
+    def _process_notifications(self, job: ClaimedJob) -> JobResult:
+        result = self._notifications.process_deliveries()
+        return JobResult(
+            self._clock() + timedelta(seconds=30),
+            {"delivered": result.delivered, "failed": result.failed},
+        )
+
+    def _create_backup(self, job: ClaimedJob) -> JobResult:
+        result = self._backups.create_backup(reason="scheduled")
+        return JobResult(
+            self._clock() + timedelta(hours=self._backup_interval_hours),
+            {"filename": result.filename, "size_bytes": result.size_bytes},
         )

@@ -329,6 +329,7 @@ class FeedService:
         new_count = 0
         with self._session_factory.begin() as session:
             feed = self._required_feed(session, feed_id)
+            recovered = feed.consecutive_failures > 0
             for entry in entries:
                 entry_id = new_id()
                 reference_ciphertext = None
@@ -391,6 +392,12 @@ class FeedService:
                 entity_id=feed_id,
                 payload={"entry_count": len(entries), "new_entry_count": new_count},
             )
+            if recovered:
+                append_event(
+                    session,
+                    name="FeedRecovered.v1",
+                    payload={"feed_id": feed_id},
+                )
 
         return RefreshResult(
             feed_id=feed_id,
@@ -407,6 +414,7 @@ class FeedService:
         now = self._clock()
         with self._session_factory.begin() as session:
             feed = self._required_feed(session, feed_id)
+            recovered = feed.consecutive_failures > 0
             feed.health = FeedHealth.HEALTHY.value
             feed.consecutive_failures = 0
             feed.error_code = None
@@ -425,6 +433,12 @@ class FeedService:
                     finished_at=now,
                 )
             )
+            if recovered:
+                append_event(
+                    session,
+                    name="FeedRecovered.v1",
+                    payload={"feed_id": feed_id},
+                )
         return RefreshResult(
             feed_id=feed_id,
             status="not_modified",
@@ -480,6 +494,14 @@ class FeedService:
                 entity_id=feed_id,
                 payload={"error_code": error.code, "status": status},
             )
+            if feed.consecutive_failures == 3 or (
+                status == "auth_failed" and feed.consecutive_failures == 1
+            ):
+                append_event(
+                    session,
+                    name="FeedRepeatedFailure.v1",
+                    payload={"feed_id": feed_id, "error_code": error.code},
+                )
             health = feed.health
         return RefreshResult(
             feed_id=feed_id,

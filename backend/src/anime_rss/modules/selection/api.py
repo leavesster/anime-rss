@@ -437,7 +437,7 @@ class SelectionService:
         append_event(
             session,
             name="DecisionCommitted.v1",
-            payload={"decision_id": decision_id, "candidate_id": candidate.id},
+            payload={"decision_id": decision_id, "candidate_id": candidate.id, "kind": kind},
         )
         if supersedes_decision_id is not None:
             append_event(

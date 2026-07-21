@@ -19,6 +19,7 @@ def _settings(tmp_path: Path, name: str) -> Settings:
         database_url=f"sqlite:///{tmp_path / name}",
         master_key_file=tmp_path / f"{name}.key",
         download_poll_seconds=300,
+        auth_enabled=False,
     )
 
 
