@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, CalendarClock, Clock3, History, ListTree, Pause, Play, Plus, Sparkles } from "lucide-react";
+import { Archive, BookOpen, CalendarClock, Clock3, History, ListTree, Plus, Sparkles } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -21,6 +21,7 @@ import { BackfillDialog } from "./BackfillDialog";
 import { CreateSubscriptionDialog } from "./CreateSubscriptionDialog";
 import { EpisodeControlDialog } from "./EpisodeControlDialog";
 import { GlobalPreferencesPanel } from "./GlobalPreferencesPanel";
+import { LifecycleMenu } from "./LifecycleMenu";
 import { SelectionLogicPanel } from "./SelectionLogicPanel";
 import { ScheduleDialog } from "./ScheduleDialog";
 
@@ -40,24 +41,29 @@ export function SubscriptionsPage() {
   const [backfill, setBackfill] = useState<Subscription | null>(null);
   const [episodeControl, setEpisodeControl] = useState<Subscription | null>(null);
   const [scheduleAnime, setScheduleAnime] = useState<Anime | null>(null);
+  const [subscriptionView, setSubscriptionView] = useState<"active" | "archived">("active");
   const anime = useQuery({ queryKey: ["anime"], queryFn: listAnime });
   const subscriptions = useQuery({ queryKey: ["subscriptions"], queryFn: listSubscriptions });
   const slots = useQuery({ queryKey: ["selection-slots"], queryFn: () => listSelectionSlots() });
   const decisions = useQuery({ queryKey: ["decisions"], queryFn: () => listDecisions() });
   const lifecycle = useMutation({
-    mutationFn: ({ subscription, state }: { subscription: Subscription; state: "following" | "paused" }) => updateSubscription(subscription.id, subscription.version, { state }),
+    mutationFn: ({ subscription, state }: { subscription: Subscription; state: "following" | "paused" | "completed" | "archived" }) => updateSubscription(subscription.id, subscription.version, { state }),
     onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["subscriptions"] }); },
   });
   const loading = anime.isLoading || subscriptions.isLoading || slots.isLoading || decisions.isLoading;
   const failed = anime.isError || subscriptions.isError || slots.isError || decisions.isError;
   const waiting = slots.data?.filter((item) => item.state === "waiting_fallback").length ?? 0;
   const following = subscriptions.data?.filter((item) => item.state === "following").length ?? 0;
+  const archived = subscriptions.data?.filter((item) => item.state === "archived").length ?? 0;
+  const visibleSubscriptions = subscriptions.data?.filter((item) =>
+    subscriptionView === "archived" ? item.state === "archived" : item.state !== "archived",
+  ) ?? [];
 
   return (
     <>
       <PageHeader eyebrow="订阅决策" title="追番管理" description="维护动画身份与订阅规则，查看等待窗口和每一次不可变选择。" actions={<><button className="button button--secondary" onClick={() => setShowAnime(true)}><BookOpen size={16} />添加动画</button><button className="button button--primary" onClick={() => setShowSubscription(true)} disabled={!anime.data?.length}><Plus size={16} />新建追番</button></>} />
       {loading && <LoadingState label="正在读取追番状态" />}
-      {failed && <ErrorBanner message="追番和决策状态加载失败。" />}
+      {(failed || lifecycle.isError) && <ErrorBanner message={lifecycle.error?.message ?? "追番和决策状态加载失败。"} />}
       {anime.data && subscriptions.data && slots.data && decisions.data && <>
         <section className="overview-band" aria-label="追番指标">
           <div className="overview-metric"><span className="metric-icon metric-icon--green"><BookOpen size={19} /></span><div><small>正在追番</small><strong>{following}</strong></div></div>
@@ -69,13 +75,13 @@ export function SubscriptionsPage() {
         <SelectionLogicPanel />
 
         <div className="subscription-layout">
-          <section className="data-section"><div className="section-heading"><div><h2>追番订阅</h2><p>暂停或恢复会切换激活时间边界。</p></div></div>
-            {subscriptions.data.length === 0 ? <EmptyState icon={BookOpen} title="还没有追番" description="先添加动画身份，再为它配置字幕组偏好和备选等待时间。" /> : <div className="subscription-list">{subscriptions.data.map((subscription) => <article className="subscription-row" key={subscription.id}>
+          <section className="data-section"><div className="section-heading"><div><h2>追番订阅</h2><p>完结仅接收同组修订版；归档停止全部自动处理。</p></div><div className="segmented" aria-label="订阅视图"><button className={subscriptionView === "active" ? "active" : ""} onClick={() => setSubscriptionView("active")}>当前</button><button className={subscriptionView === "archived" ? "active" : ""} onClick={() => setSubscriptionView("archived")}><Archive size={14} />归档 {archived}</button></div></div>
+            {subscriptions.data.length === 0 ? <EmptyState icon={BookOpen} title="还没有追番" description="先添加动画身份，再为它配置字幕组偏好和备选等待时间。" /> : visibleSubscriptions.length === 0 ? <EmptyState icon={Archive} title={subscriptionView === "archived" ? "没有归档订阅" : "没有当前订阅"} description={subscriptionView === "archived" ? "归档后的订阅会集中显示在这里。" : "恢复归档订阅或创建新的追番。"} /> : <div className="subscription-list">{visibleSubscriptions.map((subscription) => <article className="subscription-row" key={subscription.id}>
               <div className="subscription-row__main"><span className="subscription-mark"><BookOpen size={18} /></span><div><strong>{subscription.anime_title}</strong><small>{subscription.match_keys.length} 个匹配标题 · 激活于 {formatDate(subscription.activation_at)}</small></div></div>
               <div className="subscription-rule"><small>{subscription.uses_global_rules ? "全局字幕组优先级" : "单独字幕组优先级"}</small><strong>{subscription.rules.preferred_groups?.join(" › ") || "不限制"}</strong></div>
               <div className="subscription-rule"><small>备选等待</small><strong>{subscription.rules.fallback_wait_minutes ?? 120} 分钟</strong></div>
               <StatusBadge status={subscription.state} />
-              <div className="feed-actions"><button className="button button--ghost button--small" onClick={() => setEpisodeControl(subscription)}><ListTree size={15} />剧集</button><button className="button button--ghost button--small" onClick={() => setScheduleAnime(anime.data.find((item) => item.id === subscription.anime_id) ?? null)}><CalendarClock size={15} />播出</button><button className="button button--ghost button--small" onClick={() => setBackfill(subscription)}><History size={15} />回填</button><button className="icon-button" aria-label={subscription.state === "following" ? "暂停追番" : "恢复追番"} onClick={() => lifecycle.mutate({ subscription, state: subscription.state === "following" ? "paused" : "following" })}>{subscription.state === "following" ? <Pause size={16} /> : <Play size={16} />}</button></div>
+              <div className="feed-actions"><button className="button button--ghost button--small" onClick={() => setEpisodeControl(subscription)}><ListTree size={15} />剧集</button><button className="button button--ghost button--small" onClick={() => setScheduleAnime(anime.data.find((item) => item.id === subscription.anime_id) ?? null)}><CalendarClock size={15} />播出</button><button className="button button--ghost button--small" onClick={() => setBackfill(subscription)}><History size={15} />回填</button><LifecycleMenu state={subscription.state as "following" | "paused" | "completed" | "archived"} disabled={lifecycle.isPending} onChange={(state) => lifecycle.mutate({ subscription, state })} /></div>
             </article>)}</div>}
           </section>
 

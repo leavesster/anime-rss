@@ -371,6 +371,80 @@ def test_range_coverage_skips_full_duplicates_and_gates_partial_overlap(
         )
 
 
+def test_completed_only_accepts_revision_upgrades_and_archived_stops_all_automation(
+    tmp_path: Path,
+) -> None:
+    current_rss = [_rss("[Group] Lifecycle Anime - 01 [1080p AVC][简体]", "6" * 40)]
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, content=current_rss[0]))
+    with TestClient(
+        create_app(_settings(tmp_path, "lifecycle.sqlite3"), feed_transport=transport)
+    ) as client:
+        anime = client.post("/api/v1/catalog/anime", json={"title": "Lifecycle Anime"}).json()
+        subscription = client.post(
+            "/api/v1/subscriptions",
+            json={"anime_id": anime["id"], "rules": {"fallback_wait_minutes": 0}},
+        ).json()
+        feed = client.post(
+            "/api/v1/feeds",
+            json={"name": "Lifecycle", "url": "https://feed.test/rss"},
+        ).json()
+        client.post(f"/api/v1/feeds/{feed['id']}/refresh")
+
+        completed = client.patch(
+            f"/api/v1/subscriptions/{subscription['id']}",
+            headers={"If-Match": str(subscription["version"])},
+            json={"state": "completed"},
+        ).json()
+        current_rss[0] = _rss("[Group] Lifecycle Anime - 02 [1080p AVC][简体]", "7" * 40)
+        client.post(f"/api/v1/feeds/{feed['id']}/refresh")
+        current_rss[0] = _rss("[Group] Lifecycle Anime - 01V2 [1080p AVC][简体]", "8" * 40)
+        client.post(f"/api/v1/feeds/{feed['id']}/refresh")
+
+        decisions = client.get(
+            "/api/v1/selection/decisions", params={"subscription_id": subscription["id"]}
+        ).json()
+        assert [item["kind"] for item in decisions] == [
+            "selected_upgrade",
+            "selected_fallback",
+        ]
+        assert {item["episode_key"] for item in decisions} == {"1"}
+
+        archived = client.patch(
+            f"/api/v1/subscriptions/{subscription['id']}",
+            headers={"If-Match": str(completed["version"])},
+            json={"state": "archived"},
+        ).json()
+        current_rss[0] = _rss("[Group] Lifecycle Anime - 01V3 [1080p AVC][简体]", "9" * 40)
+        client.post(f"/api/v1/feeds/{feed['id']}/refresh")
+        assert (
+            len(
+                client.get(
+                    "/api/v1/selection/decisions",
+                    params={"subscription_id": subscription["id"]},
+                ).json()
+            )
+            == 2
+        )
+
+        illegal_resume = client.patch(
+            f"/api/v1/subscriptions/{subscription['id']}",
+            headers={"If-Match": str(archived["version"])},
+            json={"state": "following"},
+        )
+        assert illegal_resume.status_code == 422
+        restored = client.patch(
+            f"/api/v1/subscriptions/{subscription['id']}",
+            headers={"If-Match": str(archived["version"])},
+            json={"state": "paused"},
+        ).json()
+        resumed = client.patch(
+            f"/api/v1/subscriptions/{subscription['id']}",
+            headers={"If-Match": str(restored["version"])},
+            json={"state": "following"},
+        )
+        assert resumed.status_code == 200
+
+
 def test_global_preferences_and_manual_episode_controls_are_auditable(tmp_path: Path) -> None:
     feeds = {
         "/a": _rss("[Group-A] Manual Anime - 01 [1080p HEVC][简体]", "d" * 40),

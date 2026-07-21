@@ -166,6 +166,7 @@ packaged as a first-run authenticated, recoverable Compose service.
   attributes.
 - Anime creation/import, subscription creation and lifecycle controls, backfill
   preview, waiting-state summary, and immutable decision history.
+- Legal completed/archive lifecycle menus plus separate current and archived views.
 - In-page selection flow showing hard filters, comparison order, wait behavior,
   revision upgrades, and the explicit boundary of current manual operations.
 - qBittorrent configuration, connectivity status, download progress, external
@@ -298,6 +299,18 @@ upgrade cannot silently change their behavior.
 **Reason:** One editable default makes new subscriptions cheap while the explicit
 inheritance flag preserves reviewable ownership and lets each decision snapshot
 the exact effective rules.
+
+### SUB-004: Lifecycle commands expose only legal state transitions
+
+**Choice:** The subscription row uses an action menu derived from the backend
+state machine. Following and paused subscriptions can complete or archive;
+completed subscriptions can resume or archive; archived subscriptions restore to
+paused before they can follow again. Archived rows live in a separate view.
+
+**Reason:** A binary pause toggle cannot represent completed and archived
+semantics and previously attempted the illegal `archived -> following` transition.
+The explicit menu keeps operator intent aligned with selection behavior: completed
+allows same-span same-group upgrades only, while archived stops all automation.
 
 ### SEL-001: Unknown safety attributes fail hard filters
 
@@ -863,7 +876,7 @@ truth; a row is complete only when code and proportionate evidence both exist.
 | Area | Current evidence | Remaining work |
 |---|---|---|
 | Episode span coverage | `0015`, domain/integration/migration/frontend tests | Complete |
-| Subscription lifecycle | Backend supports all four states; UI exposes pause/resume | Add completed/archive commands and views |
+| Subscription lifecycle | All legal commands, archived view, revision-only completed behavior, and archived-stop integration coverage | Complete |
 | Unsupported release handling | Raw releases are visible | Add explicit manual qBittorrent submission |
 | Parser regression contract | Deterministic bounded parser and focused fixtures | Build the planned 300+ golden corpus and Unicode/property gates |
 | HTTP consistency | CSRF token and some optimistic versions exist | Apply mutation idempotency, resource preconditions, cursor pagination, structured errors, and correlation IDs consistently |
@@ -874,10 +887,9 @@ truth; a row is complete only when code and proportionate evidence both exist.
 | Stable engineering gates | lint, typecheck, unit/integration, OpenAPI generation, Compose acceptance | Add doctor, checked OpenAPI drift, security scan, clean-room, and release-evidence commands |
 | External acceptance | Durable seven-day evidence tooling exists | Configure two real feeds, two Bangumi subscriptions, qBittorrent, then complete seven natural days |
 
-The next implementation unit is the missing subscription completed/archive UI,
-followed by unsupported-release manual submission. Security and release gates then
-proceed as independent reviewable units; the seven-day clock starts only after its
-external preflight is genuinely satisfied.
+The next implementation unit is unsupported-release manual submission. Security
+and release gates then proceed as independent reviewable units; the seven-day
+clock starts only after its external preflight is genuinely satisfied.
 
 ## 7. Current Verification Evidence
 
@@ -885,8 +897,8 @@ Verified on 2026-07-22 with `make verify` after migration `0015`:
 
 - Ruff formatting and lint: passed.
 - Pyright: passed with zero errors.
-- Backend: 79 tests passed, 88.15% statement coverage.
-- Frontend: ESLint and TypeScript passed; 9 Vitest tests passed.
+- Backend: 80 tests passed, 88.25% statement coverage.
+- Frontend: ESLint and TypeScript passed; 11 Vitest tests passed.
 - Production Vite build: passed.
 - Disposable Compose lifecycle: passed for clean setup, operator backup,
   in-place upgrade from the pre-`0012` baseline, clean-volume restore, and
@@ -926,6 +938,12 @@ Verified on 2026-07-22 with `make verify` after migration `0015`:
   history, backfill exclusion, frontend explanation, and migration of prior
   Decisions plus `acquired_elsewhere` actions. Migration `0015` passed an
   `0014 -> head -> 0014 -> head` round trip.
+- Subscription-lifecycle evidence covers all legal transitions, rejection of a
+  direct archived-to-following jump, completed-state revision upgrades without
+  ordinary new episodes, archived-state suppression, lifecycle menus, and the
+  separate archived view. A disposable no-auth browser instance verified the
+  active and archived views at 914px and 390px with no horizontal overflow,
+  action overlap, or clipped lifecycle menu.
 - Soak acceptance evidence covers incomplete-preflight refusal, idempotent start,
   the exact seven-day boundary, redacted reporting, cross-feed observation counts,
   and duplicate task identity signals.
