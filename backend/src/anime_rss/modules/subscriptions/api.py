@@ -15,9 +15,12 @@ from anime_rss.modules.subscriptions.domain import (
     validate_state_transition,
 )
 from anime_rss.modules.subscriptions.persistence import (
+    PreferenceProfileRecord,
     SubscriptionEpochRecord,
     SubscriptionRecord,
 )
+
+GLOBAL_PROFILE_ID = "default"
 
 
 class AnimeCatalog(Protocol):
@@ -32,6 +35,7 @@ class Subscription:
     state: str
     match_keys: list[str]
     rules: PreferenceRules
+    uses_global_rules: bool
     activation_at: datetime
     save_path: str | None
     version: int
@@ -48,6 +52,15 @@ class SelectionSubscription:
     match_keys: frozenset[str]
     rules: PreferenceRules
     activation_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class PreferenceProfile:
+    id: str
+    name: str
+    rules: PreferenceRules
+    version: int
+    updated_at: datetime | None
 
 
 class SubscriptionNotFoundError(LookupError):
@@ -75,6 +88,7 @@ class SubscriptionService:
         *,
         anime_id: str,
         rules: PreferenceRules | None = None,
+        use_global_rules: bool | None = None,
         aliases: list[str] | None = None,
         save_path: str | None = None,
     ) -> Subscription:
@@ -87,6 +101,14 @@ class SubscriptionService:
                 select(SubscriptionRecord.id).where(SubscriptionRecord.anime_id == anime_id)
             ):
                 raise SubscriptionConflictError("anime already has a subscription")
+            inherit_global = rules is None if use_global_rules is None else use_global_rules
+            if inherit_global and rules is not None:
+                raise ValueError(
+                    "global rules and subscription rule override are mutually exclusive"
+                )
+            effective_rules = (
+                self._global_rules(session) if inherit_global else (rules or PreferenceRules())
+            )
             session.add(
                 SubscriptionRecord(
                     id=subscription_id,
@@ -94,7 +116,8 @@ class SubscriptionService:
                     anime_title=anime.primary_title,
                     state=SubscriptionState.FOLLOWING.value,
                     match_keys=match_keys,
-                    rules=(rules or PreferenceRules()).to_dict(),
+                    rules=effective_rules.to_dict(),
+                    use_global_rules=inherit_global,
                     activation_at=now,
                     save_path=self._clean_path(save_path),
                     version=1,
@@ -126,6 +149,7 @@ class SubscriptionService:
         *,
         state: SubscriptionState | None = None,
         rules: PreferenceRules | None = None,
+        use_global_rules: bool | None = None,
         aliases: list[str] | None = None,
         save_path: str | None = None,
         expected_version: int | None = None,
@@ -145,6 +169,15 @@ class SubscriptionService:
                 record.state = target.value
             if rules is not None:
                 record.rules = rules.to_dict()
+                record.use_global_rules = False
+            if use_global_rules is not None:
+                if use_global_rules and rules is not None:
+                    raise ValueError(
+                        "global rules and subscription rule override are mutually exclusive"
+                    )
+                if use_global_rules and not record.use_global_rules:
+                    record.rules = self._global_rules(session).to_dict()
+                record.use_global_rules = use_global_rules
             if aliases is not None:
                 anime = self._catalog.get_anime(record.anime_id)
                 record.match_keys = self._match_keys(anime, aliases)
@@ -170,14 +203,63 @@ class SubscriptionService:
                     )
                 )
             )
-            return [self._to_subscription(record) for record in records]
+            global_rules = self._global_rules(session)
+            return [self._to_subscription(record, global_rules) for record in records]
 
     def get_subscription(self, subscription_id: str) -> Subscription:
         with self._session_factory() as session:
             record = session.get(SubscriptionRecord, subscription_id)
             if record is None:
                 raise SubscriptionNotFoundError(subscription_id)
-            return self._to_subscription(record)
+            return self._to_subscription(record, self._global_rules(session))
+
+    def get_global_preferences(self) -> PreferenceProfile:
+        with self._session_factory() as session:
+            record = session.get(PreferenceProfileRecord, GLOBAL_PROFILE_ID)
+            if record is None:
+                return PreferenceProfile(
+                    id=GLOBAL_PROFILE_ID,
+                    name="Default",
+                    rules=PreferenceRules(),
+                    version=0,
+                    updated_at=None,
+                )
+            return self._to_profile(record)
+
+    def update_global_preferences(
+        self,
+        rules: PreferenceRules,
+        *,
+        expected_version: int | None = None,
+    ) -> PreferenceProfile:
+        now = self._clock()
+        with self._session_factory.begin() as session:
+            record = session.get(PreferenceProfileRecord, GLOBAL_PROFILE_ID)
+            current_version = record.version if record is not None else 0
+            if expected_version is not None and expected_version != current_version:
+                raise SubscriptionConflictError("preference profile version conflict")
+            if record is None:
+                record = PreferenceProfileRecord(
+                    id=GLOBAL_PROFILE_ID,
+                    name="Default",
+                    rules=rules.to_dict(),
+                    version=1,
+                    created_at=now,
+                    updated_at=now,
+                )
+                session.add(record)
+            else:
+                record.rules = rules.to_dict()
+                record.version += 1
+                record.updated_at = now
+            record_event(
+                session,
+                event_type="subscription.global_preferences_updated",
+                entity_type="preference_profile",
+                entity_id=GLOBAL_PROFILE_ID,
+                payload={"version": record.version},
+            )
+        return self.get_global_preferences()
 
     def get_for_selection(self, subscription_id: str) -> SelectionSubscription | None:
         try:
@@ -239,18 +321,36 @@ class SubscriptionService:
             )
 
     @staticmethod
-    def _to_subscription(record: SubscriptionRecord) -> Subscription:
+    def _global_rules(session: Session) -> PreferenceRules:
+        record = session.get(PreferenceProfileRecord, GLOBAL_PROFILE_ID)
+        return PreferenceRules.from_dict(record.rules if record is not None else None)
+
+    @staticmethod
+    def _to_subscription(record: SubscriptionRecord, global_rules: PreferenceRules) -> Subscription:
         return Subscription(
             id=record.id,
             anime_id=record.anime_id,
             anime_title=record.anime_title,
             state=record.state,
             match_keys=list(record.match_keys),
-            rules=PreferenceRules.from_dict(record.rules),
+            rules=(
+                global_rules if record.use_global_rules else PreferenceRules.from_dict(record.rules)
+            ),
+            uses_global_rules=record.use_global_rules,
             activation_at=record.activation_at,
             save_path=record.save_path,
             version=record.version,
             created_at=record.created_at,
+            updated_at=record.updated_at,
+        )
+
+    @staticmethod
+    def _to_profile(record: PreferenceProfileRecord) -> PreferenceProfile:
+        return PreferenceProfile(
+            id=record.id,
+            name=record.name,
+            rules=PreferenceRules.from_dict(record.rules),
+            version=record.version,
             updated_at=record.updated_at,
         )
 

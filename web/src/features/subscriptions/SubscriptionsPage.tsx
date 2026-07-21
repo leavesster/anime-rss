@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, Clock3, History, Pause, Play, Plus, Sparkles } from "lucide-react";
+import { BookOpen, Clock3, History, ListTree, Pause, Play, Plus, Sparkles } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -18,6 +18,8 @@ import { formatDate } from "../../shared/lib/format";
 import { AddAnimeDialog } from "./AddAnimeDialog";
 import { BackfillDialog } from "./BackfillDialog";
 import { CreateSubscriptionDialog } from "./CreateSubscriptionDialog";
+import { EpisodeControlDialog } from "./EpisodeControlDialog";
+import { GlobalPreferencesPanel } from "./GlobalPreferencesPanel";
 import { SelectionLogicPanel } from "./SelectionLogicPanel";
 
 const decisionLabels: Record<string, string> = {
@@ -25,6 +27,8 @@ const decisionLabels: Record<string, string> = {
   selected_fallback: "备选到期",
   selected_backfill: "历史回填",
   selected_upgrade: "版本升级",
+  selected_manual: "人工选择",
+  selected_manual_replacement: "人工替换",
 };
 
 export function SubscriptionsPage() {
@@ -32,10 +36,11 @@ export function SubscriptionsPage() {
   const [showAnime, setShowAnime] = useState(false);
   const [showSubscription, setShowSubscription] = useState(false);
   const [backfill, setBackfill] = useState<Subscription | null>(null);
+  const [episodeControl, setEpisodeControl] = useState<Subscription | null>(null);
   const anime = useQuery({ queryKey: ["anime"], queryFn: listAnime });
   const subscriptions = useQuery({ queryKey: ["subscriptions"], queryFn: listSubscriptions });
-  const slots = useQuery({ queryKey: ["selection-slots"], queryFn: listSelectionSlots });
-  const decisions = useQuery({ queryKey: ["decisions"], queryFn: listDecisions });
+  const slots = useQuery({ queryKey: ["selection-slots"], queryFn: () => listSelectionSlots() });
+  const decisions = useQuery({ queryKey: ["decisions"], queryFn: () => listDecisions() });
   const lifecycle = useMutation({
     mutationFn: ({ subscription, state }: { subscription: Subscription; state: "following" | "paused" }) => updateSubscription(subscription.id, subscription.version, { state }),
     onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["subscriptions"] }); },
@@ -57,16 +62,17 @@ export function SubscriptionsPage() {
           <div className="overview-metric"><span className="metric-icon metric-icon--gray"><Sparkles size={19} /></span><div><small>已形成决策</small><strong>{decisions.data.length}</strong></div></div>
         </section>
 
+        <GlobalPreferencesPanel />
         <SelectionLogicPanel />
 
         <div className="subscription-layout">
           <section className="data-section"><div className="section-heading"><div><h2>追番订阅</h2><p>暂停或恢复会切换激活时间边界。</p></div></div>
             {subscriptions.data.length === 0 ? <EmptyState icon={BookOpen} title="还没有追番" description="先添加动画身份，再为它配置字幕组偏好和备选等待时间。" /> : <div className="subscription-list">{subscriptions.data.map((subscription) => <article className="subscription-row" key={subscription.id}>
               <div className="subscription-row__main"><span className="subscription-mark"><BookOpen size={18} /></span><div><strong>{subscription.anime_title}</strong><small>{subscription.match_keys.length} 个匹配标题 · 激活于 {formatDate(subscription.activation_at)}</small></div></div>
-              <div className="subscription-rule"><small>字幕组优先级</small><strong>{subscription.rules.preferred_groups?.join(" › ") || "不限制"}</strong></div>
+              <div className="subscription-rule"><small>{subscription.uses_global_rules ? "全局字幕组优先级" : "单独字幕组优先级"}</small><strong>{subscription.rules.preferred_groups?.join(" › ") || "不限制"}</strong></div>
               <div className="subscription-rule"><small>备选等待</small><strong>{subscription.rules.fallback_wait_minutes ?? 120} 分钟</strong></div>
               <StatusBadge status={subscription.state} />
-              <div className="feed-actions"><button className="button button--ghost button--small" onClick={() => setBackfill(subscription)}><History size={15} />回填</button><button className="icon-button" aria-label={subscription.state === "following" ? "暂停追番" : "恢复追番"} onClick={() => lifecycle.mutate({ subscription, state: subscription.state === "following" ? "paused" : "following" })}>{subscription.state === "following" ? <Pause size={16} /> : <Play size={16} />}</button></div>
+              <div className="feed-actions"><button className="button button--ghost button--small" onClick={() => setEpisodeControl(subscription)}><ListTree size={15} />剧集</button><button className="button button--ghost button--small" onClick={() => setBackfill(subscription)}><History size={15} />回填</button><button className="icon-button" aria-label={subscription.state === "following" ? "暂停追番" : "恢复追番"} onClick={() => lifecycle.mutate({ subscription, state: subscription.state === "following" ? "paused" : "following" })}>{subscription.state === "following" ? <Pause size={16} /> : <Play size={16} />}</button></div>
             </article>)}</div>}
           </section>
 
@@ -82,6 +88,7 @@ export function SubscriptionsPage() {
       {showAnime && <AddAnimeDialog onClose={() => setShowAnime(false)} />}
       {showSubscription && anime.data && subscriptions.data && <CreateSubscriptionDialog anime={anime.data} unavailableAnimeIds={new Set(subscriptions.data.map((item) => item.anime_id))} onClose={() => setShowSubscription(false)} />}
       {backfill && <BackfillDialog subscription={backfill} onClose={() => setBackfill(null)} />}
+      {episodeControl && <EpisodeControlDialog subscription={episodeControl} onClose={() => setEpisodeControl(null)} />}
     </>
   );
 }

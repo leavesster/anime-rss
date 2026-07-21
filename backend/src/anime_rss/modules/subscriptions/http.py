@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from anime_rss.modules.catalog.api import AnimeNotFoundError
 from anime_rss.modules.subscriptions.api import (
+    PreferenceProfile,
     Subscription,
     SubscriptionConflictError,
     SubscriptionNotFoundError,
@@ -46,7 +47,8 @@ class PreferenceRulesModel(BaseModel):
 class SubscriptionCreateRequest(BaseModel):
     anime_id: str
     aliases: list[str] = Field(default_factory=list, max_length=50)
-    rules: PreferenceRulesModel = Field(default_factory=PreferenceRulesModel)
+    rules: PreferenceRulesModel | None = None
+    use_global_rules: bool | None = None
     save_path: str | None = Field(default=None, max_length=1024)
 
 
@@ -54,6 +56,7 @@ class SubscriptionPatchRequest(BaseModel):
     state: SubscriptionState | None = None
     aliases: list[str] | None = Field(default=None, max_length=50)
     rules: PreferenceRulesModel | None = None
+    use_global_rules: bool | None = None
     save_path: str | None = Field(default=None, max_length=1024)
 
 
@@ -64,6 +67,7 @@ class SubscriptionResponse(BaseModel):
     state: str
     match_keys: list[str]
     rules: PreferenceRulesModel
+    uses_global_rules: bool
     activation_at: datetime
     save_path: str | None
     version: int
@@ -83,6 +87,18 @@ def _response(value: Subscription) -> SubscriptionResponse:
     return SubscriptionResponse.model_validate(asdict(value))
 
 
+class PreferenceProfileResponse(BaseModel):
+    id: str
+    name: str
+    rules: PreferenceRulesModel
+    version: int
+    updated_at: datetime | None
+
+
+def _profile_response(value: PreferenceProfile) -> PreferenceProfileResponse:
+    return PreferenceProfileResponse.model_validate(asdict(value))
+
+
 @router.get("", response_model=list[SubscriptionResponse])
 def list_subscriptions(request: Request) -> list[SubscriptionResponse]:
     return [_response(item) for item in _service(request).list_subscriptions()]
@@ -95,7 +111,8 @@ def create_subscription(
     try:
         value = _service(request).create_subscription(
             anime_id=payload.anime_id,
-            rules=payload.rules.to_domain(),
+            rules=payload.rules.to_domain() if payload.rules is not None else None,
+            use_global_rules=payload.use_global_rules,
             aliases=payload.aliases,
             save_path=payload.save_path,
         )
@@ -120,6 +137,7 @@ def update_subscription(
             subscription_id,
             state=payload.state,
             rules=payload.rules.to_domain() if payload.rules is not None else None,
+            use_global_rules=payload.use_global_rules,
             aliases=payload.aliases,
             save_path=payload.save_path,
             expected_version=if_match,
@@ -131,3 +149,23 @@ def update_subscription(
     except (AnimeNotFoundError, ValueError) as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     return _response(value)
+
+
+@router.get("/preferences/global", response_model=PreferenceProfileResponse)
+def get_global_preferences(request: Request) -> PreferenceProfileResponse:
+    return _profile_response(_service(request).get_global_preferences())
+
+
+@router.put("/preferences/global", response_model=PreferenceProfileResponse)
+def update_global_preferences(
+    payload: PreferenceRulesModel,
+    request: Request,
+    if_match: Annotated[int | None, Header()] = None,
+) -> PreferenceProfileResponse:
+    try:
+        profile = _service(request).update_global_preferences(
+            payload.to_domain(), expected_version=if_match
+        )
+    except SubscriptionConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return _profile_response(profile)

@@ -399,6 +399,24 @@ export interface paths {
         patch: operations["update_subscription_api_v1_subscriptions__subscription_id__patch"];
         trace?: never;
     };
+    "/api/v1/subscriptions/preferences/global": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Global Preferences */
+        get: operations["get_global_preferences_api_v1_subscriptions_preferences_global_get"];
+        /** Update Global Preferences */
+        put: operations["update_global_preferences_api_v1_subscriptions_preferences_global_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/selection/episodes": {
         parameters: {
             query?: never;
@@ -478,6 +496,91 @@ export interface paths {
         put?: never;
         /** Commit Backfill */
         post: operations["commit_backfill_api_v1_selection_subscriptions__subscription_id__backfill_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/selection/subscriptions/{subscription_id}/candidates/{candidate_id}/select": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Select Candidate */
+        post: operations["select_candidate_api_v1_selection_subscriptions__subscription_id__candidates__candidate_id__select_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/selection/subscriptions/{subscription_id}/candidates/{candidate_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject Candidate */
+        post: operations["reject_candidate_api_v1_selection_subscriptions__subscription_id__candidates__candidate_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/selection/subscriptions/{subscription_id}/episodes/{episode_key}/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reset Episode */
+        post: operations["reset_episode_api_v1_selection_subscriptions__subscription_id__episodes__episode_key__reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/selection/subscriptions/{subscription_id}/episodes/{episode_key}/acquired-elsewhere": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Acquired Elsewhere */
+        post: operations["mark_acquired_elsewhere_api_v1_selection_subscriptions__subscription_id__episodes__episode_key__acquired_elsewhere_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/selection/manual-actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Manual Actions */
+        get: operations["list_manual_actions_api_v1_selection_manual_actions_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -972,6 +1075,19 @@ export interface components {
              */
             first_seen_at: string;
         };
+        /** CandidateSelectRequest */
+        CandidateSelectRequest: {
+            /**
+             * Replace Existing
+             * @default false
+             */
+            replace_existing: boolean;
+            /**
+             * Override Filters
+             * @default false
+             */
+            override_filters: boolean;
+        };
         /** CatalogSearchResponse */
         CatalogSearchResponse: {
             /** Items */
@@ -990,6 +1106,11 @@ export interface components {
             username: string;
             /** Password */
             password: string;
+        };
+        /** DecisionCommandResponse */
+        DecisionCommandResponse: {
+            /** Decision Id */
+            decision_id: string;
         };
         /** DecisionResponse */
         DecisionResponse: {
@@ -1387,6 +1508,32 @@ export interface components {
             /** Aliases */
             aliases?: string[];
         };
+        /** ManualActionResponse */
+        ManualActionResponse: {
+            /** Id */
+            id: string;
+            /** Subscription Id */
+            subscription_id: string;
+            /** Slot Id */
+            slot_id: string | null;
+            /** Episode Key */
+            episode_key: string;
+            /** Candidate Id */
+            candidate_id: string | null;
+            /** Release Id */
+            release_id: string | null;
+            /** Action */
+            action: string;
+            /** Reason */
+            reason: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** NotificationConfigRequest */
         NotificationConfigRequest: {
             /**
@@ -1453,6 +1600,18 @@ export interface components {
             failed_work: components["schemas"]["FailedWorkResponse"][];
             /** Pending Jobs */
             pending_jobs: number;
+        };
+        /** PreferenceProfileResponse */
+        PreferenceProfileResponse: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            rules: components["schemas"]["PreferenceRulesModel"];
+            /** Version */
+            version: number;
+            /** Updated At */
+            updated_at: string | null;
         };
         /** PreferenceRulesModel */
         PreferenceRulesModel: {
@@ -1633,7 +1792,9 @@ export interface components {
             anime_id: string;
             /** Aliases */
             aliases?: string[];
-            rules?: components["schemas"]["PreferenceRulesModel"];
+            rules?: components["schemas"]["PreferenceRulesModel"] | null;
+            /** Use Global Rules */
+            use_global_rules?: boolean | null;
             /** Save Path */
             save_path?: string | null;
         };
@@ -1643,6 +1804,8 @@ export interface components {
             /** Aliases */
             aliases?: string[] | null;
             rules?: components["schemas"]["PreferenceRulesModel"] | null;
+            /** Use Global Rules */
+            use_global_rules?: boolean | null;
             /** Save Path */
             save_path?: string | null;
         };
@@ -1659,6 +1822,8 @@ export interface components {
             /** Match Keys */
             match_keys: string[];
             rules: components["schemas"]["PreferenceRulesModel"];
+            /** Uses Global Rules */
+            uses_global_rules: boolean;
             /**
              * Activation At
              * Format: date-time
@@ -2520,9 +2685,65 @@ export interface operations {
             };
         };
     };
+    get_global_preferences_api_v1_subscriptions_preferences_global_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreferenceProfileResponse"];
+                };
+            };
+        };
+    };
+    update_global_preferences_api_v1_subscriptions_preferences_global_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "if-match"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreferenceRulesModel"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreferenceProfileResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_episode_slots_api_v1_selection_episodes_get: {
         parameters: {
             query?: {
+                subscription_id?: string | null;
                 limit?: number;
             };
             header?: never;
@@ -2554,6 +2775,7 @@ export interface operations {
     list_decisions_api_v1_selection_decisions_get: {
         parameters: {
             query?: {
+                subscription_id?: string | null;
                 limit?: number;
             };
             header?: never;
@@ -2655,6 +2877,170 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CommandResultResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    select_candidate_api_v1_selection_subscriptions__subscription_id__candidates__candidate_id__select_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subscription_id: string;
+                candidate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CandidateSelectRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionCommandResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_candidate_api_v1_selection_subscriptions__subscription_id__candidates__candidate_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subscription_id: string;
+                candidate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualActionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_episode_api_v1_selection_subscriptions__subscription_id__episodes__episode_key__reset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subscription_id: string;
+                episode_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualActionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_acquired_elsewhere_api_v1_selection_subscriptions__subscription_id__episodes__episode_key__acquired_elsewhere_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subscription_id: string;
+                episode_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualActionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_manual_actions_api_v1_selection_manual_actions_get: {
+        parameters: {
+            query?: {
+                subscription_id?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualActionResponse"][];
                 };
             };
             /** @description Validation Error */

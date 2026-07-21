@@ -1099,6 +1099,84 @@
         }
       }
     },
+    "/api/v1/subscriptions/preferences/global": {
+      "get": {
+        "tags": [
+          "subscriptions"
+        ],
+        "summary": "Get Global Preferences",
+        "operationId": "get_global_preferences_api_v1_subscriptions_preferences_global_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreferenceProfileResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "subscriptions"
+        ],
+        "summary": "Update Global Preferences",
+        "operationId": "update_global_preferences_api_v1_subscriptions_preferences_global_put",
+        "parameters": [
+          {
+            "name": "if-match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreferenceRulesModel"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreferenceProfileResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/selection/episodes": {
       "get": {
         "tags": [
@@ -1107,6 +1185,22 @@
         "summary": "List Episode Slots",
         "operationId": "list_episode_slots_api_v1_selection_episodes_get",
         "parameters": [
+          {
+            "name": "subscription_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subscription Id"
+            }
+          },
           {
             "name": "limit",
             "in": "query",
@@ -1154,6 +1248,22 @@
         "summary": "List Decisions",
         "operationId": "list_decisions_api_v1_selection_decisions_get",
         "parameters": [
+          {
+            "name": "subscription_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subscription Id"
+            }
+          },
           {
             "name": "limit",
             "in": "query",
@@ -1295,6 +1405,283 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CommandResultResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/selection/subscriptions/{subscription_id}/candidates/{candidate_id}/select": {
+      "post": {
+        "tags": [
+          "selection"
+        ],
+        "summary": "Select Candidate",
+        "operationId": "select_candidate_api_v1_selection_subscriptions__subscription_id__candidates__candidate_id__select_post",
+        "parameters": [
+          {
+            "name": "subscription_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Subscription Id"
+            }
+          },
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Candidate Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CandidateSelectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionCommandResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/selection/subscriptions/{subscription_id}/candidates/{candidate_id}/reject": {
+      "post": {
+        "tags": [
+          "selection"
+        ],
+        "summary": "Reject Candidate",
+        "operationId": "reject_candidate_api_v1_selection_subscriptions__subscription_id__candidates__candidate_id__reject_post",
+        "parameters": [
+          {
+            "name": "subscription_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Subscription Id"
+            }
+          },
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Candidate Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManualActionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/selection/subscriptions/{subscription_id}/episodes/{episode_key}/reset": {
+      "post": {
+        "tags": [
+          "selection"
+        ],
+        "summary": "Reset Episode",
+        "operationId": "reset_episode_api_v1_selection_subscriptions__subscription_id__episodes__episode_key__reset_post",
+        "parameters": [
+          {
+            "name": "subscription_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Subscription Id"
+            }
+          },
+          {
+            "name": "episode_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Episode Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManualActionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/selection/subscriptions/{subscription_id}/episodes/{episode_key}/acquired-elsewhere": {
+      "post": {
+        "tags": [
+          "selection"
+        ],
+        "summary": "Mark Acquired Elsewhere",
+        "operationId": "mark_acquired_elsewhere_api_v1_selection_subscriptions__subscription_id__episodes__episode_key__acquired_elsewhere_post",
+        "parameters": [
+          {
+            "name": "subscription_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Subscription Id"
+            }
+          },
+          {
+            "name": "episode_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Episode Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManualActionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/selection/manual-actions": {
+      "get": {
+        "tags": [
+          "selection"
+        ],
+        "summary": "List Manual Actions",
+        "operationId": "list_manual_actions_api_v1_selection_manual_actions_get",
+        "parameters": [
+          {
+            "name": "subscription_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subscription Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 200,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ManualActionResponse"
+                  },
+                  "title": "Response List Manual Actions Api V1 Selection Manual Actions Get"
                 }
               }
             }
@@ -2601,6 +2988,22 @@
         ],
         "title": "CandidateResponse"
       },
+      "CandidateSelectRequest": {
+        "properties": {
+          "replace_existing": {
+            "type": "boolean",
+            "title": "Replace Existing",
+            "default": false
+          },
+          "override_filters": {
+            "type": "boolean",
+            "title": "Override Filters",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "CandidateSelectRequest"
+      },
       "CatalogSearchResponse": {
         "properties": {
           "items": {
@@ -2656,6 +3059,19 @@
           "password"
         ],
         "title": "CredentialsRequest"
+      },
+      "DecisionCommandResponse": {
+        "properties": {
+          "decision_id": {
+            "type": "string",
+            "title": "Decision Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "decision_id"
+        ],
+        "title": "DecisionCommandResponse"
       },
       "DecisionResponse": {
         "properties": {
@@ -3871,6 +4287,82 @@
         ],
         "title": "LocalAnimeCreateRequest"
       },
+      "ManualActionResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "subscription_id": {
+            "type": "string",
+            "title": "Subscription Id"
+          },
+          "slot_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slot Id"
+          },
+          "episode_key": {
+            "type": "string",
+            "title": "Episode Key"
+          },
+          "candidate_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidate Id"
+          },
+          "release_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Id"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "reason": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Reason"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "subscription_id",
+          "slot_id",
+          "episode_key",
+          "candidate_id",
+          "release_id",
+          "action",
+          "reason",
+          "created_at"
+        ],
+        "title": "ManualActionResponse"
+      },
       "NotificationConfigRequest": {
         "properties": {
           "webhook_enabled": {
@@ -4120,6 +4612,46 @@
           "pending_jobs"
         ],
         "title": "OperationsOverviewResponse"
+      },
+      "PreferenceProfileResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "rules": {
+            "$ref": "#/components/schemas/PreferenceRulesModel"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "rules",
+          "version",
+          "updated_at"
+        ],
+        "title": "PreferenceProfileResponse"
       },
       "PreferenceRulesModel": {
         "properties": {
@@ -4688,7 +5220,25 @@
             "title": "Aliases"
           },
           "rules": {
-            "$ref": "#/components/schemas/PreferenceRulesModel"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PreferenceRulesModel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "use_global_rules": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Use Global Rules"
           },
           "save_path": {
             "anyOf": [
@@ -4746,6 +5296,17 @@
               }
             ]
           },
+          "use_global_rules": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Use Global Rules"
+          },
           "save_path": {
             "anyOf": [
               {
@@ -4790,6 +5351,10 @@
           "rules": {
             "$ref": "#/components/schemas/PreferenceRulesModel"
           },
+          "uses_global_rules": {
+            "type": "boolean",
+            "title": "Uses Global Rules"
+          },
           "activation_at": {
             "type": "string",
             "format": "date-time",
@@ -4829,6 +5394,7 @@
           "state",
           "match_keys",
           "rules",
+          "uses_global_rules",
           "activation_at",
           "save_path",
           "version",

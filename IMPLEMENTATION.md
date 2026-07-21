@@ -2,7 +2,7 @@
 
 Status: Living implementation and decision record
 
-Updated: 2026-07-21
+Updated: 2026-07-22
 
 This document records what the repository actually implements and the choices
 made while turning `DESIGN.md` and `ARCHITECTURE.md` into code. It is intended
@@ -75,6 +75,7 @@ packaged as a first-run authenticated, recoverable Compose service.
 - Activation epochs, title-key snapshots, save-path intent, and versioned
   optimistic updates.
 - Explicit hard filters, ordered preferences, and a configurable fallback wait.
+- One versioned global preference profile with explicit per-subscription overrides.
 
 ### Selection
 
@@ -89,6 +90,8 @@ packaged as a first-run authenticated, recoverable Compose service.
 - Historical backfill preview and explicit multi-episode confirmation.
 - Same-group, same-episode higher revisions create append-only upgrade
   decisions.
+- Per-episode manual selection, replacement, rejection, reset, and acquired-elsewhere
+  actions with append-only action history.
 - Every committed decision emits `DecisionCommitted.v1` and
   `DownloadRequested.v1`.
 
@@ -248,6 +251,17 @@ epoch; historical items require backfill.
 **Reason:** Adding another feed or resuming a subscription must not turn old
 releases into unexpected automatic downloads.
 
+### SUB-003: Global preferences are live; overrides are explicit
+
+**Choice:** A single versioned default profile is resolved when a subscription is
+read for selection. New subscriptions inherit it unless they explicitly store an
+override. Existing subscriptions created before migration remain overrides so an
+upgrade cannot silently change their behavior.
+
+**Reason:** One editable default makes new subscriptions cheap while the explicit
+inheritance flag preserves reviewable ownership and lets each decision snapshot
+the exact effective rules.
+
 ### SEL-001: Unknown safety attributes fail hard filters
 
 **Choice:** Default automatic rules require an episode content kind, recognized
@@ -309,12 +323,22 @@ release group with a higher revision can create an automatic upgrade decision.
 **Reason:** A later release from a different group is an alternative, not a V2
 replacement.
 
+### SEL-008: Manual episode commands append; they do not rewrite
+
+**Choice:** Selection, replacement, rejection, reset, and acquired-elsewhere are
+stored as immutable manual actions. Replacement creates a new decision and emits
+the same cancellation intent used by revision upgrades. Reset reopens the local
+slot but never deletes or pauses an existing downloader task.
+
+**Reason:** The operator can correct an episode without losing the previous
+rationale. Download idempotency and qBittorrent reconciliation remain responsible
+for preventing duplicate external submissions.
+
 ### UI-001: The interface documents the live policy boundary
 
 **Choice:** The interface presents the automatic selection stages in execution
-order. It exposes backfill confirmation, candidate confirmation, and unmatched
-release mapping while continuing to mark per-episode override and decision
-replacement as unavailable.
+order. It exposes backfill confirmation, candidate confirmation, unmatched
+release mapping, global preferences, and per-episode manual controls.
 
 **Reason:** Operators must be able to predict automatic behavior without
 mistaking a visible confirmation state for an available manual command.
@@ -575,10 +599,6 @@ attempts are not silently rewritten.
   linked through a subscription alias snapshot.
 - Manual mapping is limited to releases without a candidate; parser re-run and
   reassignment of already-decided candidates are not implemented.
-- Rules are currently stored per subscription; named reusable global preference
-  profiles are not implemented.
-- Per-episode manual candidate selection and replacement of an existing decision
-  are not implemented.
 - Only qBittorrent Web API v2 is implemented; there is no alternate downloader
   adapter or app-side pause/resume command.
 - qBittorrent category and tags are defaults captured when the task is planned;
@@ -596,10 +616,8 @@ The next coherent delivery unit is `release acceptance + remaining product views
 
 1. Add an airing calendar and per-anime episode history without allowing schedule
    metadata to trigger downloads.
-2. Add explicit per-episode candidate selection and controlled replacement of an
-   existing decision.
-3. Run disposable Compose acceptance for first setup, backup into a clean volume,
+2. Run disposable Compose acceptance for first setup, backup into a clean volume,
    restore, upgrade, and rollback.
-4. Add multi-architecture image CI and published image provenance.
-5. Start and record the seven-day real-feed soak required by `DESIGN.md`; this is
+3. Add multi-architecture image CI and published image provenance.
+4. Start and record the seven-day real-feed soak required by `DESIGN.md`; this is
    elapsed-time validation and is not claimed by the current automated suite.

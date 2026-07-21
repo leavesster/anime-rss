@@ -218,6 +218,10 @@ a.compact-row:hover { background: var(--surface-soft); }
 .remap-fields { display: grid; grid-template-columns: .65fr 1fr 1fr; gap: 12px; }
 
 .subscription-layout { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px, .75fr); gap: 28px; }
+.preference-panel { margin: 28px 0; }
+.preference-form { display: grid; grid-template-columns: repeat(4, minmax(130px, 1fr)) 150px auto; align-items: end; gap: 12px; }
+.preference-form .field { min-width: 0; }
+.preference-form .button { min-width: 88px; }
 .subscription-list, .decision-list, .catalog-results, .backfill-list { display: grid; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .subscription-row { min-height: 82px; display: grid; grid-template-columns: minmax(220px, 1fr) minmax(130px, .6fr) 92px 76px auto; align-items: center; gap: 14px; padding: 13px 15px; border-bottom: 1px solid var(--soft-line); }
 .subscription-row:last-child, .decision-list article:last-child, .catalog-results article:last-child, .backfill-row:last-child { border-bottom: 0; }
@@ -234,6 +238,22 @@ a.compact-row:hover { background: var(--surface-soft); }
 .catalog-search .button { flex: 0 0 auto; }
 .catalog-results article { min-height: 66px; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 13px; border-bottom: 1px solid var(--soft-line); }
 .dialog--wide { width: min(760px, 100%); }
+.episode-acquired-form { display: grid; grid-template-columns: minmax(180px, 1fr) auto; align-items: end; gap: 10px; margin-bottom: 18px; }
+.episode-control-list { display: grid; gap: 18px; }
+.episode-control { border-top: 1px solid var(--line); padding-top: 16px; }
+.episode-control > header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.episode-control > header > div { min-width: 0; display: flex; flex: 1; flex-direction: column; gap: 3px; }
+.episode-control > header small { color: var(--muted); font-size: 10px; }
+.episode-candidates { display: grid; overflow: hidden; border: 1px solid var(--line); border-radius: 8px; }
+.episode-candidates article { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 11px 12px; border-bottom: 1px solid var(--soft-line); }
+.episode-candidates article:last-child { border-bottom: 0; }
+.episode-candidates article > div:first-child { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.episode-candidates small { overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.episode-candidates span { color: var(--muted); font-size: 9px; }
+.episode-candidate-actions { display: flex; align-items: center; gap: 5px; }
+.manual-action-log { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.manual-action-log h3 { margin-bottom: 9px; font-size: 13px; }
+.manual-action-log > div { display: grid; grid-template-columns: 50px 1fr auto; gap: 10px; padding: 6px 0; color: var(--muted); font-size: 10px; }
 .backfill-row { min-height: 74px; display: grid; grid-template-columns: 18px 76px minmax(0, 1fr) 96px; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--soft-line); cursor: pointer; }
 .backfill-row input { width: 16px; height: 16px; accent-color: var(--accent); }
 .backfill-row--disabled { opacity: .62; cursor: default; }
@@ -424,6 +444,7 @@ a.compact-row:hover { background: var(--surface-soft); }
   .candidate-row { grid-template-columns: minmax(170px, 1fr) 100px 94px; }
   .candidate-row > :nth-child(3), .candidate-row > :nth-child(4) { display: none; }
   .subscription-layout { grid-template-columns: 1fr; gap: 34px; }
+  .preference-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .subscription-row { grid-template-columns: minmax(190px, 1fr) 90px 76px auto; }
   .subscription-row .subscription-rule:nth-of-type(2) { display: none; }
   .download-config__form { grid-template-columns: 1fr 1fr; }
@@ -477,6 +498,12 @@ a.compact-row:hover { background: var(--surface-soft); }
   .subscription-row .feed-actions .button { width: 36px; padding: 0; font-size: 0; }
   .decision-list article { grid-template-columns: 74px minmax(0, 1fr); }
   .decision-list article .status { display: none; }
+  .preference-form { grid-template-columns: 1fr; }
+  .preference-form .button { width: 100%; }
+  .episode-acquired-form { grid-template-columns: 1fr; }
+  .episode-acquired-form .button { width: 100%; }
+  .episode-candidates article { grid-template-columns: minmax(0, 1fr); }
+  .episode-candidate-actions { justify-content: flex-end; }
   .backfill-row { grid-template-columns: 18px 64px minmax(0, 1fr); }
   .backfill-row .eligibility { display: none; }
   .download-config { padding: 16px; }

@@ -223,3 +223,118 @@ def test_resume_does_not_commit_a_candidate_from_the_previous_epoch(tmp_path: Pa
         slot = client.get("/api/v1/selection/episodes").json()[0]
         assert slot["state"] == "open"
         assert slot["fallback_deadline"] is None
+
+
+def test_global_preferences_and_manual_episode_controls_are_auditable(tmp_path: Path) -> None:
+    feeds = {
+        "/a": _rss("[Group-A] Manual Anime - 01 [1080p HEVC][简体]", "d" * 40),
+        "/b": _rss("[Group-B] Manual Anime - 01 [1080p AVC][简体]", "e" * 40),
+    }
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(200, content=feeds[request.url.path])
+    )
+    with TestClient(
+        create_app(_settings(tmp_path, "manual-controls.sqlite3"), feed_transport=transport)
+    ) as client:
+        global_profile = client.put(
+            "/api/v1/subscriptions/preferences/global",
+            headers={"If-Match": "0"},
+            json={
+                "preferred_groups": ["Group-A", "Group-B"],
+                "preferred_codecs": ["HEVC", "AVC"],
+                "fallback_wait_minutes": 30,
+            },
+        )
+        assert global_profile.status_code == 200
+        assert global_profile.json()["version"] == 1
+
+        for name in ("a", "b"):
+            feed = client.post(
+                "/api/v1/feeds",
+                json={"name": name, "url": f"https://feed.test/{name}"},
+            ).json()
+            assert client.post(f"/api/v1/feeds/{feed['id']}/refresh").status_code == 200
+
+        anime = client.post("/api/v1/catalog/anime", json={"title": "Manual Anime"}).json()
+        subscription = client.post("/api/v1/subscriptions", json={"anime_id": anime["id"]}).json()
+        assert subscription["uses_global_rules"] is True
+        assert subscription["rules"]["preferred_groups"] == ["Group-A", "Group-B"]
+
+        preview = client.get(
+            f"/api/v1/selection/subscriptions/{subscription['id']}/backfill-preview"
+        ).json()[0]
+        candidates = {item["release_group"]: item["candidate_id"] for item in preview["candidates"]}
+        selected_b = client.post(
+            f"/api/v1/selection/subscriptions/{subscription['id']}"
+            f"/candidates/{candidates['Group-B']}/select",
+            json={},
+        )
+        assert selected_b.status_code == 200
+
+        conflict = client.post(
+            f"/api/v1/selection/subscriptions/{subscription['id']}"
+            f"/candidates/{candidates['Group-A']}/select",
+            json={},
+        )
+        assert conflict.status_code == 409
+        replacement = client.post(
+            f"/api/v1/selection/subscriptions/{subscription['id']}"
+            f"/candidates/{candidates['Group-A']}/select",
+            json={"replace_existing": True},
+        )
+        assert replacement.status_code == 200
+        decisions = client.get(
+            "/api/v1/selection/decisions",
+            params={"subscription_id": subscription["id"]},
+        ).json()
+        assert [item["kind"] for item in decisions] == [
+            "selected_manual_replacement",
+            "selected_manual",
+        ]
+
+        reset = client.post(
+            f"/api/v1/selection/subscriptions/{subscription['id']}/episodes/1/reset"
+        )
+        assert reset.status_code == 200
+        rejected = client.post(
+            f"/api/v1/selection/subscriptions/{subscription['id']}"
+            f"/candidates/{candidates['Group-A']}/reject"
+        )
+        assert rejected.status_code == 200
+        preview_after_rejection = client.get(
+            f"/api/v1/selection/subscriptions/{subscription['id']}/backfill-preview"
+        ).json()[0]
+        assert preview_after_rejection["selected_candidate_id"] == candidates["Group-B"]
+        assert (
+            next(
+                item
+                for item in preview_after_rejection["candidates"]
+                if item["candidate_id"] == candidates["Group-A"]
+            )["rejection_reasons"][-1]
+            == "manually_rejected"
+        )
+
+        acquired = client.post(
+            f"/api/v1/selection/subscriptions/{subscription['id']}/episodes/2/acquired-elsewhere"
+        )
+        assert acquired.status_code == 200
+        actions = client.get(
+            "/api/v1/selection/manual-actions",
+            params={"subscription_id": subscription["id"]},
+        ).json()
+        assert {item["action"] for item in actions} >= {
+            "selected",
+            "replaced",
+            "reset",
+            "rejected",
+            "acquired_elsewhere",
+        }
+
+        updated_profile = client.put(
+            "/api/v1/subscriptions/preferences/global",
+            headers={"If-Match": "1"},
+            json={"preferred_groups": ["Group-B"], "fallback_wait_minutes": 5},
+        )
+        assert updated_profile.json()["version"] == 2
+        refreshed_subscription = client.get("/api/v1/subscriptions").json()[0]
+        assert refreshed_subscription["rules"]["preferred_groups"] == ["Group-B"]

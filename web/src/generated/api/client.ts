@@ -19,9 +19,12 @@ export type CatalogSearch = components["schemas"]["CatalogSearchResponse"];
 export type Subscription = components["schemas"]["SubscriptionResponse"];
 export type SubscriptionCreate = components["schemas"]["SubscriptionCreateRequest"];
 export type SubscriptionPatch = components["schemas"]["SubscriptionPatchRequest"];
+export type PreferenceProfile = components["schemas"]["PreferenceProfileResponse"];
+export type PreferenceRules = components["schemas"]["PreferenceRulesModel"];
 export type EpisodeSlot = components["schemas"]["EpisodeSlotResponse"];
 export type Decision = components["schemas"]["DecisionResponse"];
 export type BackfillPreview = components["schemas"]["BackfillPreviewResponse"];
+export type ManualAction = components["schemas"]["ManualActionResponse"];
 export type DownloadConfig = components["schemas"]["DownloadConfigResponse"];
 export type DownloadConfigRequest = components["schemas"]["DownloadConfigRequest"];
 export type DownloadConnection = components["schemas"]["DownloadConnectionResponse"];
@@ -267,18 +270,34 @@ export async function updateSubscription(
   );
 }
 
-export async function listSelectionSlots(): Promise<EpisodeSlot[]> {
+export async function getGlobalPreferences(): Promise<PreferenceProfile> {
+  return unwrap(await client.GET("/api/v1/subscriptions/preferences/global"));
+}
+
+export async function saveGlobalPreferences(
+  rules: PreferenceRules,
+  version: number,
+): Promise<PreferenceProfile> {
   return unwrap(
-    await client.GET("/api/v1/selection/episodes", {
-      params: { query: { limit: 200 } },
+    await client.PUT("/api/v1/subscriptions/preferences/global", {
+      params: { header: { "if-match": version } },
+      body: rules,
     }),
   );
 }
 
-export async function listDecisions(): Promise<Decision[]> {
+export async function listSelectionSlots(subscriptionId?: string): Promise<EpisodeSlot[]> {
+  return unwrap(
+    await client.GET("/api/v1/selection/episodes", {
+      params: { query: { subscription_id: subscriptionId, limit: 200 } },
+    }),
+  );
+}
+
+export async function listDecisions(subscriptionId?: string): Promise<Decision[]> {
   return unwrap(
     await client.GET("/api/v1/selection/decisions", {
-      params: { query: { limit: 200 } },
+      params: { query: { subscription_id: subscriptionId, limit: 200 } },
     }),
   );
 }
@@ -304,6 +323,69 @@ export async function commitBackfill(
         body: { episode_keys: episodeKeys },
       },
     ),
+  );
+}
+
+export async function selectCandidate(
+  subscriptionId: string,
+  candidateId: string,
+  options: { replace_existing?: boolean; override_filters?: boolean } = {},
+): Promise<{ decision_id: string }> {
+  return unwrap(
+    await client.POST(
+      "/api/v1/selection/subscriptions/{subscription_id}/candidates/{candidate_id}/select",
+      {
+        params: { path: { subscription_id: subscriptionId, candidate_id: candidateId } },
+        body: {
+          replace_existing: options.replace_existing ?? false,
+          override_filters: options.override_filters ?? false,
+        },
+      },
+    ),
+  );
+}
+
+export async function rejectCandidate(
+  subscriptionId: string,
+  candidateId: string,
+): Promise<ManualAction> {
+  return unwrap(
+    await client.POST(
+      "/api/v1/selection/subscriptions/{subscription_id}/candidates/{candidate_id}/reject",
+      { params: { path: { subscription_id: subscriptionId, candidate_id: candidateId } } },
+    ),
+  );
+}
+
+export async function resetEpisode(
+  subscriptionId: string,
+  episodeKey: string,
+): Promise<ManualAction> {
+  return unwrap(
+    await client.POST(
+      "/api/v1/selection/subscriptions/{subscription_id}/episodes/{episode_key}/reset",
+      { params: { path: { subscription_id: subscriptionId, episode_key: episodeKey } } },
+    ),
+  );
+}
+
+export async function markEpisodeAcquired(
+  subscriptionId: string,
+  episodeKey: string,
+): Promise<ManualAction> {
+  return unwrap(
+    await client.POST(
+      "/api/v1/selection/subscriptions/{subscription_id}/episodes/{episode_key}/acquired-elsewhere",
+      { params: { path: { subscription_id: subscriptionId, episode_key: episodeKey } } },
+    ),
+  );
+}
+
+export async function listManualActions(subscriptionId?: string): Promise<ManualAction[]> {
+  return unwrap(
+    await client.GET("/api/v1/selection/manual-actions", {
+      params: { query: { subscription_id: subscriptionId, limit: 200 } },
+    }),
   );
 }
 

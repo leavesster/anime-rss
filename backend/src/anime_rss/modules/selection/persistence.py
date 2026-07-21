@@ -79,3 +79,21 @@ class DecisionRecord(Base):
     rules_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON)
     candidate_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
+
+
+class ManualActionRecord(Base):
+    __tablename__ = "select_manual_actions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    subscription_id: Mapped[str] = mapped_column(
+        ForeignKey("sub_subscriptions.id", ondelete="CASCADE"), index=True
+    )
+    slot_id: Mapped[str | None] = mapped_column(
+        ForeignKey("select_episode_slots.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    episode_key: Mapped[str] = mapped_column(String(52), index=True)
+    candidate_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    release_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    action: Mapped[str] = mapped_column(String(40), index=True)
+    reason: Mapped[dict[str, Any]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
