@@ -108,7 +108,7 @@ future extraction. Event handlers are idempotent.
 
 | Module | Owns | Public responsibilities | Must not own |
 | --- | --- | --- | --- |
-| `system` | administrator, sessions, installation state, timezone, secret references | setup, login/logout, session validation, settings, secret encryption | feed or downloader behavior |
+| `system` | administrator, sessions, installation state, timezone, secret references | setup progress, login/logout, session validation, settings, secret encryption | feed or downloader behavior |
 | `feeds` | feed configuration, fetch state, feed entries, fetch attempts | safe fetching, RSS/Atom normalization, cache validators, retry health | torrent identity or title interpretation |
 | `releases` | releases, source observations, torrent metadata and payload references | magnet normalization, torrent validation, info-hash identity, layered deduplication | anime matching or selection |
 | `catalog` | anime, external IDs, titles, aliases, metadata and airing snapshots | Bangumi search/cache, local anime creation, user metadata and airing overrides | automatic download decisions |
@@ -116,7 +116,7 @@ future extraction. Event handlers are idempotent.
 | `subscriptions` | subscriptions, rule profiles, activation cutoffs, lifecycle | effective rules and aliases linked to a subscription | candidate ranking or schedule state |
 | `selection` | waiting state, decisions, manual overrides, rejections, upgrade plans | hard filters, lexicographic comparison, fallback timers, backfill preview, V2/V3 policy | external downloader calls |
 | `schedule` | expected episodes, calendar state, missing-notification markers | weekly expectation projection, timezone calendar, episode history, missing-state evaluation | candidates, decisions, or download requests |
-| `downloads` | submission attempts, idempotency keys, task links, observed qBittorrent state | adapter contract, submit/cancel/retry/reconcile | deciding which release should win |
+| `downloads` | qBittorrent configuration, submission attempts, idempotency keys, task links, observed state | default path/category/tags, submit/cancel/retry/reconcile | deciding which release should win |
 | `notifications` | notification intents, delivery attempts, in-app notifications | policy for when to notify, JSON webhook delivery and retry | originating business decisions |
 | `audit` | append-only administrator-facing events | searchable history and redacted diagnostic context | workflow coordination |
 | `operations` | scheduled jobs, leases, backups, retention runs, health snapshots | durable scheduling, backup/restore, cleanup, readiness aggregation | product-domain state |
@@ -451,6 +451,10 @@ Features do not import another feature's internals. Shared screens use a small
 composition layer in `app` and backend read projections. Server state remains in
 a query cache; temporary form and display state remains local. A global client
 store must not duplicate subscription, decision, or task truth.
+
+The setup feature is an application-level coordinator: it invokes public HTTP
+operations owned by each capability, then records an idempotent system step. It
+does not import another feature's forms or reproduce backend domain decisions.
 
 ## 15. Proposed Repository Layout
 

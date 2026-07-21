@@ -35,6 +35,7 @@ export function DownloadsPage() {
   const [baseUrl, setBaseUrl] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [savePath, setSavePath] = useState("");
   const [category, setCategory] = useState("");
   const [tags, setTags] = useState("");
 
@@ -42,6 +43,7 @@ export function DownloadsPage() {
     if (!config.data) return;
     setBaseUrl(config.data.base_url_redacted);
     setUsername(config.data.username);
+    setSavePath(config.data.default_save_path ?? "");
     setCategory(config.data.default_category ?? "");
     setTags(config.data.default_tags.join(", "));
   }, [config.data]);
@@ -57,6 +59,7 @@ export function DownloadsPage() {
       base_url: baseUrl,
       username,
       password: password || null,
+      default_save_path: savePath || null,
       default_category: category || null,
       default_tags: tags.split(",").map((value) => value.trim()).filter(Boolean),
     }, config.data?.version),
@@ -95,6 +98,7 @@ export function DownloadsPage() {
             <label className="field"><span>Web API 地址</span><input type="url" required value={baseUrl} placeholder="http://192.168.1.10:8080" onChange={(event) => setBaseUrl(event.target.value)} /></label>
             <label className="field"><span>用户名</span><input required value={username} autoComplete="username" onChange={(event) => setUsername(event.target.value)} /></label>
             <label className="field"><span>密码</span><input type="password" required={!config.data?.password_configured} value={password} autoComplete="current-password" placeholder={config.data?.password_configured ? "保留现有密码" : "输入密码"} onChange={(event) => setPassword(event.target.value)} /></label>
+            <label className="field"><span>默认保存目录</span><input value={savePath} placeholder="/downloads/anime" onChange={(event) => setSavePath(event.target.value)} /></label>
             <label className="field"><span>分类</span><input value={category} placeholder="anime" onChange={(event) => setCategory(event.target.value)} /></label>
             <label className="field"><span>标签</span><input value={tags} placeholder="rss, seasonal" onChange={(event) => setTags(event.target.value)} /></label>
             <div className="download-config__actions"><Button type="button" variant="secondary" icon={<PlugZap size={16} />} disabled={!config.data || test.isPending} onClick={() => test.mutate()}>{test.data ? `已连接 ${test.data.version}` : "测试连接"}</Button><Button type="submit" variant="primary" icon={<Save size={16} />} disabled={save.isPending}>{save.isPending ? "保存中" : "保存配置"}</Button></div>

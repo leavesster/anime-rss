@@ -3,11 +3,12 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AuthGate } from "../src/app/AuthGate";
-import { getAuthStatus, setupAdministrator } from "../src/generated/api/client";
+import { getAuthStatus, getInstanceSettings, setupAdministrator } from "../src/generated/api/client";
 
 vi.mock("../src/generated/api/client", () => ({
   ApiError: class ApiError extends Error {},
   getAuthStatus: vi.fn(),
+  getInstanceSettings: vi.fn(),
   login: vi.fn(),
   setupAdministrator: vi.fn(),
 }));
@@ -23,6 +24,15 @@ describe("authentication gate", () => {
     vi.mocked(setupAdministrator).mockResolvedValue({
       username: "admin",
       expires_at: "2026-08-21T00:00:00Z",
+    });
+    vi.mocked(getInstanceSettings).mockResolvedValue({
+      timezone: "Asia/Shanghai",
+      interface_language: "zh-CN",
+      missing_episode_grace_hours: 24,
+      setup_completed_steps: [],
+      setup_completed: false,
+      version: 0,
+      updated_at: null,
     });
   });
 

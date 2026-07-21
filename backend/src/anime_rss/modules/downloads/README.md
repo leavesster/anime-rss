@@ -13,3 +13,5 @@ Public surface:
 
 It consumes release payload and subscription path DTOs through public module
 APIs. It never decides which candidate wins and never mutates selection history.
+Subscription save paths override the instance default; otherwise a new task
+captures the configured default path, category, and tags when it is planned.

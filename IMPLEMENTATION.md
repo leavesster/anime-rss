@@ -431,6 +431,15 @@ torrent is only marked superseded.
 **Reason:** Replacement is a visible, retryable saga, and downloaded media is
 never removed as a side effect of choosing V2 or V3.
 
+### DL-008: Download defaults are captured when a task is planned
+
+**Choice:** qBittorrent configuration owns an optional default save path,
+category, and tags. A subscription save path overrides the instance default;
+otherwise the planned task records the instance defaults as an intent snapshot.
+
+**Reason:** Setup needs one useful default without forcing every subscription to
+repeat paths, while persisted tasks must not drift when configuration changes.
+
 ### OPS-001: One durable scheduler replaces module-local polling loops
 
 **Choice:** `feed.refresh`, `events.dispatch`, `selection.process_due`, and
@@ -629,8 +638,21 @@ setup completion live in one optimistic-lock settings row. Stored timestamps
 remain UTC; only query projections convert them.
 
 **Reason:** One instance-owned source keeps UI rendering and background missing
-evaluation consistent while leaving setup progress durable for the remaining
-guided-wizard work.
+evaluation consistent while leaving setup progress durable across restarts.
+
+### SYS-002: Guided setup composes module APIs with fixed durable steps
+
+**Choice:** The eight step IDs are fixed and ordered. Administrator creation
+records step one in the same transaction; later steps call their owning module's
+normal API and then idempotently record completion. The final candidate step only
+uses the read-only backfill preview query. Existing installations with an
+administrator are marked complete by migration `0010`; clean installations are
+not seeded.
+
+**Reason:** The wizard remains a resumable application workflow rather than a
+second implementation of feed, download, catalog, subscription, or selection
+behavior. Upgrades do not force established instances through a new first-run
+flow.
 
 ## 4. Parser v1 Contract
 
@@ -663,8 +685,8 @@ attempts are not silently rewritten.
   reassignment of already-decided candidates are not implemented.
 - Only qBittorrent Web API v2 is implemented; there is no alternate downloader
   adapter or app-side pause/resume command.
-- qBittorrent category and tags are defaults captured when the task is planned;
-  later external edits are reflected rather than overwritten.
+- qBittorrent save path, category, and tags are defaults captured when the task
+  is planned; later external edits are reflected rather than overwritten.
 - The service does not terminate TLS; secure-cookie mode requires an HTTPS reverse
   proxy with one consistent browser origin.
 - Backup archives are portable but unencrypted and contain the master key.
@@ -676,27 +698,29 @@ attempts are not silently rewritten.
 
 ## 6. Next Planned Slice
 
-The next coherent delivery unit is `guided setup + release acceptance`:
+The next coherent delivery unit is `release acceptance hardening`:
 
-1. Complete guided setup steps 2-8 using the persisted setup-progress record.
-2. Prevent duplicate feed URLs and add reassignment of recognized releases that
+1. Prevent duplicate feed URLs and add reassignment of recognized releases that
    already have candidates or decisions.
-3. Implement data/log retention and structured correlation IDs.
-4. Run disposable Compose acceptance for first setup, backup into a clean volume,
+2. Implement data/log retention and structured correlation IDs.
+3. Run disposable Compose acceptance for first setup, backup into a clean volume,
    restore, upgrade, and rollback.
-5. Add multi-architecture image CI and published image provenance.
-6. Start and record the seven-day real-feed soak required by `DESIGN.md`; this is
+4. Add multi-architecture image CI and published image provenance.
+5. Start and record the seven-day real-feed soak required by `DESIGN.md`; this is
    elapsed-time validation and is not claimed by the current automated suite.
 
 ## 7. Current Verification Evidence
 
-Verified on 2026-07-22 with `make verify` after migration `0009`:
+Verified on 2026-07-22 with `make verify` after migration `0010`:
 
 - Ruff formatting and lint: passed.
 - Pyright: passed with zero errors.
-- Backend: 60 tests passed, 88.38% statement coverage.
-- Frontend: ESLint and TypeScript passed; 5 Vitest tests passed.
+- Backend: 62 tests passed, 88.35% statement coverage.
+- Frontend: ESLint and TypeScript passed; 6 Vitest tests passed.
 - Production Vite build: passed.
+- Guided-setup integration evidence covers clean administrator setup, ordered and
+  idempotent progress, existing-install migration, default download-path capture,
+  and a read-only final candidate preview.
 - Schedule integration evidence covers UTC-to-instance-timezone rendering,
   one-time missing notification, acquired-elsewhere recovery, and the absence of
   download tasks from schedule processing.

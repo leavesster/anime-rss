@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from anime_rss.kernel.ids import new_id
 from anime_rss.kernel.time import Clock, utc_now
 from anime_rss.modules.audit.api import record_event
+from anime_rss.modules.system.api import complete_setup_step
 from anime_rss.modules.system.persistence import AdminAccountRecord, AdminSessionRecord
 
 _ADMIN_ID = "administrator"
@@ -93,6 +94,7 @@ class AuthService:
                     updated_at=now,
                 )
             )
+            complete_setup_step(session, step="administrator", now=now)
             record_event(
                 session,
                 event_type="system.admin_configured",

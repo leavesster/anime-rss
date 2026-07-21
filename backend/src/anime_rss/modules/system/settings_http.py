@@ -56,3 +56,12 @@ def update_settings(
         status = 409 if "version conflict" in str(error) else 422
         raise HTTPException(status_code=status, detail=str(error)) from error
     return InstanceSettingsResponse.model_validate(asdict(settings))
+
+
+@router.post("/setup/{step}", response_model=InstanceSettingsResponse)
+def complete_setup_step(step: str, request: Request) -> InstanceSettingsResponse:
+    try:
+        settings = _service(request).mark_setup_step_complete(step)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return InstanceSettingsResponse.model_validate(asdict(settings))

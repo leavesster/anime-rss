@@ -12,6 +12,7 @@ plaintext credentials.
 - `AuthService` first-run setup, login, logout, and session validation
 - `BackupService` online SQLite backup, retention, restore staging, and startup apply
 - `InstanceSettingsService` timezone, interface language, missing grace, and setup progress
+- Guided setup uses eight fixed, idempotent step IDs; completion is true only when all exist.
 
 ## Invariants
 
@@ -20,6 +21,7 @@ plaintext credentials.
 - A restore is validated and staged while live, then applied before migrations on restart.
 - Backup archives include the master key and are therefore sensitive credentials.
 - Instance-setting updates use optimistic versions and validated IANA timezones.
+- Creating the administrator and recording the first setup step share one transaction.
 
 ## Does not own
 

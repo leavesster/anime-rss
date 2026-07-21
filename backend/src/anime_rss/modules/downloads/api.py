@@ -32,6 +32,7 @@ class DownloadConfig:
     adapter: str
     base_url_redacted: str
     username: str
+    default_save_path: str | None
     default_category: str | None
     default_tags: list[str]
     password_configured: bool
@@ -111,6 +112,7 @@ class DownloadService:
         base_url: str,
         username: str,
         password: str | None,
+        default_save_path: str | None = None,
         default_category: str | None = None,
         default_tags: list[str] | None = None,
         expected_version: int | None = None,
@@ -119,6 +121,7 @@ class DownloadService:
         clean_username = username.strip()
         if not clean_username:
             raise ValueError("username is required")
+        clean_save_path = self._clean_optional(default_save_path, maximum=1024)
         clean_category = self._clean_optional(default_category, maximum=120)
         clean_tags = self._clean_tags(default_tags or [])
         now = self._clock()
@@ -134,6 +137,7 @@ class DownloadService:
                     base_url_ciphertext=self._encrypt_config("base-url", endpoint),
                     username_ciphertext=self._encrypt_config("username", clean_username),
                     password_ciphertext=self._encrypt_config("password", password),
+                    default_save_path=clean_save_path,
                     default_category=clean_category,
                     default_tags=clean_tags,
                     version=1,
@@ -149,6 +153,7 @@ class DownloadService:
                 record.username_ciphertext = self._encrypt_config("username", clean_username)
                 if password:
                     record.password_ciphertext = self._encrypt_config("password", password)
+                record.default_save_path = clean_save_path
                 record.default_category = clean_category
                 record.default_tags = clean_tags
                 record.version += 1
@@ -257,7 +262,13 @@ class DownloadService:
                         adapter="qbittorrent",
                         idempotency_key=idempotency_key,
                         state=DownloadState.PLANNED.value,
-                        requested_save_path=subscription.save_path,
+                        requested_save_path=(
+                            subscription.save_path
+                            if subscription.save_path is not None
+                            else config.default_save_path
+                            if config
+                            else None
+                        ),
                         category=config.default_category if config else None,
                         tags=config.default_tags if config else [],
                         progress=0.0,
@@ -388,6 +399,7 @@ class DownloadService:
             adapter=record.adapter,
             base_url_redacted=record.base_url_redacted,
             username=self._decrypt_config("username", record.username_ciphertext),
+            default_save_path=record.default_save_path,
             default_category=record.default_category,
             default_tags=list(record.default_tags),
             password_configured=bool(record.password_ciphertext),

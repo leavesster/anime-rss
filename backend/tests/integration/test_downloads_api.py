@@ -93,6 +93,7 @@ def _configure(client: TestClient) -> dict[str, object]:
             "base_url": "http://qb.test:8080",
             "username": "admin",
             "password": "download-secret",
+            "default_save_path": "/downloads/anime",
             "default_category": "anime",
             "default_tags": ["seasonal", "rss"],
         },
@@ -107,7 +108,7 @@ def _subscribe_and_refresh(client: TestClient, feed_transport: httpx.MockTranspo
         "/api/v1/subscriptions",
         json={
             "anime_id": anime["id"],
-            "save_path": "/downloads/anime",
+            "save_path": None,
             "rules": {
                 "preferred_groups": ["Nix-Raws"],
                 "preferred_subtitles": ["zh-Hans"],
@@ -137,6 +138,7 @@ def test_config_submit_reconcile_external_delete_and_explicit_retry(tmp_path: Pa
     with TestClient(app) as client:
         config = _configure(client)
         assert config["base_url_redacted"] == "http://qb.test:8080"
+        assert config["default_save_path"] == "/downloads/anime"
         assert config["password_configured"] is True
         assert client.post("/api/v1/downloads/config/test").json() == {
             "status": "connected",
@@ -146,6 +148,7 @@ def test_config_submit_reconcile_external_delete_and_explicit_retry(tmp_path: Pa
 
         planned = client.get("/api/v1/downloads/tasks").json()[0]
         assert planned["state"] == "planned"
+        assert planned["requested_save_path"] == "/downloads/anime"
         first = client.post("/api/v1/downloads/process").json()
         assert first["submissions"] == 1
         task = client.get("/api/v1/downloads/tasks").json()[0]

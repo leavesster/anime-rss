@@ -20,6 +20,7 @@ class DownloadConfigRequest(BaseModel):
     base_url: HttpUrl
     username: str = Field(min_length=1, max_length=200)
     password: str | None = Field(default=None, max_length=500)
+    default_save_path: str | None = Field(default=None, max_length=1024)
     default_category: str | None = Field(default=None, max_length=120)
     default_tags: list[str] = Field(default_factory=list, max_length=20)
 
@@ -28,6 +29,7 @@ class DownloadConfigResponse(BaseModel):
     adapter: str
     base_url_redacted: str
     username: str
+    default_save_path: str | None
     default_category: str | None
     default_tags: list[str]
     password_configured: bool
@@ -99,6 +101,7 @@ def configure_downloads(
             base_url=str(payload.base_url),
             username=payload.username,
             password=payload.password,
+            default_save_path=payload.default_save_path,
             default_category=payload.default_category,
             default_tags=payload.default_tags,
             expected_version=if_match,

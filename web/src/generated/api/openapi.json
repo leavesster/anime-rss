@@ -2656,6 +2656,48 @@
         }
       }
     },
+    "/api/v1/system/settings/setup/{step}": {
+      "post": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Complete Setup Step",
+        "operationId": "complete_setup_step_api_v1_system_settings_setup__step__post",
+        "parameters": [
+          {
+            "name": "step",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Step"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstanceSettingsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/audit/events": {
       "get": {
         "tags": [
@@ -3659,6 +3701,18 @@
             ],
             "title": "Password"
           },
+          "default_save_path": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Save Path"
+          },
           "default_category": {
             "anyOf": [
               {
@@ -3700,6 +3754,17 @@
           "username": {
             "type": "string",
             "title": "Username"
+          },
+          "default_save_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Save Path"
           },
           "default_category": {
             "anyOf": [
@@ -3768,6 +3833,7 @@
           "adapter",
           "base_url_redacted",
           "username",
+          "default_save_path",
           "default_category",
           "default_tags",
           "password_configured",

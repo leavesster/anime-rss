@@ -566,6 +566,14 @@ export async function saveInstanceSettings(
   );
 }
 
+export async function markSetupStep(step: string): Promise<InstanceSettings> {
+  return unwrap(
+    await client.POST("/api/v1/system/settings/setup/{step}", {
+      params: { path: { step } },
+    }),
+  );
+}
+
 export async function createBackup(): Promise<Backup> {
   return unwrap(await client.POST("/api/v1/system/backups"));
 }

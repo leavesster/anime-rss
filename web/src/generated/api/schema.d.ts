@@ -982,6 +982,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/settings/setup/{step}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete Setup Step */
+        post: operations["complete_setup_step_api_v1_system_settings_setup__step__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit/events": {
         parameters: {
             query?: never;
@@ -1309,6 +1326,8 @@ export interface components {
             username: string;
             /** Password */
             password?: string | null;
+            /** Default Save Path */
+            default_save_path?: string | null;
             /** Default Category */
             default_category?: string | null;
             /** Default Tags */
@@ -1322,6 +1341,8 @@ export interface components {
             base_url_redacted: string;
             /** Username */
             username: string;
+            /** Default Save Path */
+            default_save_path: string | null;
             /** Default Category */
             default_category: string | null;
             /** Default Tags */
@@ -3949,6 +3970,37 @@ export interface operations {
                 "application/json": components["schemas"]["InstanceSettingsUpdateRequest"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceSettingsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    complete_setup_step_api_v1_system_settings_setup__step__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                step: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

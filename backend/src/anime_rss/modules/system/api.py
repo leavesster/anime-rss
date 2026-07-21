@@ -14,6 +14,16 @@ from anime_rss.modules.system.persistence import InstanceSettingsRecord
 
 _SETTINGS_ID = "default"
 _LANGUAGES = {"zh-CN", "en"}
+SETUP_STEPS = (
+    "administrator",
+    "instance_preferences",
+    "qbittorrent_connection",
+    "download_defaults",
+    "feed",
+    "global_preferences",
+    "subscription",
+    "candidate_preview",
+)
 
 
 class SecretCipher(Protocol):
@@ -31,6 +41,38 @@ class InstanceSettings:
     setup_completed: bool
     version: int
     updated_at: datetime | None
+
+
+def complete_setup_step(
+    session: Session,
+    *,
+    step: str,
+    now: datetime,
+) -> InstanceSettingsRecord:
+    if step not in SETUP_STEPS:
+        raise ValueError("unknown setup step")
+    record = session.get(InstanceSettingsRecord, _SETTINGS_ID)
+    if record is None:
+        record = InstanceSettingsRecord(
+            id=_SETTINGS_ID,
+            timezone="Asia/Shanghai",
+            interface_language="zh-CN",
+            missing_episode_grace_hours=24,
+            setup_completed_steps=[step],
+            setup_completed=False,
+            version=1,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(record)
+    elif step not in record.setup_completed_steps:
+        completed = set(record.setup_completed_steps)
+        completed.add(step)
+        record.setup_completed_steps = [item for item in SETUP_STEPS if item in completed]
+        record.version += 1
+        record.updated_at = now
+    record.setup_completed = all(item in record.setup_completed_steps for item in SETUP_STEPS)
+    return record
 
 
 class InstanceSettingsService:
@@ -103,8 +145,14 @@ class InstanceSettingsService:
                 record.interface_language = interface_language
                 record.missing_episode_grace_hours = missing_episode_grace_hours
                 record.setup_completed_steps = steps
+                record.setup_completed = all(item in steps for item in SETUP_STEPS)
                 record.version += 1
                 record.updated_at = now
+        return self.get()
+
+    def mark_setup_step_complete(self, step: str) -> InstanceSettings:
+        with self._session_factory.begin() as session:
+            complete_setup_step(session, step=step, now=self._clock())
         return self.get()
 
     @staticmethod

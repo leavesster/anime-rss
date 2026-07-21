@@ -27,6 +27,7 @@ class DownloaderConfigRecord(Base):
     base_url_ciphertext: Mapped[bytes] = mapped_column(LargeBinary)
     username_ciphertext: Mapped[bytes] = mapped_column(LargeBinary)
     password_ciphertext: Mapped[bytes] = mapped_column(LargeBinary)
+    default_save_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     default_category: Mapped[str | None] = mapped_column(String(120), nullable=True)
     default_tags: Mapped[list[str]] = mapped_column(JSON)
     version: Mapped[int] = mapped_column(default=1)

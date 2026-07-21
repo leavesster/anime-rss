@@ -41,6 +41,9 @@ def test_first_run_setup_session_csrf_and_login(tmp_path: Path) -> None:
         csrf = client.cookies.get("anime_rss_csrf")
         assert csrf
         assert client.cookies.get("anime_rss_session")
+        progress = client.get("/api/v1/system/settings").json()
+        assert progress["setup_completed_steps"] == ["administrator"]
+        assert progress["setup_completed"] is False
         assert client.get("/api/v1/feeds").status_code == 200
         assert (
             client.post(
@@ -73,6 +76,62 @@ def test_first_run_setup_session_csrf_and_login(tmp_path: Path) -> None:
             == 200
         )
         assert client.get("/api/v1/auth/status").json()["authenticated"] is True
+
+
+def test_setup_progress_is_durable_ordered_and_idempotent(tmp_path: Path) -> None:
+    with TestClient(create_app(_settings(tmp_path))) as client:
+        setup = client.post(
+            "/api/v1/auth/setup",
+            json={"username": "admin", "password": "correct horse battery staple"},
+        )
+        assert setup.status_code == 200
+        csrf = client.cookies.get("anime_rss_csrf")
+        headers = {"x-csrf-token": csrf}
+
+        first = client.post(
+            "/api/v1/system/settings/setup/feed",
+            headers=headers,
+        ).json()
+        duplicate = client.post(
+            "/api/v1/system/settings/setup/feed",
+            headers=headers,
+        ).json()
+        assert first["setup_completed_steps"] == ["administrator", "feed"]
+        assert duplicate["version"] == first["version"]
+        assert (
+            client.post(
+                "/api/v1/system/settings/setup/not-a-step",
+                headers=headers,
+            ).status_code
+            == 422
+        )
+
+        for step in (
+            "candidate_preview",
+            "subscription",
+            "download_defaults",
+            "instance_preferences",
+            "global_preferences",
+            "qbittorrent_connection",
+        ):
+            response = client.post(
+                f"/api/v1/system/settings/setup/{step}",
+                headers=headers,
+            )
+            assert response.status_code == 200
+
+        completed = client.get("/api/v1/system/settings").json()
+        assert completed["setup_completed_steps"] == [
+            "administrator",
+            "instance_preferences",
+            "qbittorrent_connection",
+            "download_defaults",
+            "feed",
+            "global_preferences",
+            "subscription",
+            "candidate_preview",
+        ]
+        assert completed["setup_completed"] is True
 
 
 def test_disabled_authentication_reports_an_open_local_instance(tmp_path: Path) -> None:

@@ -5,9 +5,11 @@ import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import {
   ApiError,
   getAuthStatus,
+  getInstanceSettings,
   login,
   setupAdministrator,
 } from "../generated/api/client";
+import { SetupWizard } from "../features/setup/SetupWizard";
 import { Button } from "../shared/components/Button";
 import { ErrorBanner } from "../shared/components/Feedback";
 
@@ -44,8 +46,37 @@ export function AuthGate({ children }: { children: ReactNode }) {
       </div>
     );
   }
-  if (!status.data.enabled || status.data.authenticated) return children;
+  if (!status.data.enabled) return children;
+  if (status.data.authenticated) return <SetupGate>{children}</SetupGate>;
   return <AuthForm setupRequired={status.data.setup_required} />;
+}
+
+function SetupGate({ children }: { children: ReactNode }) {
+  const settings = useQuery({
+    queryKey: ["instance-settings"],
+    queryFn: getInstanceSettings,
+    staleTime: 0,
+  });
+  if (settings.isLoading) {
+    return (
+      <div className="auth-screen auth-screen--loading">
+        <LoaderCircle className="spin" size={24} />
+        <span>正在读取初始化进度</span>
+      </div>
+    );
+  }
+  if (settings.isError || !settings.data) {
+    return (
+      <div className="auth-screen">
+        <div className="auth-panel">
+          <ErrorBanner message="无法读取初始化进度。" />
+          <Button variant="primary" onClick={() => settings.refetch()}>重新读取</Button>
+        </div>
+      </div>
+    );
+  }
+  if (!settings.data.setup_completed) return <SetupWizard settings={settings.data} />;
+  return children;
 }
 
 function AuthForm({ setupRequired }: { setupRequired: boolean }) {
