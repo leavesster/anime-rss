@@ -13,6 +13,15 @@ export type Release = components["schemas"]["ReleaseResponse"];
 export type EpisodeGroup = components["schemas"]["EpisodeGroupResponse"];
 export type Candidate = components["schemas"]["CandidateResponse"];
 export type UnmatchedRelease = components["schemas"]["UnmatchedReleaseResponse"];
+export type Anime = components["schemas"]["AnimeResponse"];
+export type BangumiAnime = components["schemas"]["BangumiAnimeResponse"];
+export type CatalogSearch = components["schemas"]["CatalogSearchResponse"];
+export type Subscription = components["schemas"]["SubscriptionResponse"];
+export type SubscriptionCreate = components["schemas"]["SubscriptionCreateRequest"];
+export type SubscriptionPatch = components["schemas"]["SubscriptionPatchRequest"];
+export type EpisodeSlot = components["schemas"]["EpisodeSlotResponse"];
+export type Decision = components["schemas"]["DecisionResponse"];
+export type BackfillPreview = components["schemas"]["BackfillPreviewResponse"];
 
 const client = createClient<paths>({ baseUrl: "" });
 
@@ -131,5 +140,93 @@ export async function listUnmatchedReleases(): Promise<UnmatchedRelease[]> {
     await client.GET("/api/v1/recognition/unmatched", {
       params: { query: { limit: 200 } },
     }),
+  );
+}
+
+export async function listAnime(): Promise<Anime[]> {
+  return unwrap(await client.GET("/api/v1/catalog/anime"));
+}
+
+export async function createLocalAnime(title: string, aliases: string[]): Promise<Anime> {
+  return unwrap(await client.POST("/api/v1/catalog/anime", { body: { title, aliases } }));
+}
+
+export async function searchBangumi(query: string): Promise<CatalogSearch> {
+  return unwrap(
+    await client.GET("/api/v1/catalog/bangumi/search", {
+      params: { query: { query } },
+    }),
+  );
+}
+
+export async function importBangumi(bangumiId: number): Promise<Anime> {
+  return unwrap(
+    await client.POST("/api/v1/catalog/bangumi/{bangumi_id}/import", {
+      params: { path: { bangumi_id: bangumiId } },
+    }),
+  );
+}
+
+export async function listSubscriptions(): Promise<Subscription[]> {
+  return unwrap(await client.GET("/api/v1/subscriptions"));
+}
+
+export async function createSubscription(payload: SubscriptionCreate): Promise<Subscription> {
+  return unwrap(await client.POST("/api/v1/subscriptions", { body: payload }));
+}
+
+export async function updateSubscription(
+  subscriptionId: string,
+  version: number,
+  payload: SubscriptionPatch,
+): Promise<Subscription> {
+  return unwrap(
+    await client.PATCH("/api/v1/subscriptions/{subscription_id}", {
+      params: {
+        path: { subscription_id: subscriptionId },
+        header: { "if-match": version },
+      },
+      body: payload,
+    }),
+  );
+}
+
+export async function listSelectionSlots(): Promise<EpisodeSlot[]> {
+  return unwrap(
+    await client.GET("/api/v1/selection/episodes", {
+      params: { query: { limit: 200 } },
+    }),
+  );
+}
+
+export async function listDecisions(): Promise<Decision[]> {
+  return unwrap(
+    await client.GET("/api/v1/selection/decisions", {
+      params: { query: { limit: 200 } },
+    }),
+  );
+}
+
+export async function previewBackfill(subscriptionId: string): Promise<BackfillPreview[]> {
+  return unwrap(
+    await client.GET(
+      "/api/v1/selection/subscriptions/{subscription_id}/backfill-preview",
+      { params: { path: { subscription_id: subscriptionId } } },
+    ),
+  );
+}
+
+export async function commitBackfill(
+  subscriptionId: string,
+  episodeKeys: string[],
+): Promise<{ processed: number }> {
+  return unwrap(
+    await client.POST(
+      "/api/v1/selection/subscriptions/{subscription_id}/backfill-commit",
+      {
+        params: { path: { subscription_id: subscriptionId } },
+        body: { episode_keys: episodeKeys },
+      },
+    ),
   );
 }

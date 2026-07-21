@@ -17,6 +17,13 @@ const labels: Record<string, string> = {
   high: "高置信",
   medium: "中置信",
   low: "低置信",
+  following: "追番中",
+  paused: "已暂停",
+  completed: "已完结",
+  archived: "已归档",
+  decided: "已决定",
+  waiting_fallback: "等待备选",
+  needs_confirmation: "需要确认",
 };
 
 export function statusLabel(status: string): string {
@@ -24,10 +31,10 @@ export function statusLabel(status: string): string {
 }
 
 export function statusTone(status: string): StatusTone {
-  if (["healthy", "success", "ready", "resolved", "strong"].includes(status)) return "positive";
+  if (["healthy", "success", "ready", "resolved", "strong", "following", "decided"].includes(status)) return "positive";
   if (status === "high") return "positive";
   if (["auth_failed", "failed", "failing"].includes(status)) return "danger";
-  if (["never_fetched", "pending", "weak", "medium", "low"].includes(status)) return "warning";
+  if (["never_fetched", "pending", "weak", "medium", "low", "waiting_fallback", "needs_confirmation"].includes(status)) return "warning";
   if (["not_modified"].includes(status)) return "info";
   return "neutral";
 }

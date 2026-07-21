@@ -19,11 +19,12 @@ The ingestion slice and its first management interface are implemented:
 - responsive React dashboard, feed management, fetch history, and release library
 - generated TypeScript API types and production static asset serving
 - deterministic title recognition and same-episode candidate grouping
+- local/Bangumi anime catalog and lifecycle-aware subscriptions
+- deterministic hard filters, ordered preferences, fallback waits, and backfill decisions
 - versioned implementation decision record for handoff and review
 
-Authentication, authoritative anime metadata, subscription decisions, and
-qBittorrent submission are later slices. The current application is therefore
-a development build and must not be exposed publicly.
+Authentication and qBittorrent submission are later slices. The current
+application is therefore a development build and must not be exposed publicly.
 
 ## Development
 
@@ -61,4 +62,16 @@ GET    /api/v1/feeds/{feed_id}/fetches
 GET    /api/v1/releases
 GET    /api/v1/recognition/episode-groups
 GET    /api/v1/recognition/unmatched
+GET    /api/v1/catalog/anime
+POST   /api/v1/catalog/anime
+GET    /api/v1/catalog/bangumi/search
+POST   /api/v1/catalog/bangumi/{bangumi_id}/import
+GET    /api/v1/subscriptions
+POST   /api/v1/subscriptions
+PATCH  /api/v1/subscriptions/{subscription_id}
+GET    /api/v1/selection/episodes
+GET    /api/v1/selection/decisions
+POST   /api/v1/selection/process-due
+GET    /api/v1/selection/subscriptions/{subscription_id}/backfill-preview
+POST   /api/v1/selection/subscriptions/{subscription_id}/backfill-commit
 ```

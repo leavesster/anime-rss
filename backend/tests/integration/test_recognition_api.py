@@ -61,7 +61,7 @@ def test_release_events_create_episode_candidate_groups(tmp_path: Path) -> None:
         refreshed = client.post(f"/api/v1/feeds/{feed['id']}/refresh")
 
         assert refreshed.status_code == 200
-        assert refreshed.json()["dispatched_events"] == 8
+        assert refreshed.json()["dispatched_events"] == 12
         groups = client.get("/api/v1/recognition/episode-groups").json()
         assert len(groups) == 2
         assert {group["episode_key"] for group in groups} == {"1", "2"}

@@ -8,7 +8,7 @@ from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session, sessionmaker
 
-from anime_rss.infrastructure.events import IntegrationEvent
+from anime_rss.infrastructure.events import IntegrationEvent, append_event
 from anime_rss.kernel.ids import new_id
 from anime_rss.kernel.time import Clock, utc_now
 from anime_rss.modules.audit.api import record_event
@@ -209,6 +209,15 @@ class RecognitionService:
             ),
         )
         if result.rowcount:
+            append_event(
+                session,
+                name="CandidateEvaluated.v1",
+                payload={
+                    "candidate_id": candidate_id,
+                    "release_id": release_id,
+                    "episode_key": parsed.episode_key,
+                },
+            )
             return candidate_id
         return session.scalar(
             select(CandidateRecord.id).where(CandidateRecord.release_id == release_id)
@@ -251,6 +260,24 @@ class RecognitionService:
                 )
                 for record in session.scalars(statement)
             ]
+
+    def get_candidate(self, candidate_id: str) -> Candidate | None:
+        with self._session_factory() as session:
+            record = session.get(CandidateRecord, candidate_id)
+            return self._to_candidate(record) if record is not None else None
+
+    def list_candidates_for_series_keys(self, series_keys: set[str]) -> list[Candidate]:
+        if not series_keys:
+            return []
+        with self._session_factory() as session:
+            records = list(
+                session.scalars(
+                    select(CandidateRecord)
+                    .where(CandidateRecord.series_key.in_(series_keys))
+                    .order_by(CandidateRecord.first_seen_at, CandidateRecord.id)
+                )
+            )
+            return [self._to_candidate(record) for record in records]
 
     @staticmethod
     def _to_group(key: tuple[str, str], records: list[CandidateRecord]) -> EpisodeGroup:

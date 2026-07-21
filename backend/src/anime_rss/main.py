@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -15,6 +16,9 @@ from anime_rss.infrastructure.http import SafeHttpClient
 from anime_rss.infrastructure.migrations import run_migrations
 from anime_rss.infrastructure.web import SpaStaticFiles
 from anime_rss.kernel.time import Clock, utc_now
+from anime_rss.modules.catalog.adapters import BangumiClient
+from anime_rss.modules.catalog.api import CatalogService
+from anime_rss.modules.catalog.http import router as catalog_router
 from anime_rss.modules.feeds.adapters import FeedDocumentParser
 from anime_rss.modules.feeds.api import FeedEntryQueries, FeedService, Jitter
 from anime_rss.modules.feeds.http import router as feeds_router
@@ -23,7 +27,21 @@ from anime_rss.modules.recognition.api import RecognitionService
 from anime_rss.modules.recognition.http import router as recognition_router
 from anime_rss.modules.releases.api import ReleaseService
 from anime_rss.modules.releases.http import router as releases_router
+from anime_rss.modules.selection.api import SelectionService
+from anime_rss.modules.selection.http import router as selection_router
+from anime_rss.modules.subscriptions.api import SubscriptionService
+from anime_rss.modules.subscriptions.http import router as subscriptions_router
 from anime_rss.modules.system.api import FileSecretCipher
+
+
+async def _run_selection_deadlines(
+    selection: SelectionService, stop: asyncio.Event, interval_seconds: float
+) -> None:
+    while not stop.is_set():
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=interval_seconds)
+        except TimeoutError:
+            await asyncio.to_thread(selection.process_due)
 
 
 def create_app(
@@ -31,6 +49,7 @@ def create_app(
     *,
     feed_transport: httpx.BaseTransport | None = None,
     torrent_transport: httpx.BaseTransport | None = None,
+    bangumi_transport: httpx.BaseTransport | None = None,
     clock: Clock = utc_now,
     jitter: Jitter | None = None,
 ) -> FastAPI:
@@ -57,6 +76,7 @@ def create_app(
             max_response_bytes=2 * 1024 * 1024,
             transport=torrent_transport or feed_transport,
         )
+        bangumi_client = BangumiClient(transport=bangumi_transport)
         feed_service_kwargs: dict[str, Any] = {"clock": clock}
         if jitter is not None:
             feed_service_kwargs["jitter"] = jitter
@@ -72,6 +92,9 @@ def create_app(
             session_factory, feed_entries, cipher, torrent_client, clock=clock
         )
         recognition = RecognitionService(session_factory, releases, clock=clock)
+        catalog = CatalogService(session_factory, bangumi_client, clock=clock)
+        subscriptions = SubscriptionService(session_factory, catalog, clock=clock)
+        selection = SelectionService(session_factory, recognition, subscriptions, clock=clock)
         events = EventDispatcher(
             session_factory,
             {
@@ -87,6 +110,12 @@ def create_app(
                         handler=recognition.handle_release_identified,
                     )
                 ],
+                "CandidateEvaluated.v1": [
+                    RegisteredHandler(
+                        consumer="selection.candidate-evaluator.v1",
+                        handler=selection.handle_candidate_evaluated,
+                    )
+                ],
             },
             clock=clock,
         )
@@ -94,17 +123,30 @@ def create_app(
             engine=engine,
             feed_http_client=feed_client,
             torrent_http_client=torrent_client,
+            bangumi_client=bangumi_client,
             feeds=feeds,
             releases=releases,
             recognition=recognition,
+            catalog=catalog,
+            subscriptions=subscriptions,
+            selection=selection,
             jobs=JobService(session_factory, clock=clock),
             events=events,
         )
         app.state.services = services
-        events.dispatch_until_idle(event_names={"ReleaseIdentified.v1"})
+        events.dispatch_until_idle(event_names={"ReleaseIdentified.v1", "CandidateEvaluated.v1"})
+        selection.process_due()
+        deadline_stop = asyncio.Event()
+        deadline_task = asyncio.create_task(
+            _run_selection_deadlines(
+                selection, deadline_stop, runtime_settings.selection_poll_seconds
+            )
+        )
         try:
             yield
         finally:
+            deadline_stop.set()
+            await deadline_task
             services.close()
 
     app = FastAPI(
@@ -130,6 +172,9 @@ def create_app(
     api.include_router(feeds_router)
     api.include_router(releases_router)
     api.include_router(recognition_router)
+    api.include_router(catalog_router)
+    api.include_router(subscriptions_router)
+    api.include_router(selection_router)
     app.include_router(api)
 
     repository_root = Path(__file__).resolve().parents[3]

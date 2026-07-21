@@ -193,6 +193,27 @@ a.compact-row:hover { background: var(--surface-soft); }
 .unmatched-list strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .unmatched-list small { color: var(--muted); font-size: 9px; }
 
+.subscription-layout { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px, .75fr); gap: 28px; }
+.subscription-list, .decision-list, .catalog-results, .backfill-list { display: grid; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.subscription-row { min-height: 82px; display: grid; grid-template-columns: minmax(220px, 1fr) minmax(130px, .6fr) 92px 76px auto; align-items: center; gap: 14px; padding: 13px 15px; border-bottom: 1px solid var(--soft-line); }
+.subscription-row:last-child, .decision-list article:last-child, .catalog-results article:last-child, .backfill-row:last-child { border-bottom: 0; }
+.subscription-row__main { min-width: 0; display: flex; align-items: center; gap: 11px; }
+.subscription-mark { width: 34px; height: 34px; flex: 0 0 34px; display: grid; place-items: center; color: var(--accent); background: var(--accent-soft); border-radius: 6px; }
+.subscription-row__main > div, .subscription-rule, .decision-list article > div, .catalog-results article > div, .backfill-row > div { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.subscription-row__main strong, .decision-list strong, .catalog-results strong, .backfill-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.subscription-row__main small, .subscription-rule small, .decision-list small, .catalog-results small, .backfill-row small { overflow: hidden; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.subscription-rule strong { overflow: hidden; color: #3e4b46; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.decision-list article { min-height: 68px; display: grid; grid-template-columns: 82px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--soft-line); }
+.decision-kind { width: fit-content; padding: 5px 7px; color: var(--accent-dark); background: var(--accent-soft); border-radius: 4px; font-size: 9px; font-weight: 800; }
+.inline-note { color: var(--muted); font-size: 11px; line-height: 1.6; }
+.catalog-search { max-width: none; }
+.catalog-search .button { flex: 0 0 auto; }
+.catalog-results article { min-height: 66px; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 13px; border-bottom: 1px solid var(--soft-line); }
+.dialog--wide { width: min(760px, 100%); }
+.backfill-row { min-height: 74px; display: grid; grid-template-columns: 18px 76px minmax(0, 1fr) 96px; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--soft-line); cursor: pointer; }
+.backfill-row input { width: 16px; height: 16px; accent-color: var(--accent); }
+.backfill-row--disabled { opacity: .62; cursor: default; }
+
 .toolbar { min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
 .search-field { width: min(430px, 100%); min-height: 40px; display: flex; align-items: center; gap: 9px; padding: 0 12px; color: #79847f; background: var(--surface); border: 1px solid #d6ddda; border-radius: 6px; }
 .search-field:focus-within { border-color: #6b9f8c; box-shadow: 0 0 0 3px rgba(25, 112, 82, .1); }
@@ -241,7 +262,7 @@ a.compact-row:hover { background: var(--surface-soft); }
   .brand--mobile .brand__mark { width: 32px; height: 32px; flex-basis: 32px; }
   .brand--mobile strong { color: var(--ink); font-size: 14px; }
   .mobile-health { display: flex; align-items: center; gap: 5px; color: var(--accent); font-size: 10px; font-weight: 700; }
-  .mobile-nav { position: fixed; inset: auto 0 0; height: 64px; display: grid; grid-template-columns: repeat(4, 1fr); padding-bottom: env(safe-area-inset-bottom); background: #fff; border-top: 1px solid var(--line); z-index: 50; }
+  .mobile-nav { position: fixed; inset: auto 0 0; height: 64px; display: grid; grid-template-columns: repeat(5, 1fr); padding-bottom: env(safe-area-inset-bottom); background: #fff; border-top: 1px solid var(--line); z-index: 50; }
   .mobile-nav__link { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: #7d8884; font-size: 9px; font-weight: 650; }
   .mobile-nav__link--active { color: var(--accent); }
   .page-container { padding: 26px 18px 40px; }
@@ -269,6 +290,9 @@ a.compact-row:hover { background: var(--surface-soft); }
   .release-grid > :nth-child(2), .release-grid > :last-child { display: none; }
   .candidate-row { grid-template-columns: minmax(170px, 1fr) 100px 94px; }
   .candidate-row > :nth-child(3), .candidate-row > :nth-child(4) { display: none; }
+  .subscription-layout { grid-template-columns: 1fr; gap: 34px; }
+  .subscription-row { grid-template-columns: minmax(190px, 1fr) 90px 76px auto; }
+  .subscription-row .subscription-rule:nth-of-type(2) { display: none; }
 }
 
 @media (max-width: 520px) {
@@ -299,6 +323,14 @@ a.compact-row:hover { background: var(--surface-soft); }
   .episode-group__header > div { align-items: flex-start; flex-direction: column; gap: 8px; }
   .candidate-row { min-width: 0; grid-template-columns: minmax(0, 1fr) auto; }
   .candidate-row > :nth-child(2), .candidate-row > :nth-child(3), .candidate-row > :nth-child(4) { display: none; }
+  .subscription-row { grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; }
+  .subscription-row .subscription-rule { display: none; }
+  .subscription-row .feed-actions { flex-direction: row; }
+  .subscription-row .feed-actions .button { width: 36px; padding: 0; font-size: 0; }
+  .decision-list article { grid-template-columns: 74px minmax(0, 1fr); }
+  .decision-list article .status { display: none; }
+  .backfill-row { grid-template-columns: 18px 64px minmax(0, 1fr); }
+  .backfill-row .eligibility { display: none; }
   .result-count { align-self: flex-end; }
   .dialog-backdrop { align-items: end; padding: 0; }
   .dialog { width: 100%; max-height: 92vh; border-radius: 8px 8px 0 0; }

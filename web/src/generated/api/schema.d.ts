@@ -193,10 +193,285 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/catalog/anime": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Anime */
+        get: operations["list_anime_api_v1_catalog_anime_get"];
+        put?: never;
+        /** Create Local Anime */
+        post: operations["create_local_anime_api_v1_catalog_anime_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/anime/{anime_id}/aliases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Alias */
+        post: operations["add_alias_api_v1_catalog_anime__anime_id__aliases_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/bangumi/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search Bangumi */
+        get: operations["search_bangumi_api_v1_catalog_bangumi_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/bangumi/{bangumi_id}/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import Bangumi */
+        post: operations["import_bangumi_api_v1_catalog_bangumi__bangumi_id__import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Subscriptions */
+        get: operations["list_subscriptions_api_v1_subscriptions_get"];
+        put?: never;
+        /** Create Subscription */
+        post: operations["create_subscription_api_v1_subscriptions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/subscriptions/{subscription_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Subscription */
+        patch: operations["update_subscription_api_v1_subscriptions__subscription_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/selection/episodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Episode Slots */
+        get: operations["list_episode_slots_api_v1_selection_episodes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/selection/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Decisions */
+        get: operations["list_decisions_api_v1_selection_decisions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/selection/process-due": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Process Due */
+        post: operations["process_due_api_v1_selection_process_due_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/selection/subscriptions/{subscription_id}/backfill-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Preview Backfill */
+        get: operations["preview_backfill_api_v1_selection_subscriptions__subscription_id__backfill_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/selection/subscriptions/{subscription_id}/backfill-commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Commit Backfill */
+        post: operations["commit_backfill_api_v1_selection_subscriptions__subscription_id__backfill_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AliasCreateRequest */
+        AliasCreateRequest: {
+            /** Alias */
+            alias: string;
+        };
+        /** AnimeResponse */
+        AnimeResponse: {
+            /** Id */
+            id: string;
+            /** Bangumi Id */
+            bangumi_id: number | null;
+            /** Primary Title */
+            primary_title: string;
+            /** Title Zh */
+            title_zh: string | null;
+            /** Title Ja */
+            title_ja: string | null;
+            /** Title En */
+            title_en: string | null;
+            /** Summary */
+            summary: string | null;
+            /** Air Date */
+            air_date: string | null;
+            /** Episode Count */
+            episode_count: number | null;
+            /** Cover Url */
+            cover_url: string | null;
+            /** Source */
+            source: string;
+            /** Titles */
+            titles: components["schemas"]["AnimeTitleResponse"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** AnimeTitleResponse */
+        AnimeTitleResponse: {
+            /** Title */
+            title: string;
+            /** Normalized */
+            normalized: string;
+            /** Kind */
+            kind: string;
+            /** Source */
+            source: string;
+        };
+        /** BackfillCommitRequest */
+        BackfillCommitRequest: {
+            /** Episode Keys */
+            episode_keys: string[];
+        };
+        /** BackfillPreviewResponse */
+        BackfillPreviewResponse: {
+            /** Episode Key */
+            episode_key: string;
+            /** Selected Candidate Id */
+            selected_candidate_id: string | null;
+            /** Candidates */
+            candidates: components["schemas"]["PreviewCandidateResponse"][];
+        };
+        /** BangumiAnimeResponse */
+        BangumiAnimeResponse: {
+            /** Bangumi Id */
+            bangumi_id: number;
+            /** Name */
+            name: string;
+            /** Name Cn */
+            name_cn: string | null;
+            /** Summary */
+            summary: string | null;
+            /** Air Date */
+            air_date: string | null;
+            /** Episode Count */
+            episode_count: number | null;
+            /** Cover Url */
+            cover_url: string | null;
+            /** Aliases */
+            aliases: string[];
+        };
         /** CandidateResponse */
         CandidateResponse: {
             /** Id */
@@ -239,6 +514,48 @@ export interface components {
              */
             first_seen_at: string;
         };
+        /** CatalogSearchResponse */
+        CatalogSearchResponse: {
+            /** Items */
+            items: components["schemas"]["BangumiAnimeResponse"][];
+            /** Stale */
+            stale: boolean;
+        };
+        /** CommandResultResponse */
+        CommandResultResponse: {
+            /** Processed */
+            processed: number;
+        };
+        /** DecisionResponse */
+        DecisionResponse: {
+            /** Id */
+            id: string;
+            /** Subscription Id */
+            subscription_id: string;
+            /** Anime Title */
+            anime_title: string;
+            /** Episode Key */
+            episode_key: string;
+            /** Candidate Id */
+            candidate_id: string;
+            /** Release Id */
+            release_id: string;
+            /** Kind */
+            kind: string;
+            /** Reason */
+            reason: {
+                [key: string]: unknown;
+            };
+            /** Candidate Snapshot */
+            candidate_snapshot: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** EpisodeGroupResponse */
         EpisodeGroupResponse: {
             /** Key */
@@ -260,6 +577,32 @@ export interface components {
              * Format: date-time
              */
             latest_seen_at: string;
+        };
+        /** EpisodeSlotResponse */
+        EpisodeSlotResponse: {
+            /** Id */
+            id: string;
+            /** Subscription Id */
+            subscription_id: string;
+            /** Anime Title */
+            anime_title: string;
+            /** Episode Key */
+            episode_key: string;
+            /** State */
+            state: string;
+            /** Fallback Deadline */
+            fallback_deadline: string | null;
+            /** Best Candidate Id */
+            best_candidate_id: string | null;
+            /** Selected Decision Id */
+            selected_decision_id: string | null;
+            /** Version */
+            version: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** FeedCreateRequest */
         FeedCreateRequest: {
@@ -397,6 +740,58 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** LocalAnimeCreateRequest */
+        LocalAnimeCreateRequest: {
+            /** Title */
+            title: string;
+            /** Aliases */
+            aliases?: string[];
+        };
+        /** PreferenceRulesModel */
+        PreferenceRulesModel: {
+            /** Allowed Groups */
+            allowed_groups?: string[];
+            /** Allowed Subtitles */
+            allowed_subtitles?: string[];
+            /** Allowed Resolutions */
+            allowed_resolutions?: string[];
+            /** Allowed Codecs */
+            allowed_codecs?: string[];
+            /** Allowed Content Kinds */
+            allowed_content_kinds?: string[];
+            /** Preferred Groups */
+            preferred_groups?: string[];
+            /** Preferred Subtitles */
+            preferred_subtitles?: string[];
+            /** Preferred Resolutions */
+            preferred_resolutions?: string[];
+            /** Preferred Codecs */
+            preferred_codecs?: string[];
+            /**
+             * Fallback Wait Minutes
+             * @default 120
+             */
+            fallback_wait_minutes: number;
+        };
+        /** PreviewCandidateResponse */
+        PreviewCandidateResponse: {
+            /** Candidate Id */
+            candidate_id: string;
+            /** Source Title */
+            source_title: string;
+            /** Release Group */
+            release_group: string | null;
+            /** Eligible */
+            eligible: boolean;
+            /** Preferred */
+            preferred: boolean;
+            /** Rank */
+            rank: (number | string)[];
+            /** First Loss Field */
+            first_loss_field: string | null;
+            /** Rejection Reasons */
+            rejection_reasons: string[];
+        };
         /** RefreshResponse */
         RefreshResponse: {
             /** Feed Id */
@@ -436,6 +831,63 @@ export interface components {
             /** Source Count */
             source_count: number;
         };
+        /** SubscriptionCreateRequest */
+        SubscriptionCreateRequest: {
+            /** Anime Id */
+            anime_id: string;
+            /** Aliases */
+            aliases?: string[];
+            rules?: components["schemas"]["PreferenceRulesModel"];
+            /** Save Path */
+            save_path?: string | null;
+        };
+        /** SubscriptionPatchRequest */
+        SubscriptionPatchRequest: {
+            state?: components["schemas"]["SubscriptionState"] | null;
+            /** Aliases */
+            aliases?: string[] | null;
+            rules?: components["schemas"]["PreferenceRulesModel"] | null;
+            /** Save Path */
+            save_path?: string | null;
+        };
+        /** SubscriptionResponse */
+        SubscriptionResponse: {
+            /** Id */
+            id: string;
+            /** Anime Id */
+            anime_id: string;
+            /** Anime Title */
+            anime_title: string;
+            /** State */
+            state: string;
+            /** Match Keys */
+            match_keys: string[];
+            rules: components["schemas"]["PreferenceRulesModel"];
+            /**
+             * Activation At
+             * Format: date-time
+             */
+            activation_at: string;
+            /** Save Path */
+            save_path: string | null;
+            /** Version */
+            version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * SubscriptionState
+         * @enum {string}
+         */
+        SubscriptionState: "following" | "paused" | "completed" | "archived";
         /** UnmatchedReleaseResponse */
         UnmatchedReleaseResponse: {
             /** Id */
@@ -849,6 +1301,394 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UnmatchedReleaseResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_anime_api_v1_catalog_anime_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnimeResponse"][];
+                };
+            };
+        };
+    };
+    create_local_anime_api_v1_catalog_anime_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocalAnimeCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnimeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_alias_api_v1_catalog_anime__anime_id__aliases_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                anime_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AliasCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnimeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_bangumi_api_v1_catalog_bangumi_search_get: {
+        parameters: {
+            query: {
+                query: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogSearchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_bangumi_api_v1_catalog_bangumi__bangumi_id__import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bangumi_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnimeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_subscriptions_api_v1_subscriptions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionResponse"][];
+                };
+            };
+        };
+    };
+    create_subscription_api_v1_subscriptions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubscriptionCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_subscription_api_v1_subscriptions__subscription_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "if-match"?: number | null;
+            };
+            path: {
+                subscription_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubscriptionPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_episode_slots_api_v1_selection_episodes_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EpisodeSlotResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_decisions_api_v1_selection_decisions_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    process_due_api_v1_selection_process_due_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandResultResponse"];
+                };
+            };
+        };
+    };
+    preview_backfill_api_v1_selection_subscriptions__subscription_id__backfill_preview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subscription_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackfillPreviewResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    commit_backfill_api_v1_selection_subscriptions__subscription_id__backfill_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subscription_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BackfillCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandResultResponse"];
                 };
             };
             /** @description Validation Error */

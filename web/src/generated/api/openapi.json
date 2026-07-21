@@ -555,10 +555,874 @@
           }
         }
       }
+    },
+    "/api/v1/catalog/anime": {
+      "get": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "List Anime",
+        "operationId": "list_anime_api_v1_catalog_anime_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AnimeResponse"
+                  },
+                  "type": "array",
+                  "title": "Response List Anime Api V1 Catalog Anime Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Create Local Anime",
+        "operationId": "create_local_anime_api_v1_catalog_anime_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocalAnimeCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnimeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/catalog/anime/{anime_id}/aliases": {
+      "post": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Add Alias",
+        "operationId": "add_alias_api_v1_catalog_anime__anime_id__aliases_post",
+        "parameters": [
+          {
+            "name": "anime_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Anime Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AliasCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnimeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/catalog/bangumi/search": {
+      "get": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Search Bangumi",
+        "operationId": "search_bangumi_api_v1_catalog_bangumi_search_get",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Query"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogSearchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/catalog/bangumi/{bangumi_id}/import": {
+      "post": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Import Bangumi",
+        "operationId": "import_bangumi_api_v1_catalog_bangumi__bangumi_id__import_post",
+        "parameters": [
+          {
+            "name": "bangumi_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Bangumi Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnimeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/subscriptions": {
+      "get": {
+        "tags": [
+          "subscriptions"
+        ],
+        "summary": "List Subscriptions",
+        "operationId": "list_subscriptions_api_v1_subscriptions_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SubscriptionResponse"
+                  },
+                  "type": "array",
+                  "title": "Response List Subscriptions Api V1 Subscriptions Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "subscriptions"
+        ],
+        "summary": "Create Subscription",
+        "operationId": "create_subscription_api_v1_subscriptions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscriptionCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/subscriptions/{subscription_id}": {
+      "patch": {
+        "tags": [
+          "subscriptions"
+        ],
+        "summary": "Update Subscription",
+        "operationId": "update_subscription_api_v1_subscriptions__subscription_id__patch",
+        "parameters": [
+          {
+            "name": "subscription_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Subscription Id"
+            }
+          },
+          {
+            "name": "if-match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscriptionPatchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/selection/episodes": {
+      "get": {
+        "tags": [
+          "selection"
+        ],
+        "summary": "List Episode Slots",
+        "operationId": "list_episode_slots_api_v1_selection_episodes_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 200,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EpisodeSlotResponse"
+                  },
+                  "title": "Response List Episode Slots Api V1 Selection Episodes Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/selection/decisions": {
+      "get": {
+        "tags": [
+          "selection"
+        ],
+        "summary": "List Decisions",
+        "operationId": "list_decisions_api_v1_selection_decisions_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 200,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DecisionResponse"
+                  },
+                  "title": "Response List Decisions Api V1 Selection Decisions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/selection/process-due": {
+      "post": {
+        "tags": [
+          "selection"
+        ],
+        "summary": "Process Due",
+        "operationId": "process_due_api_v1_selection_process_due_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResultResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/selection/subscriptions/{subscription_id}/backfill-preview": {
+      "get": {
+        "tags": [
+          "selection"
+        ],
+        "summary": "Preview Backfill",
+        "operationId": "preview_backfill_api_v1_selection_subscriptions__subscription_id__backfill_preview_get",
+        "parameters": [
+          {
+            "name": "subscription_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Subscription Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BackfillPreviewResponse"
+                  },
+                  "title": "Response Preview Backfill Api V1 Selection Subscriptions  Subscription Id  Backfill Preview Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/selection/subscriptions/{subscription_id}/backfill-commit": {
+      "post": {
+        "tags": [
+          "selection"
+        ],
+        "summary": "Commit Backfill",
+        "operationId": "commit_backfill_api_v1_selection_subscriptions__subscription_id__backfill_commit_post",
+        "parameters": [
+          {
+            "name": "subscription_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Subscription Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BackfillCommitRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResultResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AliasCreateRequest": {
+        "properties": {
+          "alias": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Alias"
+          }
+        },
+        "type": "object",
+        "required": [
+          "alias"
+        ],
+        "title": "AliasCreateRequest"
+      },
+      "AnimeResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "bangumi_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bangumi Id"
+          },
+          "primary_title": {
+            "type": "string",
+            "title": "Primary Title"
+          },
+          "title_zh": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title Zh"
+          },
+          "title_ja": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title Ja"
+          },
+          "title_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title En"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "air_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Air Date"
+          },
+          "episode_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Episode Count"
+          },
+          "cover_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Url"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "titles": {
+            "items": {
+              "$ref": "#/components/schemas/AnimeTitleResponse"
+            },
+            "type": "array",
+            "title": "Titles"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "bangumi_id",
+          "primary_title",
+          "title_zh",
+          "title_ja",
+          "title_en",
+          "summary",
+          "air_date",
+          "episode_count",
+          "cover_url",
+          "source",
+          "titles",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "AnimeResponse"
+      },
+      "AnimeTitleResponse": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "normalized": {
+            "type": "string",
+            "title": "Normalized"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "normalized",
+          "kind",
+          "source"
+        ],
+        "title": "AnimeTitleResponse"
+      },
+      "BackfillCommitRequest": {
+        "properties": {
+          "episode_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Episode Keys"
+          }
+        },
+        "type": "object",
+        "required": [
+          "episode_keys"
+        ],
+        "title": "BackfillCommitRequest"
+      },
+      "BackfillPreviewResponse": {
+        "properties": {
+          "episode_key": {
+            "type": "string",
+            "title": "Episode Key"
+          },
+          "selected_candidate_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Candidate Id"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/PreviewCandidateResponse"
+            },
+            "type": "array",
+            "title": "Candidates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "episode_key",
+          "selected_candidate_id",
+          "candidates"
+        ],
+        "title": "BackfillPreviewResponse"
+      },
+      "BangumiAnimeResponse": {
+        "properties": {
+          "bangumi_id": {
+            "type": "integer",
+            "title": "Bangumi Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "name_cn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name Cn"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "air_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Air Date"
+          },
+          "episode_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Episode Count"
+          },
+          "cover_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Url"
+          },
+          "aliases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Aliases"
+          }
+        },
+        "type": "object",
+        "required": [
+          "bangumi_id",
+          "name",
+          "name_cn",
+          "summary",
+          "air_date",
+          "episode_count",
+          "cover_url",
+          "aliases"
+        ],
+        "title": "BangumiAnimeResponse"
+      },
       "CandidateResponse": {
         "properties": {
           "id": {
@@ -700,6 +1564,101 @@
         ],
         "title": "CandidateResponse"
       },
+      "CatalogSearchResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BangumiAnimeResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "stale": {
+            "type": "boolean",
+            "title": "Stale"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "stale"
+        ],
+        "title": "CatalogSearchResponse"
+      },
+      "CommandResultResponse": {
+        "properties": {
+          "processed": {
+            "type": "integer",
+            "title": "Processed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "processed"
+        ],
+        "title": "CommandResultResponse"
+      },
+      "DecisionResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "subscription_id": {
+            "type": "string",
+            "title": "Subscription Id"
+          },
+          "anime_title": {
+            "type": "string",
+            "title": "Anime Title"
+          },
+          "episode_key": {
+            "type": "string",
+            "title": "Episode Key"
+          },
+          "candidate_id": {
+            "type": "string",
+            "title": "Candidate Id"
+          },
+          "release_id": {
+            "type": "string",
+            "title": "Release Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "reason": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Reason"
+          },
+          "candidate_snapshot": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Candidate Snapshot"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "subscription_id",
+          "anime_title",
+          "episode_key",
+          "candidate_id",
+          "release_id",
+          "kind",
+          "reason",
+          "candidate_snapshot",
+          "created_at"
+        ],
+        "title": "DecisionResponse"
+      },
       "EpisodeGroupResponse": {
         "properties": {
           "key": {
@@ -758,6 +1717,87 @@
           "latest_seen_at"
         ],
         "title": "EpisodeGroupResponse"
+      },
+      "EpisodeSlotResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "subscription_id": {
+            "type": "string",
+            "title": "Subscription Id"
+          },
+          "anime_title": {
+            "type": "string",
+            "title": "Anime Title"
+          },
+          "episode_key": {
+            "type": "string",
+            "title": "Episode Key"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "fallback_deadline": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fallback Deadline"
+          },
+          "best_candidate_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Candidate Id"
+          },
+          "selected_decision_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Decision Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "subscription_id",
+          "anime_title",
+          "episode_key",
+          "state",
+          "fallback_deadline",
+          "best_candidate_id",
+          "selected_decision_id",
+          "version",
+          "updated_at"
+        ],
+        "title": "EpisodeSlotResponse"
       },
       "FeedCreateRequest": {
         "properties": {
@@ -1169,6 +2209,188 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "LocalAnimeCreateRequest": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "aliases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Aliases"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "LocalAnimeCreateRequest"
+      },
+      "PreferenceRulesModel": {
+        "properties": {
+          "allowed_groups": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Allowed Groups"
+          },
+          "allowed_subtitles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Allowed Subtitles"
+          },
+          "allowed_resolutions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Allowed Resolutions"
+          },
+          "allowed_codecs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Allowed Codecs"
+          },
+          "allowed_content_kinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Allowed Content Kinds"
+          },
+          "preferred_groups": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Preferred Groups"
+          },
+          "preferred_subtitles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Preferred Subtitles"
+          },
+          "preferred_resolutions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Preferred Resolutions"
+          },
+          "preferred_codecs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Preferred Codecs"
+          },
+          "fallback_wait_minutes": {
+            "type": "integer",
+            "maximum": 10080.0,
+            "minimum": 0.0,
+            "title": "Fallback Wait Minutes",
+            "default": 120
+          }
+        },
+        "type": "object",
+        "title": "PreferenceRulesModel"
+      },
+      "PreviewCandidateResponse": {
+        "properties": {
+          "candidate_id": {
+            "type": "string",
+            "title": "Candidate Id"
+          },
+          "source_title": {
+            "type": "string",
+            "title": "Source Title"
+          },
+          "release_group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Group"
+          },
+          "eligible": {
+            "type": "boolean",
+            "title": "Eligible"
+          },
+          "preferred": {
+            "type": "boolean",
+            "title": "Preferred"
+          },
+          "rank": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Rank"
+          },
+          "first_loss_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Loss Field"
+          },
+          "rejection_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Rejection Reasons"
+          }
+        },
+        "type": "object",
+        "required": [
+          "candidate_id",
+          "source_title",
+          "release_group",
+          "eligible",
+          "preferred",
+          "rank",
+          "first_loss_field",
+          "rejection_reasons"
+        ],
+        "title": "PreviewCandidateResponse"
+      },
       "RefreshResponse": {
         "properties": {
           "feed_id": {
@@ -1281,6 +2503,180 @@
           "source_count"
         ],
         "title": "ReleaseResponse"
+      },
+      "SubscriptionCreateRequest": {
+        "properties": {
+          "anime_id": {
+            "type": "string",
+            "title": "Anime Id"
+          },
+          "aliases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Aliases"
+          },
+          "rules": {
+            "$ref": "#/components/schemas/PreferenceRulesModel"
+          },
+          "save_path": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Save Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "anime_id"
+        ],
+        "title": "SubscriptionCreateRequest"
+      },
+      "SubscriptionPatchRequest": {
+        "properties": {
+          "state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SubscriptionState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "aliases": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aliases"
+          },
+          "rules": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PreferenceRulesModel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "save_path": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Save Path"
+          }
+        },
+        "type": "object",
+        "title": "SubscriptionPatchRequest"
+      },
+      "SubscriptionResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "anime_id": {
+            "type": "string",
+            "title": "Anime Id"
+          },
+          "anime_title": {
+            "type": "string",
+            "title": "Anime Title"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "match_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Match Keys"
+          },
+          "rules": {
+            "$ref": "#/components/schemas/PreferenceRulesModel"
+          },
+          "activation_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Activation At"
+          },
+          "save_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Save Path"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "anime_id",
+          "anime_title",
+          "state",
+          "match_keys",
+          "rules",
+          "activation_at",
+          "save_path",
+          "version",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SubscriptionResponse"
+      },
+      "SubscriptionState": {
+        "type": "string",
+        "enum": [
+          "following",
+          "paused",
+          "completed",
+          "archived"
+        ],
+        "title": "SubscriptionState"
       },
       "UnmatchedReleaseResponse": {
         "properties": {
