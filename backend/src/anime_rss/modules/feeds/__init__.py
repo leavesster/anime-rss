@@ -1,0 +1,1 @@
+"""Configured feed ingestion capability."""

@@ -449,10 +449,13 @@ store must not duplicate subscription, decision, or task truth.
 anime-rss-service/
   DESIGN.md
   ARCHITECTURE.md
+  README.md
+  pyproject.toml
+  uv.lock
+  Makefile
   backend/
-    pyproject.toml
     src/anime_rss/
-      bootstrap.py              # composition root only
+      main.py                   # app factory and composition root
       config.py
       kernel/
       modules/
@@ -474,6 +477,8 @@ anime-rss-service/
     tests/
       architecture/             # forbidden-import and contract checks
       integration/
+      security/
+      unit/
   web/
     package.json
     src/
@@ -502,7 +507,6 @@ modules/<name>/
   persistence.py     # SQLAlchemy mappings and repositories
   http.py            # optional FastAPI router
   adapters.py        # optional external adapters
-  tests/
 ```
 
 When one file becomes too large, replace only that file with a same-named

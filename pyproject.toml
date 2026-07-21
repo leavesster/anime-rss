@@ -1,0 +1,56 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "anime-rss-service"
+version = "0.1.0"
+description = "A self-hosted anime RSS download automation service"
+readme = "DESIGN.md"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+  "alembic>=1.16,<2",
+  "cryptography>=45,<47",
+  "fastapi>=0.116,<1",
+  "feedparser>=6,<7",
+  "httpx[socks]>=0.28,<0.29",
+  "orjson>=3.10,<4",
+  "pydantic-settings>=2.10,<3",
+  "sqlalchemy>=2.0.41,<2.1",
+  "structlog>=25.4,<26",
+  "typer>=0.16,<1",
+  "uvicorn[standard]>=0.35,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pyright>=1.1.403,<2",
+  "pytest>=8.4,<9",
+  "pytest-cov>=6.2,<7",
+  "respx>=0.22,<1",
+  "ruff>=0.12,<1",
+]
+
+[project.scripts]
+anime-rss = "anime_rss.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["backend/src/anime_rss"]
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers --strict-config"
+testpaths = ["backend/tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.pyright]
+include = ["backend/src"]
+pythonVersion = "3.13"
+typeCheckingMode = "strict"
+venvPath = "."
+venv = ".venv"

@@ -1,0 +1,25 @@
+# Feeds module
+
+Owns configured feed endpoints, fetch history, normalized feed entries, retry
+state, and feed health. It emits `FeedEntryObserved.v1` after a new entry is
+stored.
+
+## Public surface
+
+- `FeedService`: create, update, delete, list, test, and refresh feeds
+- `FeedEntryQueries`: read a normalized entry and decrypt its torrent reference
+- `FeedEntryObserved.v1`: payload contains only `feed_entry_id`
+
+## Invariants
+
+- Endpoint URLs, custom headers, and torrent references are encrypted at rest.
+- API responses and audit events contain only redacted URLs.
+- `(feed_id, guid_hash)` is unique even if concurrent refreshes overlap.
+- HTTP 401/403 enters `auth_failed` without automatic retry.
+- Successful 304 responses reset transient failures.
+
+## Does not own
+
+- BitTorrent identity or cross-feed deduplication
+- Anime title parsing or matching
+- Download selection

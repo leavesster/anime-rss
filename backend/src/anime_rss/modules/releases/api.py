@@ -1,0 +1,260 @@
+import hashlib
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any, cast
+from urllib.parse import urlsplit
+
+from sqlalchemy import func, select
+from sqlalchemy.dialects.sqlite import insert
+from sqlalchemy.engine import CursorResult
+from sqlalchemy.orm import Session, sessionmaker
+
+from anime_rss.infrastructure.events import IntegrationEvent, append_event
+from anime_rss.infrastructure.http import HttpFetchError, SafeHttpClient
+from anime_rss.kernel.ids import new_id
+from anime_rss.kernel.time import Clock, utc_now
+from anime_rss.modules.audit.api import record_event
+from anime_rss.modules.feeds.api import FeedEntryQueries, FeedEntrySecret
+from anime_rss.modules.releases.domain import (
+    InvalidTorrent,
+    TorrentIdentity,
+    parse_magnet_identity,
+    parse_torrent_identity,
+)
+from anime_rss.modules.releases.persistence import (
+    ReleasePayloadRecord,
+    ReleaseRecord,
+    ReleaseSourceRecord,
+)
+from anime_rss.modules.system.api import SecretCipher
+
+
+@dataclass(frozen=True, slots=True)
+class Release:
+    id: str
+    identity_kind: str
+    identity_value: str
+    btih: str | None
+    btmh: str | None
+    automation_eligible: bool
+    first_seen_at: datetime
+    source_count: int
+
+
+class ReleaseService:
+    def __init__(
+        self,
+        session_factory: sessionmaker[Session],
+        feed_entries: FeedEntryQueries,
+        cipher: SecretCipher,
+        torrent_http_client: SafeHttpClient,
+        *,
+        clock: Clock = utc_now,
+    ) -> None:
+        self._session_factory = session_factory
+        self._feed_entries = feed_entries
+        self._cipher = cipher
+        self._torrent_http_client = torrent_http_client
+        self._clock = clock
+
+    def handle_feed_entry_observed(self, event: IntegrationEvent) -> None:
+        if event.name != "FeedEntryObserved.v1" or event.version != 1:
+            return
+        entry_id = event.payload.get("feed_entry_id")
+        if not isinstance(entry_id, str):
+            return
+        self.observe_feed_entry(entry_id)
+
+    def observe_feed_entry(self, entry_id: str) -> str | None:
+        entry = self._feed_entries.get_secret(entry_id)
+        if entry is None or entry.torrent_reference is None:
+            self._feed_entries.record_release_resolution(entry_id, status="no_reference")
+            return None
+
+        try:
+            identity, payload, payload_kind = self._resolve_identity(entry)
+        except InvalidTorrent as error:
+            self._feed_entries.record_release_resolution(
+                entry_id, status="invalid", error_code=str(error)
+            )
+            return None
+        except HttpFetchError as error:
+            if error.transient:
+                raise
+            self._feed_entries.record_release_resolution(
+                entry_id, status="invalid", error_code=error.code
+            )
+            return None
+
+        release_id = self._store_observation(
+            entry_id=entry_id,
+            identity=identity,
+            payload=payload,
+            payload_kind=payload_kind,
+        )
+        self._feed_entries.record_release_resolution(entry_id, status="identified")
+        return release_id
+
+    def list_releases(self, *, limit: int = 100) -> list[Release]:
+        with self._session_factory() as session:
+            source_counts = (
+                select(
+                    ReleaseSourceRecord.release_id,
+                    func.count(ReleaseSourceRecord.id).label("source_count"),
+                )
+                .group_by(ReleaseSourceRecord.release_id)
+                .subquery()
+            )
+            statement = (
+                select(ReleaseRecord, source_counts.c.source_count)
+                .outerjoin(source_counts, source_counts.c.release_id == ReleaseRecord.id)
+                .order_by(ReleaseRecord.first_seen_at.desc())
+                .limit(limit)
+            )
+            return [
+                Release(
+                    id=record.id,
+                    identity_kind=record.identity_kind,
+                    identity_value=record.identity_value,
+                    btih=record.btih,
+                    btmh=record.btmh,
+                    automation_eligible=record.automation_eligible,
+                    first_seen_at=record.first_seen_at,
+                    source_count=source_count or 0,
+                )
+                for record, source_count in session.execute(statement)
+            ]
+
+    def _resolve_identity(self, entry: FeedEntrySecret) -> tuple[TorrentIdentity, bytes, str]:
+        reference = entry.torrent_reference
+        assert reference is not None
+        if reference.lower().startswith("magnet:"):
+            encoded = reference.encode()
+            return parse_magnet_identity(reference), encoded, "magnet"
+
+        parts = urlsplit(reference)
+        if parts.scheme not in {"http", "https"}:
+            raise InvalidTorrent("unsupported_torrent_reference")
+        headers = entry.headers if self._same_origin(entry.feed_url, reference) else {}
+        response = self._torrent_http_client.fetch(reference, headers=headers)
+        if response.status_code in {401, 403}:
+            raise HttpFetchError(
+                "torrent_authentication_failed",
+                http_status=response.status_code,
+                transient=False,
+            )
+        if response.status_code == 429 or response.status_code >= 500:
+            raise HttpFetchError(
+                "torrent_upstream_unavailable",
+                http_status=response.status_code,
+                transient=True,
+            )
+        if response.status_code < 200 or response.status_code >= 300:
+            raise HttpFetchError(
+                "torrent_unexpected_http_status",
+                http_status=response.status_code,
+                transient=False,
+            )
+        return parse_torrent_identity(response.body), response.body, "torrent"
+
+    def _store_observation(
+        self,
+        *,
+        entry_id: str,
+        identity: TorrentIdentity,
+        payload: bytes,
+        payload_kind: str,
+    ) -> str:
+        now = self._clock()
+        proposed_release_id = new_id()
+        payload_sha256 = hashlib.sha256(payload).hexdigest()
+        with self._session_factory.begin() as session:
+            result = cast(
+                CursorResult[Any],
+                session.execute(
+                    insert(ReleaseRecord)
+                    .values(
+                        id=proposed_release_id,
+                        identity_kind=identity.identity_kind.value,
+                        identity_value=identity.identity_value,
+                        btih=identity.btih,
+                        btmh=identity.btmh,
+                        automation_eligible=identity.automation_eligible,
+                        first_seen_at=now,
+                    )
+                    .on_conflict_do_nothing(index_elements=["identity_kind", "identity_value"])
+                ),
+            )
+            if result.rowcount:
+                release_id = proposed_release_id
+            else:
+                release_id = session.scalar(
+                    select(ReleaseRecord.id).where(
+                        ReleaseRecord.identity_kind == identity.identity_kind.value,
+                        ReleaseRecord.identity_value == identity.identity_value,
+                    )
+                )
+                if release_id is None:
+                    raise RuntimeError("release identity conflict could not be resolved")
+
+            source_result = cast(
+                CursorResult[Any],
+                session.execute(
+                    insert(ReleaseSourceRecord)
+                    .values(
+                        id=new_id(),
+                        release_id=release_id,
+                        feed_entry_id=entry_id,
+                        observed_at=now,
+                    )
+                    .on_conflict_do_nothing(index_elements=["release_id", "feed_entry_id"])
+                ),
+            )
+
+            payload_id = new_id()
+            ciphertext = self._cipher.encrypt(
+                payload, purpose=f"release-payload:{payload_id}:content"
+            )
+            session.execute(
+                insert(ReleasePayloadRecord)
+                .values(
+                    id=payload_id,
+                    release_id=release_id,
+                    feed_entry_id=entry_id,
+                    kind=payload_kind,
+                    ciphertext=ciphertext,
+                    sha256=payload_sha256,
+                    size_bytes=len(payload),
+                    created_at=now,
+                )
+                .on_conflict_do_nothing(index_elements=["release_id", "sha256"])
+            )
+
+            if source_result.rowcount:
+                append_event(
+                    session,
+                    name="ReleaseIdentified.v1",
+                    payload={"release_id": release_id, "feed_entry_id": entry_id},
+                )
+                record_event(
+                    session,
+                    event_type="release.identified",
+                    entity_type="release",
+                    entity_id=release_id,
+                    payload={
+                        "identity_kind": identity.identity_kind.value,
+                        "identity_value": identity.identity_value,
+                        "automation_eligible": identity.automation_eligible,
+                    },
+                )
+        return release_id
+
+    @staticmethod
+    def _same_origin(first: str, second: str) -> bool:
+        left = urlsplit(first)
+        right = urlsplit(second)
+        return (left.scheme, left.hostname, left.port) == (
+            right.scheme,
+            right.hostname,
+            right.port,
+        )
