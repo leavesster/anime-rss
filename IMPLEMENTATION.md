@@ -108,6 +108,8 @@ packaged as a first-run authenticated, recoverable Compose service.
   later candidates arrive.
 - Durable scheduled deadline processing plus startup recovery of expired waits.
 - Historical backfill preview and explicit multi-episode confirmation.
+- Scaled integer episode spans with at most three decimal places, append-only
+  per-decision coverage, full-coverage suppression, and a partial-overlap manual gate.
 - Same-group, same-episode higher revisions create append-only upgrade
   decisions.
 - Per-episode manual selection, replacement, rejection, reset, and acquired-elsewhere
@@ -368,6 +370,23 @@ slot but never deletes or pauses an existing downloader task.
 **Reason:** The operator can correct an episode without losing the previous
 rationale. Download idempotency and qBittorrent reconciliation remain responsible
 for preventing duplicate external submissions.
+
+### SEL-009: Range releases are atomic decisions with per-episode coverage
+
+**Choice:** Episode values use thousandths in coverage comparisons. A range such
+as `1-2` remains one Candidate, one Decision, and one DownloadTask, while the
+Decision appends coverage facts for `1` and `2`. A later single episode whose
+coverage is complete is ignored automatically. A range that only partly overlaps
+acquired episodes enters `needs_confirmation`; backfill cannot select it, while an
+explicit manual candidate selection may proceed. Coverage from Decisions and
+`acquired_elsewhere` actions is historical and survives a slot reset. Migration
+`0015` backfills both sources.
+
+**Reason:** Similar titles are not duplicate release identity, but already acquired
+episode content is a separate selection invariant. Keeping the range atomic avoids
+inventing multiple downloader tasks, while the coverage join prevents ordinary
+single releases from downloading the same content again. Partial overlap is a real
+tradeoff and therefore cannot be guessed by automation.
 
 ### UI-001: The interface documents the live policy boundary
 
@@ -835,26 +854,39 @@ attempts are not silently rewritten.
 - The Webhook adapter emits generic JSON; provider-specific message formats are
   not implemented.
 
-## 6. Next Planned Slice
+## 6. Remaining Plan Audit
 
-The next coherent delivery unit is `real-feed release acceptance`:
+The earlier record incorrectly reduced remaining work to live-feed acceptance.
+The original implementation plan is broader. This matrix is the current source of
+truth; a row is complete only when code and proportionate evidence both exist.
 
-1. Satisfy `make acceptance-soak-preflight` by connecting a second real feed,
-   following two currently airing Bangumi anime, and testing qBittorrent.
-2. Run `make acceptance-soak-start`, then operate continuously for seven natural
-   days while the existing durable histories record refreshes, decisions,
-   duplicate suppression, downloader reconciliation, and manual corrections.
-3. Review `make acceptance-soak-report` together with `ACCEPTANCE.md`, then close
-   the remaining live rows only with real-system evidence.
+| Area | Current evidence | Remaining work |
+|---|---|---|
+| Episode span coverage | `0015`, domain/integration/migration/frontend tests | Complete |
+| Subscription lifecycle | Backend supports all four states; UI exposes pause/resume | Add completed/archive commands and views |
+| Unsupported release handling | Raw releases are visible | Add explicit manual qBittorrent submission |
+| Parser regression contract | Deterministic bounded parser and focused fixtures | Build the planned 300+ golden corpus and Unicode/property gates |
+| HTTP consistency | CSRF token and some optimistic versions exist | Apply mutation idempotency, resource preconditions, cursor pagination, structured errors, and correlation IDs consistently |
+| Browser-origin security | Double-submit CSRF exists | Add Origin/Host validation and rate limits for setup, login, and connection tests |
+| Password KDF | Versioned salted scrypt is implemented and documented | Record a formal ADR deviation or migrate the plan's Argon2id choice |
+| Startup migration safety | Alembic startup migration and portable backups exist | Add migration lock and automatic consistent pre-migration backup |
+| qBittorrent contract | Adapter unit tests cover idempotent add/retry paths | Prove supported real versions, two-success external removal, and upgrade cancellation ordering |
+| Stable engineering gates | lint, typecheck, unit/integration, OpenAPI generation, Compose acceptance | Add doctor, checked OpenAPI drift, security scan, clean-room, and release-evidence commands |
+| External acceptance | Durable seven-day evidence tooling exists | Configure two real feeds, two Bangumi subscriptions, qBittorrent, then complete seven natural days |
+
+The next implementation unit is the missing subscription completed/archive UI,
+followed by unsupported-release manual submission. Security and release gates then
+proceed as independent reviewable units; the seven-day clock starts only after its
+external preflight is genuinely satisfied.
 
 ## 7. Current Verification Evidence
 
-Verified on 2026-07-22 with `make verify` after migration `0014`:
+Verified on 2026-07-22 with `make verify` after migration `0015`:
 
 - Ruff formatting and lint: passed.
 - Pyright: passed with zero errors.
-- Backend: 75 tests passed, 88.28% statement coverage.
-- Frontend: ESLint and TypeScript passed; 8 Vitest tests passed.
+- Backend: 79 tests passed, 88.15% statement coverage.
+- Frontend: ESLint and TypeScript passed; 9 Vitest tests passed.
 - Production Vite build: passed.
 - Disposable Compose lifecycle: passed for clean setup, operator backup,
   in-place upgrade from the pre-`0012` baseline, clean-volume restore, and
@@ -889,6 +921,11 @@ Verified on 2026-07-22 with `make verify` after migration `0014`:
   migration passed a `0013 -> head -> 0013 -> head` round trip. A disposable
   no-auth browser instance verified those commands at 1280px and 390px with no
   horizontal overflow or console errors.
+- Episode-coverage evidence covers scaled integer/decimal spans, range-to-single
+  suppression, partial-overlap confirmation, explicit manual override, reset-safe
+  history, backfill exclusion, frontend explanation, and migration of prior
+  Decisions plus `acquired_elsewhere` actions. Migration `0015` passed an
+  `0014 -> head -> 0014 -> head` round trip.
 - Soak acceptance evidence covers incomplete-preflight refusal, idempotent start,
   the exact seven-day boundary, redacted reporting, cross-feed observation counts,
   and duplicate task identity signals.

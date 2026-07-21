@@ -69,3 +69,103 @@ def test_guided_setup_migration_completes_existing_administrator(tmp_path: Path)
     assert json.loads(row.setup_completed_steps)[-1] == "candidate_preview"
     assert row.setup_completed == 1
     engine.dispose()
+
+
+def test_episode_coverage_migration_backfills_existing_decisions_and_manual_acquisition(
+    tmp_path: Path,
+) -> None:
+    database_url = f"sqlite:///{tmp_path / 'coverage-upgrade.sqlite3'}"
+    repository_root = Path(__file__).resolve().parents[3]
+    config = Config(repository_root / "alembic.ini")
+    config.set_main_option("sqlalchemy.url", database_url)
+    command.upgrade(config, "0014_schedule_overrides")
+    engine = create_database_engine(database_url)
+    timestamp = "2026-07-22T00:00:00Z"
+    with engine.begin() as connection:
+        connection.execute(
+            sa.text(
+                """
+                INSERT INTO catalog_anime (
+                    id, primary_title, source, created_at, updated_at
+                ) VALUES ('anime', 'Migration Anime', 'local', :timestamp, :timestamp)
+                """
+            ),
+            {"timestamp": timestamp},
+        )
+        connection.execute(
+            sa.text(
+                """
+                INSERT INTO sub_subscriptions (
+                    id, anime_id, anime_title, state, match_keys, rules,
+                    activation_at, version, created_at, updated_at
+                ) VALUES (
+                    'subscription', 'anime', 'Migration Anime', 'following', '["migrationanime"]',
+                    '{}', :timestamp, 1, :timestamp, :timestamp
+                )
+                """
+            ),
+            {"timestamp": timestamp},
+        )
+        connection.execute(
+            sa.text(
+                """
+                INSERT INTO select_episode_slots (
+                    id, subscription_id, anime_title, episode_key, state, version,
+                    created_at, updated_at
+                ) VALUES (
+                    'slot-range', 'subscription', 'Migration Anime', '1-2', 'decided', 1,
+                    :timestamp, :timestamp
+                )
+                """
+            ),
+            {"timestamp": timestamp},
+        )
+        connection.execute(
+            sa.text(
+                """
+                INSERT INTO select_decisions (
+                    id, slot_id, subscription_id, episode_key, candidate_id, release_id,
+                    kind, reason, rules_snapshot, candidate_snapshot, created_at
+                ) VALUES (
+                    'decision-range', 'slot-range', 'subscription', '1-2', 'candidate',
+                    'release', 'selected_backfill', '{}', '{}', '{}', :timestamp
+                )
+                """
+            ),
+            {"timestamp": timestamp},
+        )
+        connection.execute(
+            sa.text(
+                """
+                INSERT INTO select_manual_actions (
+                    id, subscription_id, episode_key, action, reason, created_at
+                ) VALUES (
+                    'manual-decimal', 'subscription', '3.5', 'acquired_elsewhere', '{}',
+                    :timestamp
+                )
+                """
+            ),
+            {"timestamp": timestamp},
+        )
+    engine.dispose()
+
+    command.upgrade(config, "head")
+    engine = create_database_engine(database_url)
+    with engine.connect() as connection:
+        coverage = list(
+            connection.execute(
+                sa.text(
+                    "SELECT covered_episode_key, covered_value_millis, source_type "
+                    "FROM select_episode_coverages ORDER BY covered_value_millis"
+                )
+            )
+        )
+    assert coverage == [
+        ("1", 1000, "decision"),
+        ("2", 2000, "decision"),
+        ("3.5", 3500, "manual_action"),
+    ]
+    engine.dispose()
+
+    command.downgrade(config, "0014_schedule_overrides")
+    command.upgrade(config, "head")

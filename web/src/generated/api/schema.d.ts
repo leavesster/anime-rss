@@ -1571,6 +1571,10 @@ export interface components {
             best_candidate_id: string | null;
             /** Selected Decision Id */
             selected_decision_id: string | null;
+            /** Confirmation Reason */
+            confirmation_reason: {
+                [key: string]: unknown;
+            } | null;
             /** Version */
             version: number;
             /**
@@ -1979,6 +1983,12 @@ export interface components {
             first_loss_field: string | null;
             /** Rejection Reasons */
             rejection_reasons: string[];
+            /** Coverage Status */
+            coverage_status: string;
+            /** Covered Episode Keys */
+            covered_episode_keys: string[];
+            /** Already Covered Episode Keys */
+            already_covered_episode_keys: string[];
         };
         /** RecognitionRerunResponse */
         RecognitionRerunResponse: {

@@ -271,6 +271,106 @@ def test_resume_does_not_commit_a_candidate_from_the_previous_epoch(tmp_path: Pa
         assert slot["fallback_deadline"] is None
 
 
+def test_range_coverage_skips_full_duplicates_and_gates_partial_overlap(
+    tmp_path: Path,
+) -> None:
+    current_rss = [_rss("[Group] Range Anime - 01-02 [1080p AVC][简体]", "1" * 40)]
+    feed_transport = httpx.MockTransport(
+        lambda request: httpx.Response(200, content=current_rss[0])
+    )
+    with TestClient(
+        create_app(_settings(tmp_path, "range-coverage.sqlite3"), feed_transport=feed_transport)
+    ) as client:
+        anime = client.post("/api/v1/catalog/anime", json={"title": "Range Anime"}).json()
+        subscription = client.post(
+            "/api/v1/subscriptions",
+            json={"anime_id": anime["id"], "rules": {"fallback_wait_minutes": 0}},
+        ).json()
+        feed = client.post(
+            "/api/v1/feeds", json={"name": "Range", "url": "https://feed.test/rss"}
+        ).json()
+        client.post(f"/api/v1/feeds/{feed['id']}/refresh")
+
+        decisions = client.get(
+            "/api/v1/selection/decisions", params={"subscription_id": subscription["id"]}
+        ).json()
+        assert [(item["episode_key"], item["kind"]) for item in decisions] == [
+            ("1-2", "selected_fallback")
+        ]
+
+        for episode, info_hash in (("01", "2" * 40), ("02", "3" * 40)):
+            current_rss[0] = _rss(f"[Other] Range Anime - {episode} [1080p AVC][简体]", info_hash)
+            client.post(f"/api/v1/feeds/{feed['id']}/refresh")
+
+        assert (
+            len(
+                client.get(
+                    "/api/v1/selection/decisions",
+                    params={"subscription_id": subscription["id"]},
+                ).json()
+            )
+            == 1
+        )
+        preview = client.get(
+            f"/api/v1/selection/subscriptions/{subscription['id']}/backfill-preview"
+        ).json()
+        singles = {
+            item["episode_key"]: item for item in preview if item["episode_key"] in {"1", "2"}
+        }
+        assert singles["1"]["candidates"][0]["coverage_status"] == "full"
+        assert singles["2"]["candidates"][0]["coverage_status"] == "full"
+        assert singles["1"]["selected_candidate_id"] is None
+
+        overlap_anime = client.post("/api/v1/catalog/anime", json={"title": "Overlap Anime"}).json()
+        overlap_subscription = client.post(
+            "/api/v1/subscriptions",
+            json={"anime_id": overlap_anime["id"], "rules": {"fallback_wait_minutes": 0}},
+        ).json()
+        current_rss[0] = _rss("[Group] Overlap Anime - 01 [1080p AVC][简体]", "4" * 40)
+        client.post(f"/api/v1/feeds/{feed['id']}/refresh")
+        current_rss[0] = _rss("[Group] Overlap Anime - 01-02 [1080p AVC][简体]", "5" * 40)
+        client.post(f"/api/v1/feeds/{feed['id']}/refresh")
+
+        slots = client.get(
+            "/api/v1/selection/episodes",
+            params={"subscription_id": overlap_subscription["id"]},
+        ).json()
+        overlap_slot = next(item for item in slots if item["episode_key"] == "1-2")
+        assert overlap_slot["state"] == "needs_confirmation"
+        assert overlap_slot["confirmation_reason"] == {
+            "kind": "episode_coverage_overlap",
+            "status": "partial",
+            "covered_episode_keys": ["1", "2"],
+            "already_covered_episode_keys": ["1"],
+            "detail": None,
+        }
+        overlap_preview = client.get(
+            f"/api/v1/selection/subscriptions/{overlap_subscription['id']}/backfill-preview"
+        ).json()
+        range_preview = next(item for item in overlap_preview if item["episode_key"] == "1-2")
+        candidate = range_preview["candidates"][0]
+        assert candidate["eligible"] is False
+        assert candidate["coverage_status"] == "partial"
+        assert candidate["already_covered_episode_keys"] == ["1"]
+        assert range_preview["selected_candidate_id"] is None
+
+        selected = client.post(
+            f"/api/v1/selection/subscriptions/{overlap_subscription['id']}"
+            f"/candidates/{candidate['candidate_id']}/select",
+            json={},
+        )
+        assert selected.status_code == 200
+        assert (
+            len(
+                client.get(
+                    "/api/v1/selection/decisions",
+                    params={"subscription_id": overlap_subscription["id"]},
+                ).json()
+            )
+            == 2
+        )
+
+
 def test_global_preferences_and_manual_episode_controls_are_auditable(tmp_path: Path) -> None:
     feeds = {
         "/a": _rss("[Group-A] Manual Anime - 01 [1080p HEVC][简体]", "d" * 40),
@@ -350,14 +450,17 @@ def test_global_preferences_and_manual_episode_controls_are_auditable(tmp_path: 
         preview_after_rejection = client.get(
             f"/api/v1/selection/subscriptions/{subscription['id']}/backfill-preview"
         ).json()[0]
-        assert preview_after_rejection["selected_candidate_id"] == candidates["Group-B"]
+        assert preview_after_rejection["selected_candidate_id"] is None
+        assert {item["coverage_status"] for item in preview_after_rejection["candidates"]} == {
+            "full"
+        }
         assert (
-            next(
+            "manually_rejected"
+            in next(
                 item
                 for item in preview_after_rejection["candidates"]
                 if item["candidate_id"] == candidates["Group-A"]
-            )["rejection_reasons"][-1]
-            == "manually_rejected"
+            )["rejection_reasons"]
         )
 
         acquired = client.post(

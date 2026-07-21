@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 
@@ -38,6 +39,73 @@ class CandidateEvaluation:
     preferred: bool
     hard_filter_results: list[dict[str, Any]]
     rank: tuple[int | str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class EpisodeSpan:
+    key: str
+    start_millis: int
+    end_millis: int
+    covered_keys: tuple[str, ...]
+    covered_millis: tuple[int, ...]
+
+
+class EpisodeSpanError(ValueError):
+    pass
+
+
+def _episode_value(value: str) -> tuple[str, int]:
+    try:
+        number = Decimal(value)
+    except InvalidOperation as error:
+        raise EpisodeSpanError("episode number is invalid") from error
+    if not number.is_finite() or number < 0:
+        raise EpisodeSpanError("episode number is invalid")
+    exponent = number.as_tuple().exponent
+    if not isinstance(exponent, int) or exponent < -3:
+        raise EpisodeSpanError("episode precision exceeds three decimal places")
+    scaled = number * 1000
+    if scaled != scaled.to_integral_value():
+        raise EpisodeSpanError("episode precision exceeds three decimal places")
+    rendered = format(number, "f")
+    if "." in rendered:
+        rendered = rendered.rstrip("0").rstrip(".")
+    return rendered, int(scaled)
+
+
+def episode_span(start: str, end: str | None = None) -> EpisodeSpan:
+    canonical_start, start_millis = _episode_value(start)
+    if end is None:
+        return EpisodeSpan(
+            key=canonical_start,
+            start_millis=start_millis,
+            end_millis=start_millis,
+            covered_keys=(canonical_start,),
+            covered_millis=(start_millis,),
+        )
+    canonical_end, end_millis = _episode_value(end)
+    if end_millis <= start_millis:
+        raise EpisodeSpanError("episode range end must be greater than its start")
+    values = list(range(start_millis, end_millis + 1, 1000))
+    if values[-1] != end_millis:
+        values.append(end_millis)
+    count = len(values)
+    if count > 100:
+        raise EpisodeSpanError("episode range cannot cover more than 100 episodes")
+    covered_millis = tuple(values)
+    covered_keys = tuple(_episode_value(str(Decimal(value) / 1000))[0] for value in covered_millis)
+    return EpisodeSpan(
+        key=f"{canonical_start}-{canonical_end}",
+        start_millis=start_millis,
+        end_millis=end_millis,
+        covered_keys=covered_keys,
+        covered_millis=covered_millis,
+    )
+
+
+def parse_episode_span(value: str) -> EpisodeSpan:
+    parts = value.strip().split("-", 1)
+    return episode_span(parts[0], parts[1] if len(parts) == 2 else None)
 
 
 _RANK_FIELDS = ("release_group", "subtitle", "resolution", "codec", "revision", "seen")

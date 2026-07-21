@@ -4563,6 +4563,18 @@
             ],
             "title": "Selected Decision Id"
           },
+          "confirmation_reason": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmation Reason"
+          },
           "version": {
             "type": "integer",
             "title": "Version"
@@ -4583,6 +4595,7 @@
           "fallback_deadline",
           "best_candidate_id",
           "selected_decision_id",
+          "confirmation_reason",
           "version",
           "updated_at"
         ],
@@ -5842,6 +5855,24 @@
             },
             "type": "array",
             "title": "Rejection Reasons"
+          },
+          "coverage_status": {
+            "type": "string",
+            "title": "Coverage Status"
+          },
+          "covered_episode_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Covered Episode Keys"
+          },
+          "already_covered_episode_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Already Covered Episode Keys"
           }
         },
         "type": "object",
@@ -5853,7 +5884,10 @@
           "preferred",
           "rank",
           "first_loss_field",
-          "rejection_reasons"
+          "rejection_reasons",
+          "coverage_status",
+          "covered_episode_keys",
+          "already_covered_episode_keys"
         ],
         "title": "PreviewCandidateResponse"
       },

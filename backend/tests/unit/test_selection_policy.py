@@ -1,10 +1,14 @@
 from datetime import UTC, datetime
 
+import pytest
 from anime_rss.modules.selection.domain import (
     CandidateFacts,
+    EpisodeSpanError,
     SelectionRules,
+    episode_span,
     evaluate_candidate,
     first_comparison_field,
+    parse_episode_span,
 )
 
 
@@ -59,3 +63,21 @@ def test_unknown_subtitle_is_hard_rejected_and_never_promoted() -> None:
     assert rejected.preferred is False
     failed = [item["field"] for item in rejected.hard_filter_results if not item["passed"]]
     assert failed == ["subtitle"]
+
+
+def test_episode_ranges_expand_to_stable_scaled_atomic_coverage() -> None:
+    span = episode_span("01", "3")
+    decimal_span = episode_span("7.5", "8")
+
+    assert span.key == "1-3"
+    assert span.covered_keys == ("1", "2", "3")
+    assert span.covered_millis == (1000, 2000, 3000)
+    assert decimal_span.covered_keys == ("7.5", "8")
+    assert parse_episode_span("01.500").key == "1.5"
+
+
+def test_episode_spans_reject_unsafe_precision_and_reversed_ranges() -> None:
+    with pytest.raises(EpisodeSpanError, match="three decimal"):
+        episode_span("1.0001")
+    with pytest.raises(EpisodeSpanError, match="greater"):
+        episode_span("2", "1")

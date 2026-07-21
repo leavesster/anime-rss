@@ -16,12 +16,17 @@ from anime_rss.modules.recognition.api import Candidate
 from anime_rss.modules.selection.domain import (
     CandidateEvaluation,
     CandidateFacts,
+    EpisodeSpan,
+    EpisodeSpanError,
     SelectionRules,
+    episode_span,
     evaluate_candidate,
     first_comparison_field,
+    parse_episode_span,
 )
 from anime_rss.modules.selection.persistence import (
     DecisionRecord,
+    EpisodeCoverageRecord,
     EpisodeSlotRecord,
     EvaluationRecord,
     ManualActionRecord,
@@ -51,6 +56,7 @@ class EpisodeSlot:
     fallback_deadline: datetime | None
     best_candidate_id: str | None
     selected_decision_id: str | None
+    confirmation_reason: dict[str, Any] | None
     version: int
     updated_at: datetime
 
@@ -79,6 +85,9 @@ class PreviewCandidate:
     rank: list[int | str]
     first_loss_field: str | None
     rejection_reasons: list[str]
+    coverage_status: str
+    covered_episode_keys: list[str]
+    already_covered_episode_keys: list[str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,6 +108,15 @@ class ManualAction:
     action: str
     reason: dict[str, Any]
     created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class CoverageAnalysis:
+    status: str
+    span: EpisodeSpan | None
+    covered_episode_keys: tuple[str, ...]
+    already_covered_episode_keys: tuple[str, ...]
+    reason: str | None = None
 
 
 class SelectionConflictError(RuntimeError):
@@ -189,6 +207,7 @@ class SelectionService:
                     slot.state = "open"
                     slot.best_candidate_id = None
                     slot.fallback_deadline = None
+                    slot.confirmation_reason = None
                     slot.version += 1
                     slot.updated_at = now
 
@@ -280,10 +299,11 @@ class SelectionService:
         grouped: dict[str, list[Candidate]] = defaultdict(list)
         for candidate in candidates:
             grouped[candidate.episode_key].append(candidate)
-        return [
-            self._preview_group(subscription, episode_key, items, rejected)
-            for episode_key, items in sorted(grouped.items(), key=lambda item: item[0])
-        ]
+        with self._session_factory() as session:
+            return [
+                self._preview_group(session, subscription, episode_key, items, rejected)
+                for episode_key, items in sorted(grouped.items(), key=lambda item: item[0])
+            ]
 
     def commit_backfill(self, subscription_id: str, episode_keys: list[str]) -> int:
         subscription = self._subscriptions.get_for_selection(subscription_id)
@@ -328,11 +348,15 @@ class SelectionService:
             )
         now = self._clock()
         with self._session_factory.begin() as session:
+            coverage = self._coverage_analysis(session, subscription.id, candidate)
+            if coverage.span is None:
+                raise SelectionCommandError(coverage.reason or "episode span is invalid")
             self._persist_evaluation(
                 session,
                 subscription,
                 candidate,
                 evaluation,
+                coverage,
                 trigger="manual",
                 now=now,
             )
@@ -406,6 +430,7 @@ class SelectionService:
                 slot.best_candidate_id = None
                 slot.fallback_deadline = None
                 slot.state = "open"
+                slot.confirmation_reason = None
                 slot.version += 1
                 slot.updated_at = now
             action_id = action.id
@@ -436,6 +461,7 @@ class SelectionService:
             slot.selected_decision_id = None
             slot.best_candidate_id = None
             slot.fallback_deadline = None
+            slot.confirmation_reason = None
             slot.version += 1
             slot.updated_at = now
             action_id = action.id
@@ -445,9 +471,11 @@ class SelectionService:
         subscription = self._subscriptions.get_for_selection(subscription_id)
         if subscription is None:
             raise LookupError("subscription not found")
-        value = episode_key.strip()
-        if not value or len(value) > 52:
-            raise SelectionCommandError("episode key is required")
+        try:
+            span = parse_episode_span(episode_key)
+        except EpisodeSpanError as error:
+            raise SelectionCommandError(str(error)) from error
+        value = span.key
         now = self._clock()
         with self._session_factory.begin() as session:
             slot = self._get_or_create_slot(session, subscription, value, now)
@@ -462,9 +490,18 @@ class SelectionService:
                 reason={},
                 now=now,
             )
+            self._record_coverage(
+                session,
+                subscription_id=subscription_id,
+                span=span,
+                source_type="manual_action",
+                source_id=action.id,
+                now=now,
+            )
             slot.state = "acquired_elsewhere"
             slot.best_candidate_id = None
             slot.fallback_deadline = None
+            slot.confirmation_reason = None
             slot.version += 1
             slot.updated_at = now
             action_id = action.id
@@ -602,6 +639,72 @@ class SelectionService:
                 and self._candidate_is_rejected(session, subscription_id, candidate_id)
             }
 
+    @staticmethod
+    def _coverage_analysis(
+        session: Session, subscription_id: str, candidate: Candidate
+    ) -> CoverageAnalysis:
+        try:
+            span = episode_span(candidate.episode_start, candidate.episode_end)
+        except EpisodeSpanError as error:
+            return CoverageAnalysis(
+                status="invalid",
+                span=None,
+                covered_episode_keys=(),
+                already_covered_episode_keys=(),
+                reason=str(error),
+            )
+        covered_values = set(
+            session.scalars(
+                select(EpisodeCoverageRecord.covered_value_millis)
+                .where(
+                    EpisodeCoverageRecord.subscription_id == subscription_id,
+                    EpisodeCoverageRecord.covered_value_millis.in_(span.covered_millis),
+                )
+                .distinct()
+            )
+        )
+        already_covered = tuple(
+            key
+            for key, value in zip(span.covered_keys, span.covered_millis, strict=True)
+            if value in covered_values
+        )
+        if not already_covered:
+            status = "none"
+        elif len(already_covered) == len(span.covered_keys):
+            status = "full"
+        else:
+            status = "partial"
+        return CoverageAnalysis(
+            status=status,
+            span=span,
+            covered_episode_keys=span.covered_keys,
+            already_covered_episode_keys=already_covered,
+        )
+
+    @staticmethod
+    def _record_coverage(
+        session: Session,
+        *,
+        subscription_id: str,
+        span: EpisodeSpan,
+        source_type: str,
+        source_id: str,
+        now: datetime,
+    ) -> None:
+        for key, value in zip(span.covered_keys, span.covered_millis, strict=True):
+            session.add(
+                EpisodeCoverageRecord(
+                    id=new_id(),
+                    subscription_id=subscription_id,
+                    covering_episode_key=span.key,
+                    covered_episode_key=key,
+                    covered_value_millis=value,
+                    source_type=source_type,
+                    source_id=source_id,
+                    created_at=now,
+                )
+            )
+
     def _evaluate_automatic(
         self, subscription: SelectionSubscription, candidate: Candidate
     ) -> None:
@@ -613,11 +716,13 @@ class SelectionService:
         evaluation = evaluate_candidate(self._facts(candidate), rules)
         now = self._clock()
         with self._session_factory.begin() as session:
+            coverage = self._coverage_analysis(session, subscription.id, candidate)
             evaluation_record = self._persist_evaluation(
                 session,
                 subscription,
                 candidate,
                 evaluation,
+                coverage,
                 trigger="automatic",
                 now=now,
             )
@@ -625,7 +730,13 @@ class SelectionService:
                 return
             if not evaluation.eligible:
                 if candidate.confidence != "high":
-                    self._ensure_confirmation_slot(session, subscription, candidate, now)
+                    self._ensure_confirmation_slot(
+                        session,
+                        subscription,
+                        candidate,
+                        now,
+                        reason={"kind": "recognition_confidence"},
+                    )
                 return
             slot = session.scalar(
                 select(EpisodeSlotRecord).where(
@@ -633,6 +744,27 @@ class SelectionService:
                     EpisodeSlotRecord.episode_key == candidate.episode_key,
                 )
             )
+            if coverage.status in {"partial", "invalid"}:
+                self._ensure_confirmation_slot(
+                    session,
+                    subscription,
+                    candidate,
+                    now,
+                    reason={
+                        "kind": "episode_coverage_overlap",
+                        "status": coverage.status,
+                        "covered_episode_keys": list(coverage.covered_episode_keys),
+                        "already_covered_episode_keys": list(coverage.already_covered_episode_keys),
+                        "detail": coverage.reason,
+                    },
+                )
+                return
+            if coverage.status == "full":
+                if slot is not None and slot.state == "decided":
+                    self._maybe_commit_upgrade(
+                        session, slot, subscription, candidate, evaluation, now
+                    )
+                return
             if slot is None and subscription.state == "completed":
                 return
             if slot is None:
@@ -717,6 +849,7 @@ class SelectionService:
                 slot.state = "open"
                 slot.fallback_deadline = None
                 slot.best_candidate_id = None
+                slot.confirmation_reason = None
                 slot.version += 1
                 slot.updated_at = now
                 return False
@@ -732,6 +865,7 @@ class SelectionService:
                 slot.state = "open"
                 slot.fallback_deadline = None
                 slot.best_candidate_id = None
+                slot.confirmation_reason = None
                 slot.version += 1
                 slot.updated_at = now
                 return False
@@ -755,11 +889,15 @@ class SelectionService:
     ) -> bool:
         now = self._clock()
         with self._session_factory.begin() as session:
+            coverage = self._coverage_analysis(session, subscription.id, candidate)
+            if coverage.status != "none" or coverage.span is None:
+                return False
             self._persist_evaluation(
                 session,
                 subscription,
                 candidate,
                 evaluation,
+                coverage,
                 trigger="backfill",
                 now=now,
             )
@@ -813,6 +951,9 @@ class SelectionService:
         rules_snapshot = self._rules_snapshot(subscription)
         candidate_snapshot = {
             "source_title": candidate.source_title,
+            "episode_start": candidate.episode_start,
+            "episode_end": candidate.episode_end,
+            "episode_key": candidate.episode_key,
             "release_group": candidate.release_group,
             "resolution": candidate.resolution,
             "video_codec": candidate.video_codec,
@@ -839,10 +980,23 @@ class SelectionService:
                 created_at=now,
             )
         )
+        try:
+            span = episode_span(candidate.episode_start, candidate.episode_end)
+        except EpisodeSpanError as error:
+            raise SelectionCommandError(str(error)) from error
+        self._record_coverage(
+            session,
+            subscription_id=subscription.id,
+            span=span,
+            source_type="decision",
+            source_id=decision_id,
+            now=now,
+        )
         slot.state = "decided"
         slot.best_candidate_id = candidate.id
         slot.selected_decision_id = decision_id
         slot.fallback_deadline = None
+        slot.confirmation_reason = None
         slot.version += 1
         slot.updated_at = now
         append_event(
@@ -917,6 +1071,7 @@ class SelectionService:
         subscription: SelectionSubscription,
         candidate: Candidate,
         evaluation: CandidateEvaluation,
+        coverage: CoverageAnalysis,
         *,
         trigger: str,
         now: datetime,
@@ -939,6 +1094,9 @@ class SelectionService:
                     rules_snapshot=self._rules_snapshot(subscription),
                     evaluated_at=now,
                     trigger=trigger,
+                    coverage_status=coverage.status,
+                    covered_episode_keys=list(coverage.covered_episode_keys),
+                    already_covered_episode_keys=list(coverage.already_covered_episode_keys),
                 )
                 .on_conflict_do_nothing(index_elements=["subscription_id", "candidate_id"])
             ),
@@ -962,6 +1120,9 @@ class SelectionService:
             record.rules_snapshot = self._rules_snapshot(subscription)
             record.evaluated_at = now
             record.trigger = trigger
+            record.coverage_status = coverage.status
+            record.covered_episode_keys = list(coverage.covered_episode_keys)
+            record.already_covered_episode_keys = list(coverage.already_covered_episode_keys)
         assert record is not None
         return record
 
@@ -971,9 +1132,11 @@ class SelectionService:
         subscription: SelectionSubscription,
         candidate: Candidate,
         now: datetime,
+        *,
+        reason: dict[str, Any],
     ) -> None:
         existing = session.scalar(
-            select(EpisodeSlotRecord.id).where(
+            select(EpisodeSlotRecord).where(
                 EpisodeSlotRecord.subscription_id == subscription.id,
                 EpisodeSlotRecord.episode_key == candidate.episode_key,
             )
@@ -987,11 +1150,19 @@ class SelectionService:
                     episode_key=candidate.episode_key,
                     state="needs_confirmation",
                     best_candidate_id=candidate.id,
+                    confirmation_reason=reason,
                     version=1,
                     created_at=now,
                     updated_at=now,
                 )
             )
+        elif existing.selected_decision_id is None:
+            existing.state = "needs_confirmation"
+            existing.best_candidate_id = candidate.id
+            existing.fallback_deadline = None
+            existing.confirmation_reason = reason
+            existing.version += 1
+            existing.updated_at = now
 
     @staticmethod
     def _is_better(
@@ -1007,13 +1178,18 @@ class SelectionService:
 
     def _preview_group(
         self,
+        session: Session,
         subscription: SelectionSubscription,
         episode_key: str,
         candidates: list[Candidate],
         rejected_candidate_ids: set[str],
     ) -> BackfillPreview:
         evaluated = [
-            (candidate, evaluate_candidate(self._facts(candidate), self._rules(subscription)))
+            (
+                candidate,
+                evaluate_candidate(self._facts(candidate), self._rules(subscription)),
+                self._coverage_analysis(session, subscription.id, candidate),
+            )
             for candidate in candidates
         ]
         evaluated.sort(key=lambda item: item[1].rank)
@@ -1021,12 +1197,14 @@ class SelectionService:
             (
                 item
                 for item in evaluated
-                if item[1].eligible and item[0].id not in rejected_candidate_ids
+                if item[1].eligible
+                and item[2].status == "none"
+                and item[0].id not in rejected_candidate_ids
             ),
             None,
         )
         preview_candidates: list[PreviewCandidate] = []
-        for candidate, evaluation in evaluated:
+        for candidate, evaluation, coverage in evaluated:
             reasons = [
                 str(check["reason"])
                 for check in evaluation.hard_filter_results
@@ -1034,12 +1212,22 @@ class SelectionService:
             ]
             if candidate.id in rejected_candidate_ids:
                 reasons.append("manually_rejected")
+            if coverage.status == "partial":
+                reasons.append("partially_overlaps_acquired_episodes")
+            elif coverage.status == "full":
+                reasons.append("episodes_already_covered")
+            elif coverage.status == "invalid":
+                reasons.append(coverage.reason or "episode_span_invalid")
             preview_candidates.append(
                 PreviewCandidate(
                     candidate_id=candidate.id,
                     source_title=candidate.source_title,
                     release_group=candidate.release_group,
-                    eligible=evaluation.eligible and candidate.id not in rejected_candidate_ids,
+                    eligible=(
+                        evaluation.eligible
+                        and coverage.status == "none"
+                        and candidate.id not in rejected_candidate_ids
+                    ),
                     preferred=evaluation.preferred,
                     rank=list(evaluation.rank),
                     first_loss_field=(
@@ -1048,6 +1236,9 @@ class SelectionService:
                         else None
                     ),
                     rejection_reasons=reasons,
+                    coverage_status=coverage.status,
+                    covered_episode_keys=list(coverage.covered_episode_keys),
+                    already_covered_episode_keys=list(coverage.already_covered_episode_keys),
                 )
             )
         return BackfillPreview(
@@ -1112,6 +1303,7 @@ class SelectionService:
             fallback_deadline=record.fallback_deadline,
             best_candidate_id=record.best_candidate_id,
             selected_decision_id=record.selected_decision_id,
+            confirmation_reason=record.confirmation_reason,
             version=record.version,
             updated_at=record.updated_at,
         )

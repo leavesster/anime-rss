@@ -23,6 +23,7 @@ class EpisodeSlotResponse(BaseModel):
     fallback_deadline: datetime | None
     best_candidate_id: str | None
     selected_decision_id: str | None
+    confirmation_reason: dict[str, Any] | None
     version: int
     updated_at: datetime
 
@@ -49,6 +50,9 @@ class PreviewCandidateResponse(BaseModel):
     rank: list[int | str]
     first_loss_field: str | None
     rejection_reasons: list[str]
+    coverage_status: str
+    covered_episode_keys: list[str]
+    already_covered_episode_keys: list[str]
 
 
 class BackfillPreviewResponse(BaseModel):

@@ -2,7 +2,14 @@
 
 Owns deterministic candidate evaluations, fixed fallback deadlines, serialized
 episode slots, immutable decisions, backfill previews, revision upgrades, and
-append-only manual episode actions.
+append-only manual episode actions. It also owns scaled episode-span coverage:
+range decisions append one coverage fact per atomic episode, fully covered later
+releases are skipped, and partial overlaps require an explicit manual selection.
+
+Coverage is acquisition history, not mutable slot state. Resetting a decision
+does not erase coverage or make a normal backfill eligible again. A deliberate
+manual candidate selection may cross that boundary and creates another immutable
+Decision plus its own coverage facts.
 
 It consumes recognition and subscription DTOs through their public `api.py`
 surfaces. It never reparses titles and never calls a downloader. A committed

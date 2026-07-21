@@ -68,7 +68,8 @@ def canonical_episode_number(value: str | None) -> str | None:
         number = Decimal(value)
     except InvalidOperation:
         return None
-    if not number.is_finite() or number < 0:
+    exponent = number.as_tuple().exponent
+    if not number.is_finite() or number < 0 or not isinstance(exponent, int) or exponent < -3:
         return None
     rendered = format(number, "f")
     if "." in rendered:
