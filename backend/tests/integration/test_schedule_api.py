@@ -51,6 +51,7 @@ def test_schedule_marks_missing_once_without_creating_download_work(tmp_path: Pa
         anime = client.post("/api/v1/catalog/anime", json={"title": "Calendar Anime"}).json()
         scheduled = client.put(
             f"/api/v1/catalog/anime/{anime['id']}/schedule",
+            headers={"If-Match": str(anime["version"])},
             json={
                 "air_date": "2026-07-20",
                 "episode_count": 12,
@@ -117,6 +118,7 @@ def test_acceptable_fallback_suppresses_missing_warning(tmp_path: Path) -> None:
         anime = client.post("/api/v1/catalog/anime", json={"title": "Waiting Anime"}).json()
         client.put(
             f"/api/v1/catalog/anime/{anime['id']}/schedule",
+            headers={"If-Match": str(anime["version"])},
             json={
                 "air_date": "2026-07-20",
                 "episode_count": 1,
@@ -173,6 +175,7 @@ def test_episode_overrides_cover_delays_double_episodes_specials_and_cancellatio
         anime = client.post("/api/v1/catalog/anime", json={"title": "Irregular Anime"}).json()
         client.put(
             f"/api/v1/catalog/anime/{anime['id']}/schedule",
+            headers={"If-Match": str(anime["version"])},
             json={
                 "air_date": "2026-07-20",
                 "episode_count": 12,
@@ -201,10 +204,12 @@ def test_episode_overrides_cover_delays_double_episodes_specials_and_cancellatio
 
         episode_two = client.put(
             f"/api/v1/schedule/anime/{anime['id']}/overrides/2",
+            headers={"If-Match": "0"},
             json={"expected_at": delayed_at, "note": "double episode"},
         ).json()
         special = client.put(
             f"/api/v1/schedule/anime/{anime['id']}/overrides/SP1",
+            headers={"If-Match": "0"},
             json={"expected_at": delayed_at, "source": "provider", "note": "special"},
         ).json()
         assert episode_two["version"] == 1
@@ -274,11 +279,13 @@ def test_episode_overrides_cover_delays_double_episodes_specials_and_cancellatio
         assert conflict.status_code == 409
         naive = client.put(
             f"/api/v1/schedule/anime/{anime['id']}/overrides/OVA1",
+            headers={"If-Match": "0"},
             json={"expected_at": "2026-07-23T03:00:00"},
         )
         assert naive.status_code == 422
         invalid_key = client.put(
             f"/api/v1/schedule/anime/{anime['id']}/overrides/bad%20key",
+            headers={"If-Match": "0"},
             json={"expected_at": "2026-07-23T03:00:00Z"},
         )
         assert invalid_key.status_code == 422
@@ -305,6 +312,7 @@ def test_missing_notification_uses_overridden_time_and_resets_after_reschedule(
         anime = client.post("/api/v1/catalog/anime", json={"title": "Delayed Anime"}).json()
         client.put(
             f"/api/v1/catalog/anime/{anime['id']}/schedule",
+            headers={"If-Match": str(anime["version"])},
             json={
                 "air_date": "2026-07-20",
                 "episode_count": 1,
@@ -317,6 +325,7 @@ def test_missing_notification_uses_overridden_time_and_resets_after_reschedule(
         client.post("/api/v1/schedule/sync")
         override = client.put(
             f"/api/v1/schedule/anime/{anime['id']}/overrides/1",
+            headers={"If-Match": "0"},
             json={"expected_at": "2026-07-21T01:00:00Z"},
         ).json()
 

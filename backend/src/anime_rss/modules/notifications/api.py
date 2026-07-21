@@ -89,6 +89,8 @@ class NotificationService:
         with self._session_factory.begin() as session:
             record = session.get(NotificationConfigRecord, _CONFIG_ID)
             if record is None:
+                if expected_version not in {None, 0}:
+                    raise ValueError("notification config version conflict")
                 record = NotificationConfigRecord(
                     id=_CONFIG_ID,
                     webhook_enabled=webhook_enabled,

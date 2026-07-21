@@ -142,6 +142,10 @@ packaged as a first-run authenticated, recoverable Compose service.
   password-reset CLI, and explicit logout.
 - HTTP-only session cookie plus readable CSRF cookie; every authenticated mutation
   must echo the CSRF value in `X-CSRF-Token`.
+- One structured API error envelope with machine code, message, details, and the
+  request correlation ID.
+- Durable 24-hour mutation idempotency, mandatory optimistic preconditions for
+  versioned resources, and opaque cursor pagination for growing list endpoints.
 - In-app notifications derived from durable integration events without changing
   any selection, feed, or download outcome.
 - Optional encrypted generic JSON Webhook configuration, idempotency key, delivery
@@ -623,6 +627,62 @@ every authenticated non-safe method.
 **Reason:** Browser forms cannot create authenticated mutations, and the frontend
 does not need access to the session credential.
 
+### API-001: Successful mutations can be replayed for 24 hours
+
+**Choice:** Every API mutation may carry `Idempotency-Key`. Migration `0017`
+stores a SHA-256 key digest, a method/path/query/body request digest, and the
+successful response in SQLite for 24 hours. An identical request replays the
+stored response, a different request using the same key returns 409, and a
+concurrent in-progress request returns 409 with `Retry-After`. Failed responses
+release the claim so corrected requests can retry. The browser client generates a
+UUID for every unsafe request.
+
+Authentication setup/login/logout are excluded because replaying session cookies
+would be unsafe. Restore staging is excluded because buffering and retaining a
+large backup upload in generic middleware is the wrong ownership boundary.
+
+**Reason:** A client that loses a success response can repeat the command without
+creating a second business action, while durable storage preserves this guarantee
+across process restarts.
+
+### API-002: Mutable resources require explicit versions
+
+**Choice:** Versioned `PUT`, `PATCH`, and `DELETE` operations require `If-Match`;
+creating a singleton configuration or episode override uses version `0`. Missing
+preconditions return 428 and stale versions return 409. Catalog Anime now has its
+own migrated version for alias and airing-schedule changes; feed deletion consumes
+the Feed version. Idempotent writes that do not change an alias or schedule retain
+the current version.
+
+**Reason:** The web interface and external clients cannot silently overwrite a
+newer administrator change, and a version continues to mean an actual resource
+transition rather than an API call count.
+
+### API-003: Pagination preserves existing array responses
+
+**Choice:** Growing list endpoints accept a bounded `limit` and opaque offset
+cursor. Responses remain JSON arrays for frontend compatibility and expose
+`X-Next-Cursor` plus `X-Page-Limit`; the checked OpenAPI contract declares those
+headers. Page size is capped at 200 and cursor offset at 10,000.
+
+**Tradeoff:** This is not a database snapshot. Concurrent insertions or removals
+between page requests may move offsets. The cursor contract guarantees ordered,
+non-overlapping traversal only while the underlying ordered result is stable; a
+future high-volume deployment should replace module queries with keyset cursors
+without changing the response headers.
+
+### API-004: Errors and correlation use one public envelope
+
+**Choice:** HTTP, validation, authentication, CSRF, precondition, idempotency, and
+unexpected failures return `code`, `message`, optional `details`, and
+`correlation_id`. The legacy `detail` message remains during the current client
+transition. Every response also returns `X-Correlation-ID`. OpenAPI advertises the
+error model, mutation idempotency header, preconditions, and pagination headers;
+the generated TypeScript schema is checked into the repository.
+
+**Reason:** Operators can connect browser failures to JSON logs and durable audit
+history, while clients can branch on a stable code rather than translated text.
+
 ### NOTIFY-001: Notifications are downstream facts only
 
 **Choice:** `notifications` consumes versioned integration events after the
@@ -914,7 +974,7 @@ truth; a row is complete only when code and proportionate evidence both exist.
 | Subscription lifecycle | All legal commands, archived view, revision-only completed behavior, and archived-stop integration coverage | Complete |
 | Unsupported release handling | `0016`, durable manual task origin, idempotent API, audit evidence, release-page command, backend/frontend tests | Complete |
 | Parser regression contract | `title-rules.v2`, 320-case golden matrix, focused malformed cases, and 512-case Unicode/property gates | Complete |
-| HTTP consistency | CSRF token and some optimistic versions exist | Apply mutation idempotency, resource preconditions, cursor pagination, structured errors, and correlation IDs consistently |
+| HTTP consistency | `0017`, durable replay/conflict tests, version/precondition tests, cursor traversal tests, structured error tests, and checked OpenAPI/TypeScript contract | Complete |
 | Browser-origin security | Double-submit CSRF exists | Add Origin/Host validation and rate limits for setup, login, and connection tests |
 | Password KDF | Versioned salted scrypt is implemented and documented | Record a formal ADR deviation or migrate the plan's Argon2id choice |
 | Startup migration safety | Alembic startup migration and portable backups exist | Add migration lock and automatic consistent pre-migration backup |
@@ -922,22 +982,23 @@ truth; a row is complete only when code and proportionate evidence both exist.
 | Stable engineering gates | lint, typecheck, unit/integration, OpenAPI generation, Compose acceptance | Add doctor, checked OpenAPI drift, security scan, clean-room, and release-evidence commands |
 | External acceptance | Durable seven-day evidence tooling exists | Configure two real feeds, two Bangumi subscriptions, qBittorrent, then complete seven natural days |
 
-The next implementation unit is HTTP consistency. Security and release gates
-then proceed as independent reviewable units; the seven-day clock starts only
-after its external preflight is genuinely satisfied.
+The next implementation unit is browser-origin security, followed by password
+KDF and startup migration safety. Release gates then proceed as independent
+reviewable units; the seven-day clock starts only after its external preflight is
+genuinely satisfied.
 
 ## 7. Current Verification Evidence
 
-Verified on 2026-07-22 with `make verify` after migration `0016` and parser
+Verified on 2026-07-22 with `make verify` after migration `0017` and parser
 `title-rules.v2`:
 
 - Ruff formatting and lint: passed.
 - Pyright: passed with zero errors.
-- Backend: 85 tests passed, 88.54% statement coverage.
-- Frontend: ESLint and TypeScript passed; 12 Vitest tests passed.
+- Backend: 90 tests passed, 88.67% statement coverage.
+- Frontend: ESLint and TypeScript passed; 14 Vitest tests passed.
 - Production Vite build: passed.
 - Disposable Compose lifecycle: passed for clean setup, operator backup,
-  in-place upgrade through `0016`, clean-volume restore, and backup-based
+  in-place upgrade through `0017`, clean-volume restore, and backup-based
   rollback, including audit history, waiting work, Decision, and DownloadTask
   associations.
 - Container publishing workflow: statically validated for `linux/amd64` and
@@ -993,6 +1054,13 @@ Verified on 2026-07-22 with `make verify` after migration `0016` and parser
   for NFKC equivalence, repeatability, and persistence bounds. Rule v2 also
   proves bounded casefold expansion, 4096-character input truncation, and safe
   rejection of zero or oversized revisions.
+- HTTP-contract evidence covers durable same-request replay, different-request
+  key conflict, missing and stale preconditions, version preservation for no-op
+  writes, three-page traversal without duplicate or missing rows, invalid cursors,
+  structured errors with caller and generated correlation IDs, and checked
+  OpenAPI headers. Migration `0017` passed an
+  `0016 -> head -> 0016 -> head` round trip, and the disposable Compose lifecycle
+  passed setup, backup, in-place upgrade, clean restore, and rollback.
 - Soak acceptance evidence covers incomplete-preflight refusal, idempotent start,
   the exact seven-day boundary, redacted reporting, cross-feed observation counts,
   and duplicate task identity signals.

@@ -2,9 +2,10 @@ from dataclasses import asdict
 from datetime import datetime
 from typing import Annotated, Protocol, cast
 
-from fastapi import APIRouter, Header, HTTPException, Request, status
+from fastapi import APIRouter, Header, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
+from anime_rss.infrastructure.api import PageCursor, PageLimit, page_response
 from anime_rss.modules.catalog.api import AnimeNotFoundError
 from anime_rss.modules.subscriptions.api import (
     PreferenceProfile,
@@ -100,8 +101,14 @@ def _profile_response(value: PreferenceProfile) -> PreferenceProfileResponse:
 
 
 @router.get("", response_model=list[SubscriptionResponse])
-def list_subscriptions(request: Request) -> list[SubscriptionResponse]:
-    return [_response(item) for item in _service(request).list_subscriptions()]
+def list_subscriptions(
+    request: Request,
+    response: Response,
+    limit: PageLimit = 100,
+    cursor: PageCursor = None,
+) -> list[SubscriptionResponse]:
+    items = [_response(item) for item in _service(request).list_subscriptions()]
+    return page_response(items, response, cursor=cursor, limit=limit)
 
 
 @router.post("", response_model=SubscriptionResponse, status_code=status.HTTP_201_CREATED)
@@ -130,7 +137,7 @@ def update_subscription(
     subscription_id: str,
     payload: SubscriptionPatchRequest,
     request: Request,
-    if_match: Annotated[int | None, Header()] = None,
+    if_match: Annotated[int, Header()],
 ) -> SubscriptionResponse:
     try:
         value = _service(request).update_subscription(
@@ -160,7 +167,7 @@ def get_global_preferences(request: Request) -> PreferenceProfileResponse:
 def update_global_preferences(
     payload: PreferenceRulesModel,
     request: Request,
-    if_match: Annotated[int | None, Header()] = None,
+    if_match: Annotated[int, Header()],
 ) -> PreferenceProfileResponse:
     try:
         profile = _service(request).update_global_preferences(

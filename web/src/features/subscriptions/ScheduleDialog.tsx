@@ -65,7 +65,7 @@ export function ScheduleDialog({ anime, onClose }: { anime: Anime; onClose: () =
 
   const save = useMutation({
     mutationFn: async () => {
-      await updateAnimeSchedule(anime.id, {
+      await updateAnimeSchedule(anime.id, anime.version, {
         air_date: airDate || null,
         episode_count: episodeCount ? Number(episodeCount) : null,
         airing_weekday: weekday ? Number(weekday) : null,

@@ -28,6 +28,7 @@ class AnimeRecord(Base):
     schedule_updated_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     cover_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     source: Mapped[str] = mapped_column(String(24))
+    version: Mapped[int] = mapped_column(default=1)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
 

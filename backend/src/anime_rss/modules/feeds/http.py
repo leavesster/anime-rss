@@ -5,6 +5,12 @@ from typing import Annotated, Protocol, cast
 from fastapi import APIRouter, Header, HTTPException, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
+from anime_rss.infrastructure.api import (
+    PageCursor,
+    PageLimit,
+    page_response,
+    requested_item_count,
+)
 from anime_rss.infrastructure.events import EventDispatcher
 from anime_rss.infrastructure.http import HttpFetchError
 from anime_rss.modules.feeds.api import FeedConflictError, FeedNotFoundError, FeedService
@@ -114,8 +120,14 @@ def create_feed(payload: FeedCreateRequest, request: Request) -> FeedResponse:
 
 
 @router.get("", response_model=list[FeedResponse])
-def list_feeds(request: Request) -> list[FeedResponse]:
-    return [FeedResponse.model_validate(feed) for feed in _services(request).feeds.list_feeds()]
+def list_feeds(
+    request: Request,
+    response: Response,
+    limit: PageLimit = 100,
+    cursor: PageCursor = None,
+) -> list[FeedResponse]:
+    items = [FeedResponse.model_validate(feed) for feed in _services(request).feeds.list_feeds()]
+    return page_response(items, response, cursor=cursor, limit=limit)
 
 
 @router.patch("/{feed_id}", response_model=FeedResponse)
@@ -123,7 +135,7 @@ def update_feed(
     feed_id: str,
     payload: FeedPatchRequest,
     request: Request,
-    if_match: Annotated[int | None, Header()] = None,
+    if_match: Annotated[int, Header()],
 ) -> FeedResponse:
     try:
         feed = _services(request).feeds.update_feed(
@@ -145,11 +157,13 @@ def update_feed(
 
 
 @router.delete("/{feed_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_feed(feed_id: str, request: Request) -> Response:
+def delete_feed(feed_id: str, request: Request, if_match: Annotated[int, Header()]) -> Response:
     try:
-        _services(request).feeds.delete_feed(feed_id)
+        _services(request).feeds.delete_feed(feed_id, expected_version=if_match)
     except FeedNotFoundError as error:
         raise HTTPException(status_code=404, detail="feed not found") from error
+    except FeedConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -174,18 +188,36 @@ def refresh_feed(feed_id: str, request: Request) -> RefreshResponse:
 
 
 @router.get("/{feed_id}/entries", response_model=list[FeedEntryResponse])
-def list_feed_entries(feed_id: str, request: Request, limit: int = 100) -> list[FeedEntryResponse]:
+def list_feed_entries(
+    feed_id: str,
+    request: Request,
+    response: Response,
+    limit: PageLimit = 100,
+    cursor: PageCursor = None,
+) -> list[FeedEntryResponse]:
     try:
-        entries = _services(request).feeds.list_entries(feed_id, limit=min(max(limit, 1), 500))
+        entries = _services(request).feeds.list_entries(
+            feed_id, limit=requested_item_count(cursor, limit)
+        )
     except FeedNotFoundError as error:
         raise HTTPException(status_code=404, detail="feed not found") from error
-    return [FeedEntryResponse.model_validate(asdict(entry)) for entry in entries]
+    items = [FeedEntryResponse.model_validate(asdict(entry)) for entry in entries]
+    return page_response(items, response, cursor=cursor, limit=limit)
 
 
 @router.get("/{feed_id}/fetches", response_model=list[FeedFetchResponse])
-def list_feed_fetches(feed_id: str, request: Request, limit: int = 100) -> list[FeedFetchResponse]:
+def list_feed_fetches(
+    feed_id: str,
+    request: Request,
+    response: Response,
+    limit: PageLimit = 100,
+    cursor: PageCursor = None,
+) -> list[FeedFetchResponse]:
     try:
-        fetches = _services(request).feeds.list_fetches(feed_id, limit=min(max(limit, 1), 500))
+        fetches = _services(request).feeds.list_fetches(
+            feed_id, limit=requested_item_count(cursor, limit)
+        )
     except FeedNotFoundError as error:
         raise HTTPException(status_code=404, detail="feed not found") from error
-    return [FeedFetchResponse.model_validate(asdict(fetch)) for fetch in fetches]
+    items = [FeedFetchResponse.model_validate(asdict(fetch)) for fetch in fetches]
+    return page_response(items, response, cursor=cursor, limit=limit)

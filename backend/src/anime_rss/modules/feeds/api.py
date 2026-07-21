@@ -290,11 +290,13 @@ class FeedService:
                 record.url_fingerprint = fingerprint
                 claimed.add(fingerprint)
 
-    def delete_feed(self, feed_id: str) -> None:
+    def delete_feed(self, feed_id: str, *, expected_version: int) -> None:
         with self._session_factory.begin() as session:
             record = session.get(FeedRecord, feed_id)
             if record is None:
                 raise FeedNotFoundError(feed_id)
+            if record.version != expected_version:
+                raise FeedConflictError("feed version conflict")
             record_event(
                 session,
                 event_type="feed.deleted",

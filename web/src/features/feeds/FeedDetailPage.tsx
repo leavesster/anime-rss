@@ -38,7 +38,7 @@ export function FeedDetailPage() {
     },
   });
   const remove = useMutation({
-    mutationFn: () => deleteFeed(feedId),
+    mutationFn: (version: number) => deleteFeed(feedId, version),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["feeds"] });
       navigate("/feeds");
@@ -86,7 +86,7 @@ export function FeedDetailPage() {
 
       <EditFeedDialog feed={feed} open={editOpen} onClose={() => setEditOpen(false)} />
       <Dialog open={deleteOpen} onClose={() => setDeleteOpen(false)} title="删除订阅源" description="这会删除该订阅源及其抓取条目，已经识别的发布记录会保留。">
-        <div className="confirm-copy">确定删除“{feed.name}”吗？此操作无法撤销。</div><div className="dialog__actions"><Button onClick={() => setDeleteOpen(false)}>取消</Button><Button variant="danger" disabled={remove.isPending} onClick={() => remove.mutate()}>{remove.isPending ? "删除中" : "确认删除"}</Button></div>
+        <div className="confirm-copy">确定删除“{feed.name}”吗？此操作无法撤销。</div><div className="dialog__actions"><Button onClick={() => setDeleteOpen(false)}>取消</Button><Button variant="danger" disabled={remove.isPending} onClick={() => remove.mutate(feed.version)}>{remove.isPending ? "删除中" : "确认删除"}</Button></div>
       </Dialog>
     </>
   );

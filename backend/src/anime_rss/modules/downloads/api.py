@@ -138,6 +138,8 @@ class DownloadService:
         with self._session_factory.begin() as session:
             record = session.get(DownloaderConfigRecord, _CONFIG_ID)
             if record is None:
+                if expected_version not in {None, 0}:
+                    raise ValueError("download config version conflict")
                 if not password:
                     raise ValueError("password is required")
                 record = DownloaderConfigRecord(

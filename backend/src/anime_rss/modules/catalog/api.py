@@ -50,6 +50,7 @@ class Anime:
     schedule_updated_at: datetime | None
     cover_url: str | None
     source: str
+    version: int
     titles: list[AnimeTitle]
     created_at: datetime
     updated_at: datetime
@@ -123,6 +124,8 @@ class CatalogService:
             if record is None:
                 record = AnimeRecord(id=new_id(), created_at=now)
                 session.add(record)
+            else:
+                record.version += 1
             record.bangumi_id = external.bangumi_id
             record.primary_title = external.name_cn or external.name
             record.title_zh = external.name_cn
@@ -157,17 +160,27 @@ class CatalogService:
             anime_id = record.id
         return self.get_anime(anime_id)
 
-    def add_alias(self, anime_id: str, alias: str) -> Anime:
+    def add_alias(self, anime_id: str, alias: str, *, expected_version: int) -> Anime:
         value = alias.strip()
         normalized = normalize_title_key(value)
         if not normalized:
             raise ValueError("alias is required")
         with self._session_factory.begin() as session:
-            if session.get(AnimeRecord, anime_id) is None:
+            record = session.get(AnimeRecord, anime_id)
+            if record is None:
                 raise AnimeNotFoundError(anime_id)
-            session.execute(
-                insert(AnimeTitleRecord)
-                .values(
+            if record.version != expected_version:
+                raise ValueError("anime version conflict")
+            existing = session.scalar(
+                select(AnimeTitleRecord.id).where(
+                    AnimeTitleRecord.anime_id == anime_id,
+                    AnimeTitleRecord.normalized == normalized[:300],
+                )
+            )
+            if existing is not None:
+                return self.get_anime(anime_id)
+            session.add(
+                AnimeTitleRecord(
                     id=new_id(),
                     anime_id=anime_id,
                     title=value[:300],
@@ -176,8 +189,9 @@ class CatalogService:
                     source="user",
                     created_at=self._clock(),
                 )
-                .on_conflict_do_nothing(index_elements=["anime_id", "normalized"])
             )
+            record.version += 1
+            record.updated_at = self._clock()
             record_event(
                 session,
                 event_type="catalog.alias_added",
@@ -196,6 +210,7 @@ class CatalogService:
         airing_weekday: int | None,
         airing_time: str | None,
         schedule_timezone: str,
+        expected_version: int,
     ) -> Anime:
         from datetime import date, time
         from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -224,6 +239,18 @@ class CatalogService:
             record = session.get(AnimeRecord, anime_id)
             if record is None:
                 raise AnimeNotFoundError(anime_id)
+            if record.version != expected_version:
+                raise ValueError("anime version conflict")
+            unchanged = (
+                record.air_date == air_date
+                and record.episode_count == episode_count
+                and record.airing_weekday == airing_weekday
+                and record.airing_time == airing_time
+                and record.schedule_timezone == schedule_timezone
+                and record.schedule_source == "manual"
+            )
+            if unchanged:
+                return self.get_anime(anime_id)
             record.air_date = air_date
             record.episode_count = episode_count
             record.airing_weekday = airing_weekday
@@ -231,6 +258,7 @@ class CatalogService:
             record.schedule_timezone = schedule_timezone
             record.schedule_source = "manual"
             record.schedule_updated_at = now
+            record.version += 1
             record.updated_at = now
             record_event(
                 session,
@@ -324,6 +352,7 @@ class CatalogService:
                 schedule_updated_at=record.schedule_updated_at,
                 cover_url=record.cover_url,
                 source=record.source,
+                version=record.version,
                 titles=[
                     AnimeTitle(
                         title=item.title,

@@ -2,9 +2,15 @@ from dataclasses import asdict
 from datetime import datetime
 from typing import Any, Protocol, cast
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
 
+from anime_rss.infrastructure.api import (
+    PageCursor,
+    PageLimit,
+    page_response,
+    requested_item_count,
+)
 from anime_rss.modules.operations.api import JobService
 from anime_rss.modules.operations.ports import DiagnosticsSource
 from anime_rss.modules.operations.worker import Scheduler
@@ -108,19 +114,31 @@ def get_operations_overview(request: Request) -> OperationsOverviewResponse:
 
 
 @router.get("/jobs", response_model=list[ScheduledJobResponse])
-def list_scheduled_jobs(request: Request, limit: int = 200) -> list[ScheduledJobResponse]:
-    return [
+def list_scheduled_jobs(
+    request: Request,
+    response: Response,
+    limit: PageLimit = 200,
+    cursor: PageCursor = None,
+) -> list[ScheduledJobResponse]:
+    items = [
         ScheduledJobResponse.model_validate(asdict(item))
-        for item in _services(request).jobs.list_jobs(limit=limit)
+        for item in _services(request).jobs.list_jobs(limit=requested_item_count(cursor, limit))
     ]
+    return page_response(items, response, cursor=cursor, limit=limit)
 
 
 @router.get("/runs", response_model=list[JobRunResponse])
-def list_job_runs(request: Request, limit: int = 100) -> list[JobRunResponse]:
-    return [
+def list_job_runs(
+    request: Request,
+    response: Response,
+    limit: PageLimit = 100,
+    cursor: PageCursor = None,
+) -> list[JobRunResponse]:
+    items = [
         JobRunResponse.model_validate(asdict(item))
-        for item in _services(request).jobs.list_runs(limit=limit)
+        for item in _services(request).jobs.list_runs(limit=requested_item_count(cursor, limit))
     ]
+    return page_response(items, response, cursor=cursor, limit=limit)
 
 
 @router.post("/run-now", response_model=RunNowResponse)

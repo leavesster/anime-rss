@@ -2,9 +2,15 @@ from dataclasses import asdict
 from datetime import datetime
 from typing import Protocol, cast
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
+from anime_rss.infrastructure.api import (
+    PageCursor,
+    PageLimit,
+    page_response,
+    requested_item_count,
+)
 from anime_rss.infrastructure.events import EventDispatcher
 from anime_rss.modules.recognition.api import (
     CandidateNotFoundError,
@@ -86,17 +92,29 @@ class ReleaseRemapRequest(BaseModel):
 
 
 @router.get("/episode-groups", response_model=list[EpisodeGroupResponse])
-def list_episode_groups(request: Request, limit: int = 100) -> list[EpisodeGroupResponse]:
+def list_episode_groups(
+    request: Request,
+    response: Response,
+    limit: PageLimit = 100,
+    cursor: PageCursor = None,
+) -> list[EpisodeGroupResponse]:
     services = cast(RecognitionHttpServices, request.app.state.services)
-    groups = services.recognition.list_episode_groups(limit=min(max(limit, 1), 500))
-    return [EpisodeGroupResponse.model_validate(asdict(group)) for group in groups]
+    groups = services.recognition.list_episode_groups(limit=requested_item_count(cursor, limit))
+    items = [EpisodeGroupResponse.model_validate(asdict(group)) for group in groups]
+    return page_response(items, response, cursor=cursor, limit=limit)
 
 
 @router.get("/unmatched", response_model=list[UnmatchedReleaseResponse])
-def list_unmatched(request: Request, limit: int = 100) -> list[UnmatchedReleaseResponse]:
+def list_unmatched(
+    request: Request,
+    response: Response,
+    limit: PageLimit = 100,
+    cursor: PageCursor = None,
+) -> list[UnmatchedReleaseResponse]:
     services = cast(RecognitionHttpServices, request.app.state.services)
-    releases = services.recognition.list_unmatched(limit=min(max(limit, 1), 500))
-    return [UnmatchedReleaseResponse.model_validate(asdict(release)) for release in releases]
+    releases = services.recognition.list_unmatched(limit=requested_item_count(cursor, limit))
+    items = [UnmatchedReleaseResponse.model_validate(asdict(release)) for release in releases]
+    return page_response(items, response, cursor=cursor, limit=limit)
 
 
 @router.post("/candidates/{candidate_id}/confirm", response_model=CandidateResponse)

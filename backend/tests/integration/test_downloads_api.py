@@ -89,6 +89,7 @@ class FakeQbittorrent:
 def _configure(client: TestClient) -> dict[str, object]:
     response = client.put(
         "/api/v1/downloads/config",
+        headers={"If-Match": "0"},
         json={
             "base_url": "http://qb.test:8080",
             "username": "admin",
@@ -328,6 +329,7 @@ def test_download_config_validation_and_api_errors(tmp_path: Path) -> None:
         assert (
             client.put(
                 "/api/v1/downloads/config",
+                headers={"If-Match": "0"},
                 json={"base_url": "ftp://qb.test", "username": "admin", "password": "secret"},
             ).status_code
             == 422

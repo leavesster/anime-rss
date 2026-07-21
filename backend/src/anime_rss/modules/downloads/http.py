@@ -2,9 +2,15 @@ from dataclasses import asdict
 from datetime import datetime
 from typing import Annotated, Protocol, cast
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Header, HTTPException, Request, Response
 from pydantic import BaseModel, Field, HttpUrl
 
+from anime_rss.infrastructure.api import (
+    PageCursor,
+    PageLimit,
+    page_response,
+    requested_item_count,
+)
 from anime_rss.infrastructure.events import EventDispatcher
 from anime_rss.modules.downloads.api import (
     DownloadConfigNotFoundError,
@@ -97,7 +103,7 @@ def get_download_config(request: Request) -> DownloadConfigResponse | None:
 def configure_downloads(
     payload: DownloadConfigRequest,
     request: Request,
-    if_match: Annotated[int | None, Header()] = None,
+    if_match: Annotated[int, Header()],
 ) -> DownloadConfigResponse:
     try:
         config = _services(request).downloads.configure(
@@ -127,9 +133,15 @@ def test_download_connection(request: Request) -> DownloadConnectionResponse:
 
 
 @router.get("/tasks", response_model=list[DownloadTaskResponse])
-def list_download_tasks(request: Request, limit: int = 200) -> list[DownloadTaskResponse]:
-    tasks = _services(request).downloads.list_tasks(limit=min(max(limit, 1), 500))
-    return [DownloadTaskResponse.model_validate(asdict(task)) for task in tasks]
+def list_download_tasks(
+    request: Request,
+    response: Response,
+    limit: PageLimit = 200,
+    cursor: PageCursor = None,
+) -> list[DownloadTaskResponse]:
+    tasks = _services(request).downloads.list_tasks(limit=requested_item_count(cursor, limit))
+    items = [DownloadTaskResponse.model_validate(asdict(task)) for task in tasks]
+    return page_response(items, response, cursor=cursor, limit=limit)
 
 
 @router.post(

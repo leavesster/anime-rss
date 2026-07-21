@@ -176,7 +176,7 @@ def test_scheduled_retention_preserves_subscription_and_correction_history(
             assert connection.scalar(text("SELECT count(*) FROM feed_fetches")) == 0
         retention_run = next(
             item
-            for item in client.get("/api/v1/operations/runs?limit=500").json()
+            for item in client.get("/api/v1/operations/runs?limit=200").json()
             if item["job_kind"] == "system.retention"
         )
         assert retention_run["status"] == "success"

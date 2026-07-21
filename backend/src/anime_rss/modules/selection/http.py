@@ -2,9 +2,15 @@ from dataclasses import asdict
 from datetime import datetime
 from typing import Any, Protocol, cast
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
+from anime_rss.infrastructure.api import (
+    PageCursor,
+    PageLimit,
+    page_response,
+    requested_item_count,
+)
 from anime_rss.modules.selection.api import (
     SelectionCommandError,
     SelectionConflictError,
@@ -100,22 +106,38 @@ def _service(request: Request) -> SelectionService:
 
 @router.get("/episodes", response_model=list[EpisodeSlotResponse])
 def list_episode_slots(
-    request: Request, subscription_id: str | None = None, limit: int = 200
+    request: Request,
+    response: Response,
+    subscription_id: str | None = None,
+    limit: PageLimit = 200,
+    cursor: PageCursor = None,
 ) -> list[EpisodeSlotResponse]:
-    return [
+    items = [
         EpisodeSlotResponse.model_validate(asdict(item))
-        for item in _service(request).list_slots(subscription_id=subscription_id, limit=limit)
+        for item in _service(request).list_slots(
+            subscription_id=subscription_id,
+            limit=requested_item_count(cursor, limit),
+        )
     ]
+    return page_response(items, response, cursor=cursor, limit=limit)
 
 
 @router.get("/decisions", response_model=list[DecisionResponse])
 def list_decisions(
-    request: Request, subscription_id: str | None = None, limit: int = 200
+    request: Request,
+    response: Response,
+    subscription_id: str | None = None,
+    limit: PageLimit = 200,
+    cursor: PageCursor = None,
 ) -> list[DecisionResponse]:
-    return [
+    items = [
         DecisionResponse.model_validate(asdict(item))
-        for item in _service(request).list_decisions(subscription_id=subscription_id, limit=limit)
+        for item in _service(request).list_decisions(
+            subscription_id=subscription_id,
+            limit=requested_item_count(cursor, limit),
+        )
     ]
+    return page_response(items, response, cursor=cursor, limit=limit)
 
 
 @router.post("/process-due", response_model=CommandResultResponse)
@@ -223,11 +245,17 @@ def mark_acquired_elsewhere(
 
 @router.get("/manual-actions", response_model=list[ManualActionResponse])
 def list_manual_actions(
-    request: Request, subscription_id: str | None = None, limit: int = 200
+    request: Request,
+    response: Response,
+    subscription_id: str | None = None,
+    limit: PageLimit = 200,
+    cursor: PageCursor = None,
 ) -> list[ManualActionResponse]:
-    return [
+    items = [
         ManualActionResponse.model_validate(asdict(item))
         for item in _service(request).list_manual_actions(
-            subscription_id=subscription_id, limit=limit
+            subscription_id=subscription_id,
+            limit=requested_item_count(cursor, limit),
         )
     ]
+    return page_response(items, response, cursor=cursor, limit=limit)

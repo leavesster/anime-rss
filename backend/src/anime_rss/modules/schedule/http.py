@@ -5,6 +5,12 @@ from typing import Annotated, Protocol, cast
 from fastapi import APIRouter, Header, HTTPException, Request, Response
 from pydantic import BaseModel
 
+from anime_rss.infrastructure.api import (
+    PageCursor,
+    PageLimit,
+    page_response,
+    requested_item_count,
+)
 from anime_rss.modules.catalog.api import AnimeNotFoundError
 from anime_rss.modules.schedule.api import ScheduleOverrideConflictError, ScheduleService
 
@@ -78,12 +84,19 @@ def calendar(request: Request, days: int = 8) -> list[CalendarDayResponse]:
 
 @router.get("/anime/{anime_id}/episodes", response_model=list[ExpectedEpisodeResponse])
 def anime_history(
-    anime_id: str, request: Request, limit: int = 200
+    anime_id: str,
+    request: Request,
+    response: Response,
+    limit: PageLimit = 200,
+    cursor: PageCursor = None,
 ) -> list[ExpectedEpisodeResponse]:
-    return [
+    items = [
         ExpectedEpisodeResponse.model_validate(asdict(item))
-        for item in _service(request).anime_history(anime_id, limit=limit)
+        for item in _service(request).anime_history(
+            anime_id, limit=requested_item_count(cursor, limit)
+        )
     ]
+    return page_response(items, response, cursor=cursor, limit=limit)
 
 
 @router.get(
@@ -93,12 +106,16 @@ def anime_history(
 def list_overrides(
     anime_id: str,
     request: Request,
+    response: Response,
+    limit: PageLimit = 100,
+    cursor: PageCursor = None,
 ) -> list[EpisodeScheduleOverrideResponse]:
     try:
         items = _service(request).list_overrides(anime_id)
     except AnimeNotFoundError as error:
         raise HTTPException(status_code=404, detail="anime not found") from error
-    return [EpisodeScheduleOverrideResponse.model_validate(asdict(item)) for item in items]
+    values = [EpisodeScheduleOverrideResponse.model_validate(asdict(item)) for item in items]
+    return page_response(values, response, cursor=cursor, limit=limit)
 
 
 @router.put(
@@ -110,7 +127,7 @@ def put_override(
     episode_key: str,
     payload: EpisodeScheduleOverrideRequest,
     request: Request,
-    if_match: Annotated[int | None, Header()] = None,
+    if_match: Annotated[int, Header()],
 ) -> EpisodeScheduleOverrideResponse:
     try:
         item = _service(request).put_override(
@@ -139,7 +156,7 @@ def delete_override(
     anime_id: str,
     episode_key: str,
     request: Request,
-    if_match: Annotated[int | None, Header()] = None,
+    if_match: Annotated[int, Header()],
 ) -> Response:
     try:
         _service(request).delete_override(
@@ -157,11 +174,17 @@ def delete_override(
 
 
 @router.get("/missing", response_model=list[ExpectedEpisodeResponse])
-def missing(request: Request, limit: int = 100) -> list[ExpectedEpisodeResponse]:
-    return [
+def missing(
+    request: Request,
+    response: Response,
+    limit: PageLimit = 100,
+    cursor: PageCursor = None,
+) -> list[ExpectedEpisodeResponse]:
+    items = [
         ExpectedEpisodeResponse.model_validate(asdict(item))
-        for item in _service(request).list_missing(limit=limit)
+        for item in _service(request).list_missing(limit=requested_item_count(cursor, limit))
     ]
+    return page_response(items, response, cursor=cursor, limit=limit)
 
 
 @router.post("/sync", response_model=ScheduleSyncResponse)

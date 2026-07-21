@@ -4,11 +4,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Protocol, cast
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from anime_rss.config import Settings
+from anime_rss.infrastructure.api import PageCursor, PageLimit, page_response
 from anime_rss.modules.system.backup import BackupError, BackupService
 
 router = APIRouter(prefix="/system/backups", tags=["backups"])
@@ -36,10 +37,16 @@ def _service(request: Request) -> BackupService:
 
 
 @router.get("", response_model=list[BackupResponse])
-def list_backups(request: Request) -> list[BackupResponse]:
-    return [
+def list_backups(
+    request: Request,
+    response: Response,
+    limit: PageLimit = 100,
+    cursor: PageCursor = None,
+) -> list[BackupResponse]:
+    items = [
         BackupResponse.model_validate(asdict(item)) for item in _service(request).list_backups()
     ]
+    return page_response(items, response, cursor=cursor, limit=limit)
 
 
 @router.post("", response_model=BackupResponse)

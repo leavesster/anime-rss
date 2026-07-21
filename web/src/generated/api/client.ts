@@ -68,11 +68,23 @@ client.use({
     if (!["GET", "HEAD", "OPTIONS"].includes(request.method)) {
       const token = cookieValue("anime_rss_csrf");
       if (token) request.headers.set("x-csrf-token", token);
+      if (!request.headers.has("idempotency-key")) {
+        request.headers.set("idempotency-key", crypto.randomUUID());
+      }
     }
     return request;
   },
-  onResponse({ response }) {
-    if ([401, 428].includes(response.status) && typeof window !== "undefined") {
+  async onResponse({ response }) {
+    let setupRequired = false;
+    if (response.status === 428) {
+      const payload = (await response.clone().json().catch(() => null)) as unknown;
+      setupRequired =
+        typeof payload === "object" &&
+        payload !== null &&
+        "code" in payload &&
+        payload.code === "administrator_setup_required";
+    }
+    if ((response.status === 401 || setupRequired) && typeof window !== "undefined") {
       window.dispatchEvent(new Event("anime-rss-auth-required"));
     }
     return response;
@@ -89,6 +101,10 @@ export class ApiError extends Error {
 }
 
 function errorMessage(error: unknown): string {
+  if (typeof error === "object" && error !== null && "message" in error) {
+    const message = error.message;
+    if (typeof message === "string") return message;
+  }
   if (typeof error === "object" && error !== null && "detail" in error) {
     const detail = error.detail;
     if (typeof detail === "string") return detail;
@@ -146,16 +162,19 @@ export async function updateFeed(
     await client.PATCH("/api/v1/feeds/{feed_id}", {
       params: {
         path: { feed_id: feedId },
-        header: { "if-match": version },
+        header: { "If-Match": version },
       },
       body: payload,
     }),
   );
 }
 
-export async function deleteFeed(feedId: string): Promise<void> {
+export async function deleteFeed(feedId: string, version: number): Promise<void> {
   const result = await client.DELETE("/api/v1/feeds/{feed_id}", {
-    params: { path: { feed_id: feedId } },
+    params: {
+      path: { feed_id: feedId },
+      header: { "If-Match": version },
+    },
   });
   if (result.error !== undefined) {
     throw new ApiError(errorMessage(result.error), result.response.status);
@@ -267,11 +286,15 @@ export async function importBangumi(bangumiId: number): Promise<Anime> {
 
 export async function updateAnimeSchedule(
   animeId: string,
+  version: number,
   payload: AnimeScheduleUpdate,
 ): Promise<Anime> {
   return unwrap(
     await client.PUT("/api/v1/catalog/anime/{anime_id}/schedule", {
-      params: { path: { anime_id: animeId } },
+      params: {
+        path: { anime_id: animeId },
+        header: { "If-Match": version },
+      },
       body: payload,
     }),
   );
@@ -294,7 +317,7 @@ export async function updateSubscription(
     await client.PATCH("/api/v1/subscriptions/{subscription_id}", {
       params: {
         path: { subscription_id: subscriptionId },
-        header: { "if-match": version },
+        header: { "If-Match": version },
       },
       body: payload,
     }),
@@ -311,7 +334,7 @@ export async function saveGlobalPreferences(
 ): Promise<PreferenceProfile> {
   return unwrap(
     await client.PUT("/api/v1/subscriptions/preferences/global", {
-      params: { header: { "if-match": version } },
+      params: { header: { "If-Match": version } },
       body: rules,
     }),
   );
@@ -426,11 +449,11 @@ export async function getDownloadConfig(): Promise<DownloadConfig | null> {
 
 export async function saveDownloadConfig(
   payload: DownloadConfigRequest,
-  version?: number,
+  version = 0,
 ): Promise<DownloadConfig> {
   return unwrap(
     await client.PUT("/api/v1/downloads/config", {
-      params: { header: { "if-match": version } },
+      params: { header: { "If-Match": version } },
       body: payload,
     }),
   );
@@ -526,13 +549,13 @@ export async function saveEpisodeScheduleOverride(
   animeId: string,
   episodeKey: string,
   payload: EpisodeScheduleOverrideRequest,
-  version?: number,
+  version = 0,
 ): Promise<EpisodeScheduleOverride> {
   return unwrap(
     await client.PUT("/api/v1/schedule/anime/{anime_id}/overrides/{episode_key}", {
       params: {
         path: { anime_id: animeId, episode_key: episodeKey },
-        header: { "if-match": version },
+        header: { "If-Match": version },
       },
       body: payload,
     }),
@@ -542,14 +565,14 @@ export async function saveEpisodeScheduleOverride(
 export async function deleteEpisodeScheduleOverride(
   animeId: string,
   episodeKey: string,
-  version?: number,
+  version: number,
 ): Promise<void> {
   const result = await client.DELETE(
     "/api/v1/schedule/anime/{anime_id}/overrides/{episode_key}",
     {
       params: {
         path: { anime_id: animeId, episode_key: episodeKey },
-        header: { "if-match": version },
+        header: { "If-Match": version },
       },
     },
   );
@@ -582,11 +605,11 @@ export async function getNotificationConfig(): Promise<NotificationConfig | null
 
 export async function saveNotificationConfig(
   payload: NotificationConfigRequest,
-  version?: number,
+  version = 0,
 ): Promise<NotificationConfig> {
   return unwrap(
     await client.PUT("/api/v1/notifications/config", {
-      params: { header: { "if-match": version } },
+      params: { header: { "If-Match": version } },
       body: payload,
     }),
   );

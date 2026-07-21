@@ -2,9 +2,15 @@ from dataclasses import asdict
 from datetime import datetime
 from typing import Annotated, Protocol, cast
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Header, HTTPException, Request, Response
 from pydantic import BaseModel, Field, HttpUrl
 
+from anime_rss.infrastructure.api import (
+    PageCursor,
+    PageLimit,
+    page_response,
+    requested_item_count,
+)
 from anime_rss.modules.notifications.adapters import WebhookError
 from anime_rss.modules.notifications.api import NotificationService
 
@@ -64,7 +70,7 @@ def get_config(request: Request) -> NotificationConfigResponse | None:
 def configure(
     payload: NotificationConfigRequest,
     request: Request,
-    if_match: Annotated[int | None, Header()] = None,
+    if_match: Annotated[int, Header()],
 ) -> NotificationConfigResponse:
     try:
         value = _service(request).configure(
@@ -88,11 +94,17 @@ def test_webhook(request: Request) -> None:
 
 
 @router.get("", response_model=list[NotificationResponse])
-def list_notifications(request: Request, limit: int = 100) -> list[NotificationResponse]:
-    return [
+def list_notifications(
+    request: Request,
+    response: Response,
+    limit: PageLimit = 100,
+    cursor: PageCursor = None,
+) -> list[NotificationResponse]:
+    items = [
         NotificationResponse.model_validate(asdict(item))
-        for item in _service(request).list_notifications(limit=limit)
+        for item in _service(request).list_notifications(limit=requested_item_count(cursor, limit))
     ]
+    return page_response(items, response, cursor=cursor, limit=limit)
 
 
 @router.post("/{notification_id}/read", response_model=NotificationResponse)

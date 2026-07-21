@@ -26,6 +26,7 @@ def test_notification_event_webhook_delivery_and_read_state(tmp_path: Path) -> N
     with TestClient(create_app(settings, webhook_transport=httpx.MockTransport(webhook))) as client:
         configured = client.put(
             "/api/v1/notifications/config",
+            headers={"If-Match": "0"},
             json={
                 "webhook_enabled": True,
                 "webhook_url": "https://notify.test/hook?secret=hidden",
@@ -85,6 +86,7 @@ def test_webhook_transient_failure_is_retained_for_retry(tmp_path: Path) -> None
     with TestClient(create_app(settings, webhook_transport=transport)) as client:
         client.put(
             "/api/v1/notifications/config",
+            headers={"If-Match": "0"},
             json={"webhook_enabled": True, "webhook_url": "https://notify.test/hook"},
         )
         services: ServiceContainer = client.app.state.services

@@ -6,6 +6,7 @@ from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
+from anime_rss.infrastructure import api as api_persistence  # noqa: F401
 from anime_rss.infrastructure import events as event_persistence  # noqa: F401
 from anime_rss.infrastructure.database import Base, create_database_engine
 from anime_rss.infrastructure.migrations import run_migrations

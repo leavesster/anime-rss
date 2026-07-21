@@ -179,7 +179,10 @@ def test_feed_test_update_history_and_delete_flow(tmp_path: Path) -> None:
         assert history[0]["status"] == "success"
         assert history[0]["new_entry_count"] == 1
 
-        deleted = client.delete(f"/api/v1/feeds/{created['id']}")
+        deleted = client.delete(
+            f"/api/v1/feeds/{created['id']}",
+            headers={"If-Match": str(updated.json()["version"])},
+        )
         assert deleted.status_code == 204
         assert client.get(f"/api/v1/feeds/{created['id']}/entries").status_code == 404
 

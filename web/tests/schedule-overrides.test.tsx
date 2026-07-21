@@ -39,6 +39,7 @@ const anime = {
   schedule_updated_at: "2026-07-20T00:00:00Z",
   cover_url: null,
   source: "local",
+  version: 1,
   titles: [],
   created_at: "2026-07-20T00:00:00Z",
   updated_at: "2026-07-20T00:00:00Z",

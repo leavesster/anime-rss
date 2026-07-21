@@ -8,12 +8,21 @@ from time import perf_counter
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import Response
 from sqlalchemy import text
 
 from anime_rss.config import Settings
 from anime_rss.container import ServiceContainer
+from anime_rss.infrastructure.api import (
+    ApiErrorResponse,
+    HttpIdempotencyStore,
+    IdempotencyConflictError,
+    IdempotencyInProgressError,
+    enrich_openapi_contract,
+    error_response,
+)
 from anime_rss.infrastructure.database import create_database_engine, create_session_factory
 from anime_rss.infrastructure.events import EventDispatcher, RegisteredHandler
 from anime_rss.infrastructure.http import SafeHttpClient
@@ -335,8 +344,170 @@ def create_app(
         title="Anime RSS Service",
         version="0.1.0",
         lifespan=lifespan,
+        responses={
+            400: {"model": ApiErrorResponse},
+            401: {"model": ApiErrorResponse},
+            403: {"model": ApiErrorResponse},
+            404: {"model": ApiErrorResponse},
+            409: {"model": ApiErrorResponse},
+            412: {"model": ApiErrorResponse},
+            422: {"model": ApiErrorResponse},
+            428: {"model": ApiErrorResponse},
+            429: {"model": ApiErrorResponse},
+            500: {"model": ApiErrorResponse},
+            503: {"model": ApiErrorResponse},
+        },
     )
     app.state.settings = runtime_settings
+
+    @app.exception_handler(HTTPException)
+    async def http_error_handler(  # pyright: ignore[reportUnusedFunction]
+        request: Request, error: HTTPException
+    ) -> Response:
+        codes = {
+            400: "bad_request",
+            401: "authentication_required",
+            403: "forbidden",
+            404: "resource_not_found",
+            409: "conflict",
+            412: "precondition_failed",
+            413: "request_too_large",
+            422: "unprocessable_request",
+            428: "precondition_required",
+            429: "rate_limited",
+            502: "upstream_error",
+            503: "service_unavailable",
+        }
+        message = error.detail
+        return error_response(
+            request,
+            status_code=error.status_code,
+            code=codes.get(error.status_code, "http_error"),
+            message=message,
+            headers=dict(error.headers) if error.headers is not None else None,
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error_handler(  # pyright: ignore[reportUnusedFunction]
+        request: Request, error: RequestValidationError
+    ) -> Response:
+        return error_response(
+            request,
+            status_code=422,
+            code="request_validation_failed",
+            message="request validation failed",
+            details=error.errors(),
+        )
+
+    @app.exception_handler(Exception)
+    async def unexpected_error_handler(  # pyright: ignore[reportUnusedFunction]
+        request: Request, error: Exception
+    ) -> Response:
+        log_exception(logger, "http.unhandled_error", outcome="failed")
+        return error_response(
+            request,
+            status_code=500,
+            code="internal_error",
+            message="request could not be completed",
+        )
+
+    @app.middleware("http")
+    async def idempotency_boundary(  # pyright: ignore[reportUnusedFunction]
+        request: Request, call_next: Any
+    ) -> Any:
+        excluded = {
+            "/api/v1/auth/setup",
+            "/api/v1/auth/login",
+            "/api/v1/auth/logout",
+            "/api/v1/system/backups/restore/stage",
+        }
+        key = request.headers.get("idempotency-key")
+        if (
+            key is None
+            or request.method in {"GET", "HEAD", "OPTIONS"}
+            or request.url.path in excluded
+            or not request.url.path.startswith("/api/v1")
+        ):
+            return await call_next(request)
+        body = await request.body()
+        store = HttpIdempotencyStore(request.app.state.services.engine)
+        request_hash = store.request_hash(request, body)
+        try:
+            replay = store.claim(key, request_hash)
+        except ValueError as error:
+            return error_response(
+                request,
+                status_code=422,
+                code="invalid_idempotency_key",
+                message=str(error),
+            )
+        except IdempotencyConflictError as error:
+            return error_response(
+                request,
+                status_code=409,
+                code="idempotency_key_conflict",
+                message=str(error),
+            )
+        except IdempotencyInProgressError as error:
+            return error_response(
+                request,
+                status_code=409,
+                code="idempotency_request_in_progress",
+                message=str(error),
+                headers={"Retry-After": "1"},
+            )
+        if replay is not None:
+            response = Response(
+                content=replay.body,
+                status_code=replay.status_code,
+                headers=replay.headers,
+            )
+            response.headers["idempotency-replayed"] = "true"
+            return response
+        try:
+            response = await call_next(request)
+            response_body = b"".join([chunk async for chunk in response.body_iterator])
+        except Exception:
+            store.abandon(key, request_hash)
+            raise
+        replay_headers = {
+            name: value
+            for name in ("content-type", "location", "etag")
+            if (value := response.headers.get(name)) is not None
+        }
+        if 200 <= response.status_code < 400:
+            store.complete(
+                key,
+                request_hash,
+                status_code=response.status_code,
+                body=response_body,
+                headers=replay_headers,
+            )
+        else:
+            store.abandon(key, request_hash)
+        return Response(
+            content=response_body,
+            status_code=response.status_code,
+            headers=dict(response.headers),
+            background=response.background,
+        )
+
+    @app.middleware("http")
+    async def precondition_boundary(  # pyright: ignore[reportUnusedFunction]
+        request: Request, call_next: Any
+    ) -> Any:
+        if (
+            request.url.path.startswith("/api/v1")
+            and request.method in {"PUT", "PATCH", "DELETE"}
+            and request.headers.get("if-match") is None
+        ):
+            return error_response(
+                request,
+                status_code=428,
+                code="if_match_required",
+                message="If-Match header is required",
+            )
+        return await call_next(request)
 
     @app.middleware("http")
     async def authentication_boundary(  # pyright: ignore[reportUnusedFunction]
@@ -356,11 +527,21 @@ def create_app(
         services: ServiceContainer = request.app.state.services
         state = services.auth.status()
         if state.setup_required:
-            return JSONResponse(status_code=428, content={"detail": "administrator setup required"})
+            return error_response(
+                request,
+                status_code=428,
+                code="administrator_setup_required",
+                message="administrator setup required",
+            )
         token = request.cookies.get(SESSION_COOKIE)
         authenticated = services.auth.authenticate(token)
         if authenticated is None:
-            return JSONResponse(status_code=401, content={"detail": "authentication required"})
+            return error_response(
+                request,
+                status_code=401,
+                code="authentication_required",
+                message="authentication required",
+            )
         request.state.auth_session = authenticated
         if request.method not in {"GET", "HEAD", "OPTIONS"}:
             csrf_cookie = request.cookies.get(CSRF_COOKIE)
@@ -371,7 +552,12 @@ def create_app(
                 or not hmac.compare_digest(csrf_cookie, csrf_header)
                 or not services.auth.validate_csrf(authenticated.id, csrf_header)
             ):
-                return JSONResponse(status_code=403, content={"detail": "csrf validation failed"})
+                return error_response(
+                    request,
+                    status_code=403,
+                    code="csrf_validation_failed",
+                    message="csrf validation failed",
+                )
         return await call_next(request)
 
     @app.middleware("http")
@@ -379,6 +565,7 @@ def create_app(
         request: Request, call_next: Any
     ) -> Any:
         correlation_id = normalize_correlation_id(request.headers.get("x-correlation-id"))
+        request.state.correlation_id = correlation_id
         started_at = perf_counter()
         with observation_context(
             correlation_id=correlation_id,
@@ -440,6 +627,15 @@ def create_app(
     api.include_router(settings_router)
     api.include_router(audit_router)
     app.include_router(api)
+
+    generated_openapi = app.openapi
+
+    def openapi_with_http_contract() -> dict[str, Any]:
+        schema = generated_openapi()
+        enrich_openapi_contract(schema)
+        return schema
+
+    app.openapi = openapi_with_http_contract
 
     repository_root = Path(__file__).resolve().parents[3]
     web_dist_dir = runtime_settings.web_dist_dir or repository_root / "web" / "dist"

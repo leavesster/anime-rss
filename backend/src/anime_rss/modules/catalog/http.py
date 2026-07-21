@@ -1,10 +1,11 @@
 from dataclasses import asdict
 from datetime import datetime
-from typing import Protocol, cast
+from typing import Annotated, Protocol, cast
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Header, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
+from anime_rss.infrastructure.api import PageCursor, PageLimit, page_response
 from anime_rss.modules.catalog.adapters import CatalogProviderError
 from anime_rss.modules.catalog.api import AnimeNotFoundError, CatalogService
 
@@ -35,6 +36,7 @@ class AnimeResponse(BaseModel):
     schedule_updated_at: datetime | None
     cover_url: str | None
     source: str
+    version: int
     titles: list[AnimeTitleResponse]
     created_at: datetime
     updated_at: datetime
@@ -82,8 +84,14 @@ def _service(request: Request) -> CatalogService:
 
 
 @router.get("/anime", response_model=list[AnimeResponse])
-def list_anime(request: Request) -> list[AnimeResponse]:
-    return [AnimeResponse.model_validate(asdict(item)) for item in _service(request).list_anime()]
+def list_anime(
+    request: Request,
+    response: Response,
+    limit: PageLimit = 100,
+    cursor: PageCursor = None,
+) -> list[AnimeResponse]:
+    items = [AnimeResponse.model_validate(asdict(item)) for item in _service(request).list_anime()]
+    return page_response(items, response, cursor=cursor, limit=limit)
 
 
 @router.post("/anime", response_model=AnimeResponse, status_code=status.HTTP_201_CREATED)
@@ -96,19 +104,30 @@ def create_local_anime(payload: LocalAnimeCreateRequest, request: Request) -> An
 
 
 @router.post("/anime/{anime_id}/aliases", response_model=AnimeResponse)
-def add_alias(anime_id: str, payload: AliasCreateRequest, request: Request) -> AnimeResponse:
+def add_alias(
+    anime_id: str,
+    payload: AliasCreateRequest,
+    request: Request,
+    if_match: Annotated[int | None, Header()] = None,
+) -> AnimeResponse:
+    if if_match is None:
+        raise HTTPException(status_code=428, detail="If-Match header is required")
     try:
-        anime = _service(request).add_alias(anime_id, payload.alias)
+        anime = _service(request).add_alias(anime_id, payload.alias, expected_version=if_match)
     except AnimeNotFoundError as error:
         raise HTTPException(status_code=404, detail="anime not found") from error
     except ValueError as error:
-        raise HTTPException(status_code=422, detail=str(error)) from error
+        status_code = 409 if str(error) == "anime version conflict" else 422
+        raise HTTPException(status_code=status_code, detail=str(error)) from error
     return AnimeResponse.model_validate(asdict(anime))
 
 
 @router.put("/anime/{anime_id}/schedule", response_model=AnimeResponse)
 def update_schedule(
-    anime_id: str, payload: AnimeScheduleUpdateRequest, request: Request
+    anime_id: str,
+    payload: AnimeScheduleUpdateRequest,
+    request: Request,
+    if_match: Annotated[int, Header()],
 ) -> AnimeResponse:
     try:
         anime = _service(request).update_schedule(
@@ -118,11 +137,13 @@ def update_schedule(
             airing_weekday=payload.airing_weekday,
             airing_time=payload.airing_time,
             schedule_timezone=payload.schedule_timezone,
+            expected_version=if_match,
         )
     except AnimeNotFoundError as error:
         raise HTTPException(status_code=404, detail="anime not found") from error
     except ValueError as error:
-        raise HTTPException(status_code=422, detail=str(error)) from error
+        status_code = 409 if str(error) == "anime version conflict" else 422
+        raise HTTPException(status_code=status_code, detail=str(error)) from error
     return AnimeResponse.model_validate(asdict(anime))
 
 
