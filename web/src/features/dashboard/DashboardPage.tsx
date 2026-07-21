@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, Database, Plus, Rss } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, Database, Plus, Rss, ServerCog } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import { listReleases } from "../../generated/api/client";
+import { getOperationsOverview, listReleases } from "../../generated/api/client";
 import { EmptyState } from "../../shared/components/EmptyState";
 import { ErrorBanner, LoadingState } from "../../shared/components/Feedback";
 import { PageHeader } from "../../shared/components/PageHeader";
@@ -13,8 +13,9 @@ import { feedsQuery } from "../feeds/queries";
 export function DashboardPage() {
   const feeds = useQuery(feedsQuery);
   const releases = useQuery({ queryKey: ["releases"], queryFn: listReleases });
-  const isLoading = feeds.isLoading || releases.isLoading;
-  const hasError = feeds.isError || releases.isError;
+  const operations = useQuery({ queryKey: ["operations-overview"], queryFn: getOperationsOverview, refetchInterval: 15_000 });
+  const isLoading = feeds.isLoading || releases.isLoading || operations.isLoading;
+  const hasError = feeds.isError || releases.isError || operations.isError;
   const healthyFeeds = feeds.data?.filter((feed) => feed.health === "healthy").length ?? 0;
   const attentionFeeds = feeds.data?.filter((feed) => !["healthy", "never_fetched"].includes(feed.health)) ?? [];
 
@@ -25,11 +26,14 @@ export function DashboardPage() {
       {hasError && <ErrorBanner message="部分运行数据暂时无法加载。" />}
       {!isLoading && !hasError && (
         <>
-          <section className="overview-band" aria-label="运行指标">
+          <section className="overview-band overview-band--four" aria-label="运行指标">
             <div className="overview-metric"><span className="metric-icon metric-icon--green"><CheckCircle2 size={19} /></span><div><small>健康订阅源</small><strong>{healthyFeeds}<span> / {feeds.data?.length ?? 0}</span></strong></div></div>
             <div className="overview-metric"><span className="metric-icon metric-icon--blue"><Database size={19} /></span><div><small>唯一发布</small><strong>{releases.data?.length ?? 0}</strong></div></div>
-            <div className="overview-metric"><span className={`metric-icon ${attentionFeeds.length ? "metric-icon--red" : "metric-icon--gray"}`}><AlertTriangle size={19} /></span><div><small>需要处理</small><strong>{attentionFeeds.length}</strong></div></div>
+            <div className="overview-metric"><span className={`metric-icon ${operations.data?.failed_work.length ? "metric-icon--red" : "metric-icon--gray"}`}><AlertTriangle size={19} /></span><div><small>需要处理</small><strong>{operations.data?.failed_work.length ?? attentionFeeds.length}</strong></div></div>
+            <div className="overview-metric"><span className="metric-icon metric-icon--gray"><ServerCog size={19} /></span><div><small>后台调度</small><strong>{operations.data?.scheduler?.state ?? "启动中"}</strong></div></div>
           </section>
+
+          {operations.data && operations.data.failed_work.length > 0 && <section className="dashboard-section dashboard-attention"><div className="section-heading"><div><h2>需要处理</h2><p>按最近发生时间汇总</p></div><Link to="/operations">查看运行中心<ArrowRight size={15} /></Link></div><div className="compact-list">{operations.data.failed_work.slice(0, 5).map((item) => <Link className="compact-row" to={item.action_path ?? "/operations"} key={item.key}><span className="compact-row__icon compact-row__icon--danger"><AlertTriangle size={17} /></span><div><strong>{item.title}</strong><small>{item.detail}{item.error_code ? ` · ${item.error_code}` : ""}</small></div><StatusBadge status="failed" /><ArrowRight className="compact-row__arrow" size={16} /></Link>)}</div></section>}
 
           <div className="dashboard-grid">
             <section className="dashboard-section">

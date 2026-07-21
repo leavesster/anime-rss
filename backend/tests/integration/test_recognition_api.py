@@ -101,3 +101,83 @@ def test_existing_release_events_are_backfilled_on_startup(tmp_path: Path) -> No
     with TestClient(create_app(settings, feed_transport=transport)) as restarted:
         groups = restarted.get("/api/v1/recognition/episode-groups").json()
         assert len(groups) == 2
+
+
+def test_manual_confirmation_re_evaluates_medium_confidence_candidate(tmp_path: Path) -> None:
+    title = "Manual Anime - 01 [1080p AVC][CHS]"
+    info_hash = "5" * 40
+    rss = (
+        '<?xml version="1.0"?><rss version="2.0"><channel><item>'
+        f"<guid>manual-confirm</guid><title>{title}</title>"
+        f'<enclosure url="magnet:?xt=urn:btih:{info_hash}" '
+        'type="application/x-bittorrent" /></item></channel></rss>'
+    ).encode()
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, content=rss))
+
+    with TestClient(create_app(_settings(tmp_path), feed_transport=transport)) as client:
+        anime = client.post("/api/v1/catalog/anime", json={"title": "Manual Anime"}).json()
+        client.post(
+            "/api/v1/subscriptions",
+            json={"anime_id": anime["id"], "rules": {"fallback_wait_minutes": 0}},
+        )
+        feed = client.post(
+            "/api/v1/feeds", json={"name": "Manual", "url": "https://feed.test/rss"}
+        ).json()
+        client.post(f"/api/v1/feeds/{feed['id']}/refresh")
+        candidate = client.get("/api/v1/recognition/episode-groups").json()[0]["candidates"][0]
+
+        assert candidate["confidence"] == "medium"
+        assert client.get("/api/v1/selection/episodes").json()[0]["state"] == "needs_confirmation"
+        confirmed = client.post(f"/api/v1/recognition/candidates/{candidate['id']}/confirm")
+
+        assert confirmed.status_code == 200
+        assert confirmed.json()["recognition_eligible"] is True
+        assert confirmed.json()["confidence"] == "high"
+        assert client.get("/api/v1/selection/episodes").json()[0]["state"] == "decided"
+
+
+def test_manual_remap_turns_unmatched_release_into_candidate(tmp_path: Path) -> None:
+    info_hash = "6" * 40
+    rss = (
+        '<?xml version="1.0"?><rss version="2.0"><channel><item>'
+        "<guid>manual-remap</guid><title>Unknown weekly package</title>"
+        f'<enclosure url="magnet:?xt=urn:btih:{info_hash}" '
+        'type="application/x-bittorrent" /></item></channel></rss>'
+    ).encode()
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, content=rss))
+
+    with TestClient(create_app(_settings(tmp_path), feed_transport=transport)) as client:
+        anime = client.post("/api/v1/catalog/anime", json={"title": "Mapped Anime"}).json()
+        client.post(
+            "/api/v1/subscriptions",
+            json={
+                "anime_id": anime["id"],
+                "rules": {
+                    "allowed_subtitles": [],
+                    "allowed_resolutions": [],
+                    "allowed_codecs": [],
+                    "fallback_wait_minutes": 0,
+                },
+            },
+        )
+        feed = client.post(
+            "/api/v1/feeds", json={"name": "Unknown", "url": "https://feed.test/rss"}
+        ).json()
+        client.post(f"/api/v1/feeds/{feed['id']}/refresh")
+        unmatched = client.get("/api/v1/recognition/unmatched").json()[0]
+
+        remapped = client.post(
+            f"/api/v1/recognition/releases/{unmatched['release_id']}/remap",
+            json={
+                "series_title": "Mapped Anime",
+                "episode_start": "2",
+                "season": 1,
+                "release_group": "Manual Group",
+            },
+        )
+
+        assert remapped.status_code == 200
+        assert remapped.json()["episode_key"] == "2"
+        assert remapped.json()["recognition_eligible"] is True
+        assert client.get("/api/v1/recognition/unmatched").json() == []
+        assert client.get("/api/v1/selection/episodes").json()[0]["state"] == "decided"

@@ -556,6 +556,100 @@
         }
       }
     },
+    "/api/v1/recognition/candidates/{candidate_id}/confirm": {
+      "post": {
+        "tags": [
+          "recognition"
+        ],
+        "summary": "Confirm Candidate",
+        "operationId": "confirm_candidate_api_v1_recognition_candidates__candidate_id__confirm_post",
+        "parameters": [
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Candidate Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CandidateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/recognition/releases/{release_id}/remap": {
+      "post": {
+        "tags": [
+          "recognition"
+        ],
+        "summary": "Remap Release",
+        "operationId": "remap_release_api_v1_recognition_releases__release_id__remap_post",
+        "parameters": [
+          {
+            "name": "release_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Release Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseRemapRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CandidateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/catalog/anime": {
       "get": {
         "tags": [
@@ -1317,6 +1411,189 @@
           }
         }
       }
+    },
+    "/api/v1/operations/overview": {
+      "get": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Get Operations Overview",
+        "operationId": "get_operations_overview_api_v1_operations_overview_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationsOverviewResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/operations/jobs": {
+      "get": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "List Scheduled Jobs",
+        "operationId": "list_scheduled_jobs_api_v1_operations_jobs_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 200,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ScheduledJobResponse"
+                  },
+                  "title": "Response List Scheduled Jobs Api V1 Operations Jobs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/operations/runs": {
+      "get": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "List Job Runs",
+        "operationId": "list_job_runs_api_v1_operations_runs_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/JobRunResponse"
+                  },
+                  "title": "Response List Job Runs Api V1 Operations Runs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/operations/run-now": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Run Scheduler Now",
+        "operationId": "run_scheduler_now_api_v1_operations_run_now_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunNowResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/audit/events": {
+      "get": {
+        "tags": [
+          "audit"
+        ],
+        "summary": "List Audit Events",
+        "operationId": "list_audit_events_api_v1_audit_events_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuditEventResponse"
+                  },
+                  "title": "Response List Audit Events Api V1 Audit Events Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1502,6 +1779,58 @@
           "source"
         ],
         "title": "AnimeTitleResponse"
+      },
+      "AuditEventResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "event_type": {
+            "type": "string",
+            "title": "Event Type"
+          },
+          "entity_type": {
+            "type": "string",
+            "title": "Entity Type"
+          },
+          "entity_id": {
+            "type": "string",
+            "title": "Entity Id"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "event_type",
+          "entity_type",
+          "entity_id",
+          "payload",
+          "correlation_id",
+          "created_at"
+        ],
+        "title": "AuditEventResponse"
       },
       "BackfillCommitRequest": {
         "properties": {
@@ -1875,6 +2204,47 @@
           "created_at"
         ],
         "title": "DecisionResponse"
+      },
+      "DependencyStatusResponse": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "observed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "status",
+          "summary",
+          "observed_at"
+        ],
+        "title": "DependencyStatusResponse"
       },
       "DownloadConfigRequest": {
         "properties": {
@@ -2392,6 +2762,71 @@
         ],
         "title": "EpisodeSlotResponse"
       },
+      "FailedWorkResponse": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          },
+          "action_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "kind",
+          "title",
+          "detail",
+          "error_code",
+          "occurred_at",
+          "action_path"
+        ],
+        "title": "FailedWorkResponse"
+      },
       "FeedCreateRequest": {
         "properties": {
           "name": {
@@ -2802,6 +3237,86 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "JobRunResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "job_kind": {
+            "type": "string",
+            "title": "Job Kind"
+          },
+          "dedupe_key": {
+            "type": "string",
+            "title": "Dedupe Key"
+          },
+          "worker_id": {
+            "type": "string",
+            "title": "Worker Id"
+          },
+          "attempt": {
+            "type": "integer",
+            "title": "Attempt"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Details"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "job_id",
+          "job_kind",
+          "dedupe_key",
+          "worker_id",
+          "attempt",
+          "status",
+          "error_code",
+          "details",
+          "started_at",
+          "finished_at"
+        ],
+        "title": "JobRunResponse"
+      },
       "LocalAnimeCreateRequest": {
         "properties": {
           "title": {
@@ -2824,6 +3339,46 @@
           "title"
         ],
         "title": "LocalAnimeCreateRequest"
+      },
+      "OperationsOverviewResponse": {
+        "properties": {
+          "scheduler": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SchedulerStateResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dependencies": {
+            "items": {
+              "$ref": "#/components/schemas/DependencyStatusResponse"
+            },
+            "type": "array",
+            "title": "Dependencies"
+          },
+          "failed_work": {
+            "items": {
+              "$ref": "#/components/schemas/FailedWorkResponse"
+            },
+            "type": "array",
+            "title": "Failed Work"
+          },
+          "pending_jobs": {
+            "type": "integer",
+            "title": "Pending Jobs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scheduler",
+          "dependencies",
+          "failed_work",
+          "pending_jobs"
+        ],
+        "title": "OperationsOverviewResponse"
       },
       "PreferenceRulesModel": {
         "properties": {
@@ -3034,6 +3589,65 @@
         ],
         "title": "RefreshResponse"
       },
+      "ReleaseRemapRequest": {
+        "properties": {
+          "series_title": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Series Title"
+          },
+          "episode_start": {
+            "type": "string",
+            "maxLength": 24,
+            "minLength": 1,
+            "title": "Episode Start"
+          },
+          "episode_end": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 24
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Episode End"
+          },
+          "season": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 99.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season"
+          },
+          "release_group": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Group"
+          }
+        },
+        "type": "object",
+        "required": [
+          "series_title",
+          "episode_start"
+        ],
+        "title": "ReleaseRemapRequest"
+      },
       "ReleaseResponse": {
         "properties": {
           "id": {
@@ -3096,6 +3710,184 @@
           "source_count"
         ],
         "title": "ReleaseResponse"
+      },
+      "RunNowResponse": {
+        "properties": {
+          "processed": {
+            "type": "integer",
+            "title": "Processed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "processed"
+        ],
+        "title": "RunNowResponse"
+      },
+      "ScheduledJobResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "job_kind": {
+            "type": "string",
+            "title": "Job Kind"
+          },
+          "dedupe_key": {
+            "type": "string",
+            "title": "Dedupe Key"
+          },
+          "due_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Due At"
+          },
+          "attempt": {
+            "type": "integer",
+            "title": "Attempt"
+          },
+          "lease_owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lease Owner"
+          },
+          "lease_until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lease Until"
+          },
+          "last_error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error Code"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "job_kind",
+          "dedupe_key",
+          "due_at",
+          "attempt",
+          "lease_owner",
+          "lease_until",
+          "last_error_code",
+          "updated_at"
+        ],
+        "title": "ScheduledJobResponse"
+      },
+      "SchedulerStateResponse": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "worker_id": {
+            "type": "string",
+            "title": "Worker Id"
+          },
+          "last_cycle_started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Cycle Started At"
+          },
+          "last_cycle_finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Cycle Finished At"
+          },
+          "last_success_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success At"
+          },
+          "last_error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error Code"
+          },
+          "next_wake_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Wake At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "state",
+          "worker_id",
+          "last_cycle_started_at",
+          "last_cycle_finished_at",
+          "last_success_at",
+          "last_error_code",
+          "next_wake_at",
+          "updated_at"
+        ],
+        "title": "SchedulerStateResponse"
       },
       "SubscriptionCreateRequest": {
         "properties": {

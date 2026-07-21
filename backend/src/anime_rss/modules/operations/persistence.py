@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, String, UniqueConstraint
+from sqlalchemy import JSON, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from anime_rss.infrastructure.database import Base, UTCDateTime
@@ -24,4 +24,36 @@ class ScheduledJobRecord(Base):
     lease_until: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True, index=True)
     last_error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
+
+
+class JobRunRecord(Base):
+    __tablename__ = "runtime_job_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    job_id: Mapped[str] = mapped_column(
+        ForeignKey("runtime_scheduled_jobs.id", ondelete="CASCADE"), index=True
+    )
+    job_kind: Mapped[str] = mapped_column(String(80), index=True)
+    dedupe_key: Mapped[str] = mapped_column(String(160))
+    worker_id: Mapped[str] = mapped_column(String(120), index=True)
+    attempt: Mapped[int]
+    status: Mapped[str] = mapped_column(String(24), index=True)
+    error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    details: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    started_at: Mapped[datetime] = mapped_column(UTCDateTime(), index=True)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+
+class SchedulerStateRecord(Base):
+    __tablename__ = "runtime_scheduler_state"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    worker_id: Mapped[str] = mapped_column(String(120))
+    state: Mapped[str] = mapped_column(String(24), index=True)
+    last_cycle_started_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    last_cycle_finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    last_success_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    last_error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    next_wake_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)

@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +16,8 @@ from anime_rss.infrastructure.http import SafeHttpClient
 from anime_rss.infrastructure.migrations import run_migrations
 from anime_rss.infrastructure.web import SpaStaticFiles
 from anime_rss.kernel.time import Clock, utc_now
+from anime_rss.modules.audit.api import AuditService
+from anime_rss.modules.audit.http import router as audit_router
 from anime_rss.modules.catalog.adapters import BangumiClient
 from anime_rss.modules.catalog.api import CatalogService
 from anime_rss.modules.catalog.http import router as catalog_router
@@ -26,6 +28,8 @@ from anime_rss.modules.feeds.adapters import FeedDocumentParser
 from anime_rss.modules.feeds.api import FeedEntryQueries, FeedService, Jitter
 from anime_rss.modules.feeds.http import router as feeds_router
 from anime_rss.modules.operations.api import JobService
+from anime_rss.modules.operations.http import router as operations_router
+from anime_rss.modules.operations.worker import Scheduler
 from anime_rss.modules.recognition.api import RecognitionService
 from anime_rss.modules.recognition.http import router as recognition_router
 from anime_rss.modules.releases.api import ReleaseService
@@ -35,26 +39,19 @@ from anime_rss.modules.selection.http import router as selection_router
 from anime_rss.modules.subscriptions.api import SubscriptionService
 from anime_rss.modules.subscriptions.http import router as subscriptions_router
 from anime_rss.modules.system.api import FileSecretCipher
+from anime_rss.runtime import ApplicationRuntime
 
 
-async def _run_selection_deadlines(
-    selection: SelectionService, stop: asyncio.Event, interval_seconds: float
+async def _run_scheduler(
+    scheduler: Scheduler, stop: asyncio.Event, interval_seconds: float
 ) -> None:
     while not stop.is_set():
+        with suppress(Exception):
+            await asyncio.to_thread(scheduler.run_once, next_wake_seconds=interval_seconds)
         try:
             await asyncio.wait_for(stop.wait(), timeout=interval_seconds)
         except TimeoutError:
-            await asyncio.to_thread(selection.process_due)
-
-
-async def _run_download_cycles(
-    downloads: DownloadService, stop: asyncio.Event, interval_seconds: float
-) -> None:
-    while not stop.is_set():
-        try:
-            await asyncio.wait_for(stop.wait(), timeout=interval_seconds)
-        except TimeoutError:
-            await asyncio.to_thread(downloads.process_cycle)
+            continue
 
 
 def create_app(
@@ -158,6 +155,25 @@ def create_app(
             },
             clock=clock,
         )
+        jobs = JobService(session_factory, clock=clock)
+        runtime = ApplicationRuntime(
+            feeds=feeds,
+            events=events,
+            selection=selection,
+            downloads=downloads,
+            recognition=recognition,
+            jobs=jobs,
+            clock=clock,
+            selection_interval_seconds=max(1, int(runtime_settings.selection_poll_seconds)),
+            download_interval_seconds=max(1, int(runtime_settings.download_poll_seconds)),
+        )
+        scheduler = Scheduler(
+            jobs,
+            handlers=runtime.handlers,
+            schedule_sources=[runtime.schedules],
+            clock=clock,
+            lease_seconds=runtime_settings.scheduler_lease_seconds,
+        )
         services = ServiceContainer(
             engine=engine,
             feed_http_client=feed_client,
@@ -171,7 +187,10 @@ def create_app(
             subscriptions=subscriptions,
             selection=selection,
             downloads=downloads,
-            jobs=JobService(session_factory, clock=clock),
+            jobs=jobs,
+            audit=AuditService(session_factory),
+            diagnostics=runtime,
+            scheduler=scheduler,
             events=events,
         )
         app.state.services = services
@@ -186,21 +205,17 @@ def create_app(
         selection.process_due()
         downloads.recover_inflight(force=True)
         downloads.process_cycle()
-        deadline_stop = asyncio.Event()
-        deadline_task = asyncio.create_task(
-            _run_selection_deadlines(
-                selection, deadline_stop, runtime_settings.selection_poll_seconds
-            )
-        )
-        download_task = asyncio.create_task(
-            _run_download_cycles(downloads, deadline_stop, runtime_settings.download_poll_seconds)
+        scheduler.recover()
+        scheduler.run_once(next_wake_seconds=runtime_settings.scheduler_poll_seconds)
+        scheduler_stop = asyncio.Event()
+        scheduler_task = asyncio.create_task(
+            _run_scheduler(scheduler, scheduler_stop, runtime_settings.scheduler_poll_seconds)
         )
         try:
             yield
         finally:
-            deadline_stop.set()
-            await deadline_task
-            await download_task
+            scheduler_stop.set()
+            await scheduler_task
             services.close()
 
     app = FastAPI(
@@ -230,6 +245,8 @@ def create_app(
     api.include_router(subscriptions_router)
     api.include_router(selection_router)
     api.include_router(downloads_router)
+    api.include_router(operations_router)
+    api.include_router(audit_router)
     app.include_router(api)
 
     repository_root = Path(__file__).resolve().parents[3]

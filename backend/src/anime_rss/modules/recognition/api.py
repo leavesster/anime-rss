@@ -13,11 +13,18 @@ from anime_rss.kernel.ids import new_id
 from anime_rss.kernel.time import Clock, utc_now
 from anime_rss.modules.audit.api import record_event
 from anime_rss.modules.recognition.domain import (
+    ContentKind,
     MatchConfidence,
     ParsedReleaseTitle,
+    canonical_episode_number,
+    normalize_series_key,
     parse_release_title,
 )
-from anime_rss.modules.recognition.persistence import CandidateRecord, MatchAttemptRecord
+from anime_rss.modules.recognition.persistence import (
+    CandidateRecord,
+    ManualActionRecord,
+    MatchAttemptRecord,
+)
 from anime_rss.modules.releases.api import ReleaseRecognitionSource
 
 
@@ -69,6 +76,14 @@ class UnmatchedRelease:
     confidence: str
     reason_code: str
     parsed_at: datetime
+
+
+class CandidateNotFoundError(LookupError):
+    pass
+
+
+class ReleaseRemapError(ValueError):
+    pass
 
 
 class RecognitionService:
@@ -243,9 +258,15 @@ class RecognitionService:
 
     def list_unmatched(self, *, limit: int = 100) -> list[UnmatchedRelease]:
         with self._session_factory() as session:
+            candidate_exists = select(CandidateRecord.id).where(
+                CandidateRecord.attempt_id == MatchAttemptRecord.id
+            )
             statement = (
                 select(MatchAttemptRecord)
-                .where(MatchAttemptRecord.confidence == MatchConfidence.LOW.value)
+                .where(
+                    MatchAttemptRecord.confidence == MatchConfidence.LOW.value,
+                    ~candidate_exists.exists(),
+                )
                 .order_by(MatchAttemptRecord.parsed_at.desc())
                 .limit(min(max(limit, 1), 500))
             )
@@ -260,6 +281,145 @@ class RecognitionService:
                 )
                 for record in session.scalars(statement)
             ]
+
+    def confirm_candidate(self, candidate_id: str) -> Candidate:
+        now = self._clock()
+        with self._session_factory.begin() as session:
+            record = session.get(CandidateRecord, candidate_id)
+            if record is None:
+                raise CandidateNotFoundError(candidate_id)
+            if not record.recognition_eligible or record.confidence != MatchConfidence.HIGH.value:
+                previous_confidence = record.confidence
+                record.recognition_eligible = True
+                record.confidence = MatchConfidence.HIGH.value
+                session.add(
+                    ManualActionRecord(
+                        candidate_id=record.id,
+                        attempt_id=record.attempt_id,
+                        action="confirmed",
+                        payload={"previous_confidence": previous_confidence},
+                        created_at=now,
+                    )
+                )
+                append_event(
+                    session,
+                    name="CandidateEvaluated.v1",
+                    payload={
+                        "candidate_id": record.id,
+                        "release_id": record.release_id,
+                        "episode_key": record.episode_key,
+                        "trigger": "manual_confirmation",
+                    },
+                )
+                record_event(
+                    session,
+                    event_type="recognition.candidate_confirmed",
+                    entity_type="candidate",
+                    entity_id=record.id,
+                    payload={"episode_key": record.episode_key},
+                )
+        candidate = self.get_candidate(candidate_id)
+        if candidate is None:
+            raise CandidateNotFoundError(candidate_id)
+        return candidate
+
+    def remap_release(
+        self,
+        release_id: str,
+        *,
+        series_title: str,
+        episode_start: str,
+        episode_end: str | None = None,
+        season: int | None = None,
+        release_group: str | None = None,
+    ) -> Candidate:
+        title = series_title.strip()[:300]
+        series_key = normalize_series_key(title)
+        start = canonical_episode_number(episode_start)
+        end = canonical_episode_number(episode_end)
+        if not title or not series_key:
+            raise ReleaseRemapError("series title is required")
+        if start is None or (episode_end is not None and end is None):
+            raise ReleaseRemapError("episode number is invalid")
+        if end is not None and start == end:
+            end = None
+        episode_key = f"{start}-{end}" if end else start
+        now = self._clock()
+        with self._session_factory.begin() as session:
+            if session.scalar(
+                select(CandidateRecord.id).where(CandidateRecord.release_id == release_id)
+            ):
+                raise ReleaseRemapError("release already has a candidate")
+            attempt = session.scalar(
+                select(MatchAttemptRecord)
+                .where(MatchAttemptRecord.release_id == release_id)
+                .order_by(MatchAttemptRecord.parsed_at.desc(), MatchAttemptRecord.id.desc())
+            )
+            if attempt is None:
+                raise CandidateNotFoundError(release_id)
+            source = self._sources.get_recognition_source(release_id, attempt.feed_entry_id)
+            if source is None:
+                raise CandidateNotFoundError(release_id)
+            candidate_id = new_id()
+            session.add(
+                CandidateRecord(
+                    id=candidate_id,
+                    release_id=release_id,
+                    attempt_id=attempt.id,
+                    source_title=attempt.source_title,
+                    series_title=title,
+                    series_key=series_key,
+                    season=season,
+                    episode_start=start,
+                    episode_end=end,
+                    episode_key=episode_key,
+                    release_group=(release_group.strip()[:120] if release_group else None),
+                    resolution=attempt.resolution,
+                    video_codec=attempt.video_codec,
+                    subtitle_language=attempt.subtitle_language,
+                    revision=attempt.revision,
+                    content_kind=(attempt.content_kind or ContentKind.EPISODE.value),
+                    confidence=MatchConfidence.HIGH.value,
+                    recognition_eligible=source.automation_eligible,
+                    first_seen_at=source.first_seen_at,
+                )
+            )
+            session.flush()
+            session.add(
+                ManualActionRecord(
+                    candidate_id=candidate_id,
+                    attempt_id=attempt.id,
+                    action="remapped",
+                    payload={
+                        "series_title": title,
+                        "series_key": series_key,
+                        "season": season,
+                        "episode_key": episode_key,
+                        "release_group": release_group,
+                    },
+                    created_at=now,
+                )
+            )
+            append_event(
+                session,
+                name="CandidateEvaluated.v1",
+                payload={
+                    "candidate_id": candidate_id,
+                    "release_id": release_id,
+                    "episode_key": episode_key,
+                    "trigger": "manual_remap",
+                },
+            )
+            record_event(
+                session,
+                event_type="recognition.release_remapped",
+                entity_type="release",
+                entity_id=release_id,
+                payload={"candidate_id": candidate_id, "episode_key": episode_key},
+            )
+        candidate = self.get_candidate(candidate_id)
+        assert candidate is not None
+        return candidate
 
     def get_candidate(self, candidate_id: str) -> Candidate | None:
         with self._session_factory() as session:

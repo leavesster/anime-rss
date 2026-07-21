@@ -15,7 +15,7 @@ The ingestion slice and its first management interface are implemented:
 - persisted feed health, retry state, fetch history, and normalized entries
 - exact raw bencoded `info` hashing for v1, hybrid, and pure v2 torrents
 - cross-feed release deduplication through durable integration events
-- durable scheduler job leases
+- durable scheduler leases, execution history, recovery, and automatic feed refresh
 - responsive React dashboard, feed management, fetch history, and release library
 - generated TypeScript API types and production static asset serving
 - deterministic title recognition and same-episode candidate grouping
@@ -24,10 +24,12 @@ The ingestion slice and its first management interface are implemented:
 - encrypted qBittorrent configuration and connectivity validation
 - idempotent magnet/torrent submission, task reconciliation, and explicit retry
 - V2/V3 cancellation without deleting completed files
+- dependency health, failed-work aggregation, and append-only audit history
+- manual candidate confirmation and unmatched-release mapping
 - versioned implementation decision record for handoff and review
 
-Authentication and automatic feed scheduling are later slices. The current
-application is therefore a development build and must not be exposed publicly.
+Authentication is a later slice. The current application operates continuously
+but remains a trusted-network development build and must not be exposed publicly.
 
 ## Development
 
@@ -65,6 +67,8 @@ GET    /api/v1/feeds/{feed_id}/fetches
 GET    /api/v1/releases
 GET    /api/v1/recognition/episode-groups
 GET    /api/v1/recognition/unmatched
+POST   /api/v1/recognition/candidates/{candidate_id}/confirm
+POST   /api/v1/recognition/releases/{release_id}/remap
 GET    /api/v1/catalog/anime
 POST   /api/v1/catalog/anime
 GET    /api/v1/catalog/bangumi/search
@@ -83,4 +87,9 @@ POST   /api/v1/downloads/config/test
 GET    /api/v1/downloads/tasks
 POST   /api/v1/downloads/tasks/{task_id}/retry
 POST   /api/v1/downloads/process
+GET    /api/v1/operations/overview
+GET    /api/v1/operations/jobs
+GET    /api/v1/operations/runs
+POST   /api/v1/operations/run-now
+GET    /api/v1/audit/events
 ```

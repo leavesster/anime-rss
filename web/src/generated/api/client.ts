@@ -27,6 +27,11 @@ export type DownloadConfigRequest = components["schemas"]["DownloadConfigRequest
 export type DownloadConnection = components["schemas"]["DownloadConnectionResponse"];
 export type DownloadTask = components["schemas"]["DownloadTaskResponse"];
 export type DownloadCycle = components["schemas"]["DownloadCycleResponse"];
+export type OperationsOverview = components["schemas"]["OperationsOverviewResponse"];
+export type ScheduledJob = components["schemas"]["ScheduledJobResponse"];
+export type JobRun = components["schemas"]["JobRunResponse"];
+export type AuditEvent = components["schemas"]["AuditEventResponse"];
+export type ReleaseRemap = components["schemas"]["ReleaseRemapRequest"];
 
 const client = createClient<paths>({ baseUrl: "" });
 
@@ -144,6 +149,23 @@ export async function listUnmatchedReleases(): Promise<UnmatchedRelease[]> {
   return unwrap(
     await client.GET("/api/v1/recognition/unmatched", {
       params: { query: { limit: 200 } },
+    }),
+  );
+}
+
+export async function confirmCandidate(candidateId: string): Promise<Candidate> {
+  return unwrap(
+    await client.POST("/api/v1/recognition/candidates/{candidate_id}/confirm", {
+      params: { path: { candidate_id: candidateId } },
+    }),
+  );
+}
+
+export async function remapRelease(releaseId: string, payload: ReleaseRemap): Promise<Candidate> {
+  return unwrap(
+    await client.POST("/api/v1/recognition/releases/{release_id}/remap", {
+      params: { path: { release_id: releaseId } },
+      body: payload,
     }),
   );
 }
@@ -273,5 +295,31 @@ export async function retryDownloadTask(taskId: string): Promise<DownloadTask> {
     await client.POST("/api/v1/downloads/tasks/{task_id}/retry", {
       params: { path: { task_id: taskId } },
     }),
+  );
+}
+
+export async function getOperationsOverview(): Promise<OperationsOverview> {
+  return unwrap(await client.GET("/api/v1/operations/overview"));
+}
+
+export async function listScheduledJobs(): Promise<ScheduledJob[]> {
+  return unwrap(
+    await client.GET("/api/v1/operations/jobs", { params: { query: { limit: 200 } } }),
+  );
+}
+
+export async function listJobRuns(): Promise<JobRun[]> {
+  return unwrap(
+    await client.GET("/api/v1/operations/runs", { params: { query: { limit: 100 } } }),
+  );
+}
+
+export async function runSchedulerNow(): Promise<{ processed: number }> {
+  return unwrap(await client.POST("/api/v1/operations/run-now"));
+}
+
+export async function listAuditEvents(): Promise<AuditEvent[]> {
+  return unwrap(
+    await client.GET("/api/v1/audit/events", { params: { query: { limit: 100 } } }),
   );
 }

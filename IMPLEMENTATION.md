@@ -2,7 +2,7 @@
 
 Status: Living implementation and decision record
 
-Updated: 2026-07-21
+Updated: 2026-07-22
 
 This document records what the repository actually implements and the choices
 made while turning `DESIGN.md` and `ARCHITECTURE.md` into code. It is intended
@@ -45,6 +45,10 @@ keeps the local task projection synchronized with external runtime state.
 - Feed-local entry deduplication by `(feed_id, guid_hash)`.
 - Exact BitTorrent v1/v2 identity and cross-feed release deduplication.
 - Durable integration events with per-consumer delivery records.
+- One durable scheduler loop for feed refresh, event dispatch, selection
+  deadlines, and download reconciliation.
+- Persisted scheduler heartbeats, leases, attempts, execution history, and
+  expired-run recovery.
 
 ### Recognition
 
@@ -56,6 +60,8 @@ keeps the local task projection synchronized with external runtime state.
 - Episode groups exposed as a read projection and a separate unmatched queue.
 - Startup replay for undelivered `ReleaseIdentified.v1` events, allowing an
   existing installation to gain recognition data after upgrade.
+- Explicit confirmation for medium-confidence candidates and structured mapping
+  for previously unmatched releases, both with append-only action history.
 
 ### Catalog and subscriptions
 
@@ -78,7 +84,7 @@ keeps the local task projection synchronized with external runtime state.
   states.
 - Preferred candidates commit immediately; fallback deadlines never extend when
   later candidates arrive.
-- Background deadline polling plus startup recovery of expired waits.
+- Durable scheduled deadline processing plus startup recovery of expired waits.
 - Historical backfill preview and explicit multi-episode confirmation.
 - Same-group, same-episode higher revisions create append-only upgrade
   decisions.
@@ -94,7 +100,7 @@ keeps the local task projection synchronized with external runtime state.
   recovery without duplicate submission.
 - Magnet and uploaded `.torrent` submission with subscription save path plus
   configured category and tags.
-- Thirty-second background reconciliation and an explicit manual sync command.
+- Durable periodic reconciliation and an explicit manual sync command.
 - qBittorrent-derived progress, pause, completion, path, category, and tag
   state; connection failures preserve the last observation and mark it stale.
 - Confirmed external deletion becomes terminal until an administrator
@@ -118,6 +124,10 @@ keeps the local task projection synchronized with external runtime state.
 - qBittorrent configuration, connectivity status, download progress, external
   state, manual reconciliation, and explicit retry controls.
 - Generated TypeScript API types from the checked OpenAPI contract.
+- Operations view for dependency state, durable jobs, execution runs, failed
+  work, and audit history.
+- Dashboard failed-work summary plus candidate confirmation and release-mapping
+  controls.
 
 ## 3. Decision Log
 
@@ -279,12 +289,12 @@ release group with a higher revision can create an automatic upgrade decision.
 **Reason:** A later release from a different group is an alternative, not a V2
 replacement.
 
-### UI-001: The subscription page documents the live policy boundary
+### UI-001: The interface documents the live policy boundary
 
-**Choice:** The page presents the automatic selection stages in execution order
-and distinguishes available backfill confirmation from manual candidate
-approval, per-episode override, and decision replacement that are not yet
-implemented.
+**Choice:** The interface presents the automatic selection stages in execution
+order. It exposes backfill confirmation, candidate confirmation, and unmatched
+release mapping while continuing to mark per-episode override and decision
+replacement as unavailable.
 
 **Reason:** Operators must be able to predict automatic behavior without
 mistaking a visible confirmation state for an available manual command.
@@ -355,6 +365,62 @@ torrent is only marked superseded.
 **Reason:** Replacement is a visible, retryable saga, and downloaded media is
 never removed as a side effect of choosing V2 or V3.
 
+### OPS-001: One durable scheduler replaces module-local polling loops
+
+**Choice:** `feed.refresh`, `events.dispatch`, `selection.process_due`, and
+`downloads.process_cycle` run through one generic scheduler with database
+leases. The composition layer maps job kinds to public module commands.
+
+**Reason:** Restart and retry behavior is observable in one place, while each
+business module remains independently readable and owns its own state.
+
+### OPS-002: Business deadlines remain authoritative
+
+**Choice:** Feed `next_fetch_at` may replace the queued job due time during
+synchronization. Generic periodic jobs retain the next due time written by the
+worker. Selection fallback deadlines remain in selection tables and are queried
+by the scheduled command.
+
+**Reason:** Rebuilding the scheduler queue cannot lose or invent a business
+deadline, and manual feed refresh cannot trigger an immediate duplicate fetch.
+
+### OPS-003: Claims and executions are separate records
+
+**Choice:** The current job row stores the next intent and lease. Every claim
+creates an append-only run row with worker, attempt, outcome, error class, and
+timing. Expired running rows become `recovered` before the job is reclaimed.
+
+**Reason:** A mutable queue row is sufficient for execution but insufficient for
+diagnosis or proof of restart recovery.
+
+### OPS-004: Optional dependencies do not gate readiness
+
+**Choice:** Readiness continues to verify the local database. RSS aggregate
+health, Bangumi on-demand state, qBittorrent observations, and scheduler
+heartbeats are returned as administrator diagnostics.
+
+**Reason:** A metadata or downloader outage should be visible without causing
+the local application process to fail readiness and restart repeatedly.
+
+### OPS-005: Failed-work summaries use public module queries
+
+**Choice:** The composition-level diagnostics adapter aggregates feed failures,
+unmatched releases, download failures, and scheduler errors through public API
+DTOs. `operations` does not query another module's tables.
+
+**Reason:** The dashboard needs one actionable queue, but that read requirement
+must not erode table ownership or create hidden cross-module write logic.
+
+### REC-004: Manual recognition actions preserve parser evidence
+
+**Choice:** Confirming a medium-confidence candidate promotes that candidate for
+re-evaluation. Mapping a low-confidence release requires structured series and
+episode fields and is allowed only while no candidate exists. Both actions are
+stored separately and emit a new candidate-evaluation event.
+
+**Reason:** Administrators can unblock real releases without silently rewriting
+what parser v1 originally observed or invalidating existing decisions.
+
 ## 4. Parser v1 Contract
 
 Supported episode shapes:
@@ -380,18 +446,14 @@ attempts are not silently rewritten.
 ## 5. Known Boundaries
 
 - Identical RSS URLs can still be configured twice.
-- Periodic feed scheduling has durable primitives but no running scheduler loop;
-  refresh is currently manual.
 - Provisional recognition grouping remains visible before a catalog identity is
   linked through a subscription alias snapshot.
-- No release remap or parser re-run command exists yet.
+- Manual mapping is limited to releases without a candidate; parser re-run and
+  reassignment of already-decided candidates are not implemented.
 - Rules are currently stored per subscription; named reusable global preference
   profiles are not implemented.
-- Medium-confidence confirmation is represented in state but has no manual
-  correction/approval command yet.
 - Per-episode manual candidate selection and replacement of an existing decision
-  are not implemented; historical backfill confirmation is the only current
-  manual selection action.
+  are not implemented.
 - Only qBittorrent Web API v2 is implemented; there is no alternate downloader
   adapter or app-side pause/resume command.
 - qBittorrent category and tags are defaults captured when the task is planned;
@@ -401,15 +463,17 @@ attempts are not silently rewritten.
 
 ## 6. Next Planned Slice
 
-The next coherent delivery unit is the `operations + scheduler` slice:
+The next coherent delivery unit is the `product hardening + packaging` slice:
 
-1. Automatically claim and refresh due feeds through the existing durable job
-   lease instead of requiring a manual refresh.
-2. Persist scheduler runs, recovery, and next-run diagnostics.
-3. Add dependency status for feeds, Bangumi, qBittorrent, and background loops.
-4. Expose audit history and actionable failed-work summaries on the dashboard.
-5. Add manual confirmation and release-remap commands without weakening the
-   automatic matching boundary.
+1. Add first-run administrator setup, session authentication, and CSRF-safe
+   mutation handling.
+2. Add notification channels with durable delivery attempts and retry policy.
+3. Add SQLite backup/restore, retention jobs, and operator-facing validation.
+4. Add container images, Compose configuration, data-volume documentation, and
+   upgrade/rollback checks.
+5. Run restart, outage, and long-running soak scenarios against the complete
+   feed-to-qBittorrent path.
 
-This makes the already durable ingestion, selection, and download slices operate
-continuously before administrator authentication and packaging are added.
+This turns the continuously operating modular monolith into a deployable,
+recoverable single-user product without changing the established domain
+boundaries.

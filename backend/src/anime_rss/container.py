@@ -4,12 +4,15 @@ from sqlalchemy import Engine
 
 from anime_rss.infrastructure.events import EventDispatcher
 from anime_rss.infrastructure.http import SafeHttpClient
+from anime_rss.modules.audit.api import AuditService
 from anime_rss.modules.catalog.adapters import BangumiClient
 from anime_rss.modules.catalog.api import CatalogService
 from anime_rss.modules.downloads.adapters import QbittorrentClient
 from anime_rss.modules.downloads.api import DownloadService
 from anime_rss.modules.feeds.api import FeedService
 from anime_rss.modules.operations.api import JobService
+from anime_rss.modules.operations.ports import DiagnosticsSource
+from anime_rss.modules.operations.worker import Scheduler
 from anime_rss.modules.recognition.api import RecognitionService
 from anime_rss.modules.releases.api import ReleaseService
 from anime_rss.modules.selection.api import SelectionService
@@ -31,6 +34,9 @@ class ServiceContainer:
     selection: SelectionService
     downloads: DownloadService
     jobs: JobService
+    audit: AuditService
+    diagnostics: DiagnosticsSource
+    scheduler: Scheduler
     events: EventDispatcher
 
     def close(self) -> None:

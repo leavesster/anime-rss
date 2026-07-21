@@ -1,6 +1,7 @@
 from datetime import datetime
+from typing import Any
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import JSON, Boolean, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from anime_rss.infrastructure.database import Base, UTCDateTime
@@ -65,3 +66,18 @@ class CandidateRecord(Base):
     confidence: Mapped[str] = mapped_column(String(16), index=True)
     recognition_eligible: Mapped[bool] = mapped_column(Boolean, default=False)
     first_seen_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, index=True)
+
+
+class ManualActionRecord(Base):
+    __tablename__ = "match_manual_actions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    candidate_id: Mapped[str] = mapped_column(
+        ForeignKey("match_candidates.id", ondelete="CASCADE"), index=True
+    )
+    attempt_id: Mapped[str] = mapped_column(
+        ForeignKey("match_attempts.id", ondelete="CASCADE"), index=True
+    )
+    action: Mapped[str] = mapped_column(String(32), index=True)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)

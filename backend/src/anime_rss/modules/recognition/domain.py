@@ -61,7 +61,7 @@ _BRACKET_EPISODE = re.compile(
 )
 
 
-def _canonical_decimal(value: str | None) -> str | None:
+def canonical_episode_number(value: str | None) -> str | None:
     if value is None:
         return None
     try:
@@ -76,7 +76,7 @@ def _canonical_decimal(value: str | None) -> str | None:
     return rendered
 
 
-def _series_key(value: str) -> str:
+def normalize_series_key(value: str) -> str:
     normalized = unicodedata.normalize("NFKC", value).casefold()
     return "".join(character for character in normalized if character.isalnum())
 
@@ -148,8 +148,8 @@ def parse_release_title(title: str) -> ParsedReleaseTitle:
     if episode_match is None:
         episode_match = _BRACKET_EPISODE.search(body)
 
-    start = _canonical_decimal(episode_match.group("start")) if episode_match else None
-    end = _canonical_decimal(episode_match.groupdict().get("end")) if episode_match else None
+    start = canonical_episode_number(episode_match.group("start")) if episode_match else None
+    end = canonical_episode_number(episode_match.groupdict().get("end")) if episode_match else None
     revision_text = episode_match.groupdict().get("revision") if episode_match else None
     revision = int(revision_text) if revision_text else 1
     episode_key = f"{start}-{end}" if start and end else start
@@ -165,7 +165,7 @@ def parse_release_title(title: str) -> ParsedReleaseTitle:
         localized_title = re.sub(r"\s*[\[(【][^\])】]*$", "", localized_title).strip()
         if localized_title:
             series_title = localized_title[:300]
-            series_key = _series_key(series_title) or None
+            series_key = normalize_series_key(series_title) or None
 
     content_kind = _content_kind(normalized)
     if series_key and episode_key and release_group:

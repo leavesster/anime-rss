@@ -33,6 +33,14 @@ const labels: Record<string, string> = {
   canceling: "正在替换",
   superseded: "已被替代",
   connected: "已连接",
+  idle: "空闲",
+  running: "运行中",
+  degraded: "异常",
+  starting: "启动中",
+  on_demand: "按需连接",
+  not_configured: "未配置",
+  unknown: "待检查",
+  recovered: "已恢复",
 };
 
 export function statusLabel(status: string): string {
@@ -40,10 +48,10 @@ export function statusLabel(status: string): string {
 }
 
 export function statusTone(status: string): StatusTone {
-  if (["healthy", "success", "ready", "resolved", "strong", "following", "decided", "completed", "connected"].includes(status)) return "positive";
+  if (["healthy", "success", "ready", "resolved", "strong", "following", "decided", "completed", "connected", "idle", "recovered"].includes(status)) return "positive";
   if (status === "high") return "positive";
-  if (["auth_failed", "failed", "failing", "externally_removed"].includes(status)) return "danger";
-  if (["never_fetched", "pending", "weak", "medium", "low", "waiting_fallback", "needs_confirmation", "retrying", "submitting", "submitted", "canceling"].includes(status)) return "warning";
-  if (["not_modified", "planned", "downloading"].includes(status)) return "info";
+  if (["auth_failed", "failed", "failing", "externally_removed", "degraded"].includes(status)) return "danger";
+  if (["never_fetched", "pending", "weak", "medium", "low", "waiting_fallback", "needs_confirmation", "retrying", "submitting", "submitted", "canceling", "starting", "unknown"].includes(status)) return "warning";
+  if (["not_modified", "planned", "downloading", "running", "on_demand", "not_configured"].includes(status)) return "info";
   return "neutral";
 }

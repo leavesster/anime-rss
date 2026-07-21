@@ -540,6 +540,16 @@ class SelectionService:
                     EvaluationRecord.candidate_id == candidate.id,
                 )
             )
+            assert record is not None
+            record.release_id = candidate.release_id
+            record.episode_key = candidate.episode_key
+            record.eligible = evaluation.eligible
+            record.preferred = evaluation.preferred
+            record.hard_filter_results = evaluation.hard_filter_results
+            record.rank = list(evaluation.rank)
+            record.rules_snapshot = self._rules_snapshot(subscription)
+            record.evaluated_at = now
+            record.trigger = trigger
         assert record is not None
         return record
 

@@ -9,6 +9,8 @@ consumes `ReleaseIdentified.v1` and reads release observations only through the
 - `RecognitionService.handle_release_identified`
 - `RecognitionService.list_episode_groups`
 - `RecognitionService.list_unmatched`
+- `RecognitionService.confirm_candidate`
+- `RecognitionService.remap_release`
 - `parse_release_title`
 
 ## Invariants
@@ -18,6 +20,10 @@ consumes `ReleaseIdentified.v1` and reads release observations only through the
 - A release has at most one canonical candidate.
 - Series grouping uses an exact normalized key; fuzzy matching is forbidden.
 - Every source observation produces an immutable parse attempt.
+- Manual confirmation and unmatched mapping append action records; they never
+  rewrite the parser attempt that required intervention.
+- Release mapping only creates a missing candidate. Reassigning a candidate
+  that may already have downstream decisions is rejected.
 
 ## Does not own
 

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Activity, BookOpenCheck, Database, Download, Layers3, LayoutDashboard, Radio, Rss } from "lucide-react";
+import { Activity, BookOpenCheck, Database, Download, Layers3, LayoutDashboard, Radio, Rss, ServerCog } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
 
 import { getReadiness } from "../generated/api/client";
@@ -11,6 +11,7 @@ const navigation = [
   { to: "/downloads", label: "下载", icon: Download },
   { to: "/candidates", label: "剧集候选", icon: Layers3 },
   { to: "/releases", label: "发布条目", icon: Database },
+  { to: "/operations", label: "运行", icon: ServerCog },
 ];
 
 export function AppShell() {

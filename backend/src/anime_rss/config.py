@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     feed_max_response_bytes: int = Field(default=10 * 1024 * 1024, ge=1024)
     selection_poll_seconds: float = Field(default=30.0, ge=1.0, le=300.0)
     download_poll_seconds: float = Field(default=30.0, ge=1.0, le=300.0)
+    scheduler_poll_seconds: float = Field(default=5.0, ge=1.0, le=60.0)
+    scheduler_lease_seconds: int = Field(default=60, ge=10, le=600)
 
     @property
     def resolved_database_url(self) -> str:

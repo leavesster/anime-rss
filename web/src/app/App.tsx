@@ -6,6 +6,7 @@ import { FeedDetailPage } from "../features/feeds/FeedDetailPage";
 import { FeedsPage } from "../features/feeds/FeedsPage";
 import { CandidatesPage } from "../features/recognition/CandidatesPage";
 import { ReleasesPage } from "../features/releases/ReleasesPage";
+import { OperationsPage } from "../features/operations/OperationsPage";
 import { SubscriptionsPage } from "../features/subscriptions/SubscriptionsPage";
 import { AppShell } from "./AppShell";
 
@@ -20,6 +21,7 @@ export function App() {
         <Route path="subscriptions" element={<SubscriptionsPage />} />
         <Route path="downloads" element={<DownloadsPage />} />
         <Route path="releases" element={<ReleasesPage />} />
+        <Route path="operations" element={<OperationsPage />} />
         <Route path="*" element={<Navigate replace to="/" />} />
       </Route>
     </Routes>
