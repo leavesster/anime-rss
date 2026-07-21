@@ -448,6 +448,14 @@ export async function listDownloadTasks(): Promise<DownloadTask[]> {
   );
 }
 
+export async function submitReleaseDownload(releaseId: string): Promise<DownloadTask> {
+  return unwrap(
+    await client.POST("/api/v1/downloads/releases/{release_id}/submit", {
+      params: { path: { release_id: releaseId } },
+    }),
+  );
+}
+
 export async function processDownloads(): Promise<DownloadCycle> {
   return unwrap(await client.POST("/api/v1/downloads/process"));
 }

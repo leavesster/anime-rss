@@ -82,7 +82,12 @@ def test_http_correlation_reaches_audit_events_and_json_logs(tmp_path: Path) -> 
 def test_scheduled_retention_preserves_subscription_and_correction_history(
     tmp_path: Path,
 ) -> None:
-    hashes = {"keep": "1" * 40, "orphan": "2" * 40, "corrected": "3" * 40}
+    hashes = {
+        "keep": "1" * 40,
+        "orphan": "2" * 40,
+        "corrected": "3" * 40,
+        "manual": "4" * 40,
+    }
 
     def item(guid: str, title: str) -> str:
         return (
@@ -96,6 +101,7 @@ def test_scheduled_retention_preserves_subscription_and_correction_history(
         + item("keep", "[Group] Keep Anime - 01 [1080p AVC][CHS]")
         + item("orphan", "[Group] Orphan Anime - 01 [1080p AVC][CHS]")
         + item("corrected", "Unknown weekly package")
+        + item("manual", "Unsupported manual package")
         + "<item><guid>no-reference</guid><title>Unusable entry</title></item>"
         + "</channel></rss>"
     ).encode()
@@ -123,6 +129,13 @@ def test_scheduled_retention_preserves_subscription_and_correction_history(
                 json={"series_title": "Corrected Anime", "episode_start": "1"},
             ).status_code
             == 200
+        )
+        manual = next(
+            item for item in unmatched if item["source_title"] == "Unsupported manual package"
+        )
+        assert (
+            client.post(f"/api/v1/downloads/releases/{manual['release_id']}/submit").status_code
+            == 201
         )
 
         services: ServiceContainer = client.app.state.services
@@ -157,9 +170,9 @@ def test_scheduled_retention_preserves_subscription_and_correction_history(
         remaining_hashes = {
             item["identity_value"] for item in client.get("/api/v1/releases").json()
         }
-        assert remaining_hashes == {hashes["keep"], hashes["corrected"]}
+        assert remaining_hashes == {hashes["keep"], hashes["corrected"], hashes["manual"]}
         with services.engine.connect() as connection:
-            assert connection.scalar(text("SELECT count(*) FROM feed_entries")) == 2
+            assert connection.scalar(text("SELECT count(*) FROM feed_entries")) == 3
             assert connection.scalar(text("SELECT count(*) FROM feed_fetches")) == 0
         retention_run = next(
             item

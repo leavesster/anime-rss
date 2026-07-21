@@ -108,10 +108,13 @@ def main() -> None:
             """,
             (subscription_id, now),
         )
+        task_columns = {row[1] for row in connection.execute("PRAGMA table_info(download_tasks)")}
+        origin_column = "origin_kind," if "origin_kind" in task_columns else ""
+        origin_value = "'selection_decision'," if "origin_kind" in task_columns else ""
         connection.execute(
-            """
+            f"""
             INSERT INTO download_tasks (
-                id, decision_id, release_id, subscription_id, info_hash,
+                id, {origin_column} decision_id, release_id, subscription_id, info_hash,
                 external_id, adapter, idempotency_key, state,
                 requested_save_path, actual_save_path, category, tags, progress,
                 stale, observed_once, cancellation_requested,
@@ -119,7 +122,7 @@ def main() -> None:
                 error_code, attempt_count, next_retry_at, last_observed_at,
                 operation_started_at, version, created_at, updated_at
             ) VALUES (
-                'acceptance-task', 'acceptance-decision', 'acceptance-release', ?, ?,
+                'acceptance-task', {origin_value} 'acceptance-decision', 'acceptance-release', ?, ?,
                 ?, 'qbittorrent', 'acceptance-decision:qbittorrent', 'completed',
                 NULL, NULL, NULL, '[]', 1.0, 0, 1, 0,
                 NULL, NULL, NULL, NULL, 1, NULL, ?, NULL, 1, ?, ?

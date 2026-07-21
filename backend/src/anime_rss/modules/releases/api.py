@@ -176,6 +176,10 @@ class ReleaseService:
                 automation_eligible=release.automation_eligible,
             )
 
+    def has_release(self, release_id: str) -> bool:
+        with self._session_factory() as session:
+            return session.get(ReleaseRecord, release_id) is not None
+
     def get_download_source(self, release_id: str) -> ReleaseDownloadSource | None:
         with self._session_factory() as session:
             release = session.get(ReleaseRecord, release_id)

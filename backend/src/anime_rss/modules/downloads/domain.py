@@ -17,6 +17,11 @@ class DownloadState(StrEnum):
     SUPERSEDED = "superseded"
 
 
+class DownloadOriginKind(StrEnum):
+    SELECTION_DECISION = "selection_decision"
+    MANUAL_RELEASE = "manual_release"
+
+
 @dataclass(frozen=True, slots=True)
 class DownloaderConnection:
     base_url: str

@@ -317,6 +317,7 @@ class ApplicationRuntime:
         failure_before = now - timedelta(days=self._feed_failure_retention_days)
         retained_release_ids = self._selection.retained_release_ids()
         retained_release_ids.update(self._recognition.permanent_release_ids())
+        retained_release_ids.update(self._downloads.retained_release_ids())
         releases = self._releases.prune_unmatched(
             before=unmatched_before,
             retained_release_ids=retained_release_ids,

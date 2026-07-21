@@ -148,7 +148,14 @@ def test_config_submit_reconcile_external_delete_and_explicit_retry(tmp_path: Pa
 
         planned = client.get("/api/v1/downloads/tasks").json()[0]
         assert planned["state"] == "planned"
+        assert planned["origin_kind"] == "selection_decision"
+        assert planned["decision_id"] is not None
+        assert planned["subscription_id"] is not None
         assert planned["requested_save_path"] == "/downloads/anime"
+        reused = client.post(f"/api/v1/downloads/releases/{planned['release_id']}/submit")
+        assert reused.status_code == 201
+        assert reused.json()["id"] == planned["id"]
+        assert reused.json()["origin_kind"] == "selection_decision"
         first = client.post("/api/v1/downloads/process").json()
         assert first["submissions"] == 1
         task = client.get("/api/v1/downloads/tasks").json()[0]
@@ -183,6 +190,65 @@ def test_config_submit_reconcile_external_delete_and_explicit_retry(tmp_path: Pa
 
     database_bytes = (tmp_path / "downloads.sqlite3").read_bytes()
     assert b"download-secret" not in database_bytes
+
+
+def test_manual_release_submission_is_durable_idempotent_and_btih_only(tmp_path: Path) -> None:
+    pure_v2 = "1220" + "a" * 64
+    rss = f"""<?xml version="1.0"?>
+    <rss version="2.0"><channel><title>Manual</title>
+      <item><guid>manual-btih</guid><title>Unknown weekly package</title>
+        <enclosure url="magnet:?xt=urn:btih:{INFO_HASH}" type="application/x-bittorrent" />
+      </item>
+      <item><guid>manual-btmh</guid><title>Unknown v2 package</title>
+        <enclosure url="magnet:?xt=urn:btmh:{pure_v2}" type="application/x-bittorrent" />
+      </item>
+    </channel></rss>""".encode()
+    qb = FakeQbittorrent()
+    app = create_app(
+        _settings(tmp_path, "manual-download.sqlite3"),
+        feed_transport=httpx.MockTransport(lambda request: httpx.Response(200, content=rss)),
+        qbittorrent_transport=httpx.MockTransport(qb.handler),
+    )
+
+    with TestClient(app) as client:
+        _configure(client)
+        feed = client.post(
+            "/api/v1/feeds", json={"name": "Manual", "url": "https://feed.test/rss"}
+        ).json()
+        assert client.post(f"/api/v1/feeds/{feed['id']}/refresh").status_code == 200
+        releases = client.get("/api/v1/releases").json()
+        btih_release = next(item for item in releases if item["btih"] == INFO_HASH)
+        btmh_release = next(item for item in releases if item["btmh"] == pure_v2)
+
+        first = client.post(f"/api/v1/downloads/releases/{btih_release['id']}/submit")
+        second = client.post(f"/api/v1/downloads/releases/{btih_release['id']}/submit")
+
+        assert first.status_code == second.status_code == 201
+        assert first.json()["id"] == second.json()["id"]
+        assert first.json()["origin_kind"] == "manual_release"
+        assert first.json()["decision_id"] is None
+        assert first.json()["subscription_id"] is None
+        assert first.json()["state"] == "planned"
+        assert client.get("/api/v1/selection/decisions").json() == []
+        assert qb.add_hashes == []
+        manual_audits = [
+            item
+            for item in client.get("/api/v1/audit/events").json()
+            if item["event_type"] == "download.manual_planned"
+        ]
+        assert len(manual_audits) == 1
+        assert manual_audits[0]["payload"]["release_id"] == btih_release["id"]
+
+        processed = client.post("/api/v1/downloads/process").json()
+        assert processed["submissions"] == 1
+        assert qb.add_hashes == [INFO_HASH]
+        assert client.get("/api/v1/downloads/tasks").json()[0]["state"] == "downloading"
+
+        assert (
+            client.post(f"/api/v1/downloads/releases/{btmh_release['id']}/submit").status_code
+            == 409
+        )
+        assert client.post("/api/v1/downloads/releases/missing/submit").status_code == 404
 
 
 def test_timeout_after_success_recovers_by_hash_without_duplicate_add(tmp_path: Path) -> None:

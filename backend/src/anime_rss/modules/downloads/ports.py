@@ -7,6 +7,8 @@ from anime_rss.modules.subscriptions.api import Subscription
 
 
 class ReleaseSources(Protocol):
+    def has_release(self, release_id: str) -> bool: ...
+
     def get_download_source(self, release_id: str) -> ReleaseDownloadSource | None: ...
 
 

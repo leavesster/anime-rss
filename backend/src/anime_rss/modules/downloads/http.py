@@ -8,7 +8,9 @@ from pydantic import BaseModel, Field, HttpUrl
 from anime_rss.infrastructure.events import EventDispatcher
 from anime_rss.modules.downloads.api import (
     DownloadConfigNotFoundError,
+    DownloadReleaseNotFoundError,
     DownloadService,
+    DownloadSourceUnavailableError,
     DownloadTaskNotFoundError,
 )
 from anime_rss.modules.downloads.domain import DownloaderError
@@ -46,9 +48,10 @@ class DownloadConnectionResponse(BaseModel):
 
 class DownloadTaskResponse(BaseModel):
     id: str
-    decision_id: str
+    origin_kind: str
+    decision_id: str | None
     release_id: str
-    subscription_id: str
+    subscription_id: str | None
     info_hash: str
     state: str
     requested_save_path: str | None
@@ -127,6 +130,21 @@ def test_download_connection(request: Request) -> DownloadConnectionResponse:
 def list_download_tasks(request: Request, limit: int = 200) -> list[DownloadTaskResponse]:
     tasks = _services(request).downloads.list_tasks(limit=min(max(limit, 1), 500))
     return [DownloadTaskResponse.model_validate(asdict(task)) for task in tasks]
+
+
+@router.post(
+    "/releases/{release_id}/submit",
+    response_model=DownloadTaskResponse,
+    status_code=201,
+)
+def submit_release_download(release_id: str, request: Request) -> DownloadTaskResponse:
+    try:
+        task = _services(request).downloads.submit_release_manually(release_id)
+    except DownloadReleaseNotFoundError as error:
+        raise HTTPException(status_code=404, detail="release not found") from error
+    except DownloadSourceUnavailableError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return DownloadTaskResponse.model_validate(asdict(task))
 
 
 @router.post("/tasks/{task_id}/retry", response_model=DownloadTaskResponse)

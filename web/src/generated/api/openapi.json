@@ -1947,6 +1947,48 @@
         }
       }
     },
+    "/api/v1/downloads/releases/{release_id}/submit": {
+      "post": {
+        "tags": [
+          "downloads"
+        ],
+        "summary": "Submit Release Download",
+        "operationId": "submit_release_download_api_v1_downloads_releases__release_id__submit_post",
+        "parameters": [
+          {
+            "name": "release_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Release Id"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadTaskResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/downloads/tasks/{task_id}/retry": {
       "post": {
         "tags": [
@@ -4156,8 +4198,19 @@
             "type": "string",
             "title": "Id"
           },
-          "decision_id": {
+          "origin_kind": {
             "type": "string",
+            "title": "Origin Kind"
+          },
+          "decision_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Decision Id"
           },
           "release_id": {
@@ -4165,7 +4218,14 @@
             "title": "Release Id"
           },
           "subscription_id": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Subscription Id"
           },
           "info_hash": {
@@ -4311,6 +4371,7 @@
         "type": "object",
         "required": [
           "id",
+          "origin_kind",
           "decision_id",
           "release_id",
           "subscription_id",

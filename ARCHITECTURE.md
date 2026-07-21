@@ -41,9 +41,10 @@ flowchart LR
 ```
 
 The service owns subscriptions, matching rationale, selection history, and the
-link between a decision and a downloader task. qBittorrent owns the current
-runtime state of that task. Neither Bangumi nor an airing schedule can directly
-cause a download.
+immutable local intent behind every downloader task. That intent is either a
+selection Decision or an explicit operator submission of a Release; the two
+origins cannot be mixed. qBittorrent owns the current runtime state of the task.
+Neither Bangumi nor an airing schedule can directly cause a download.
 
 ## 3. Runtime Topology
 
@@ -129,8 +130,10 @@ future extraction. Event handlers are idempotent.
   episode. `selection` consumes that evidence but never reparses a title.
 - `subscriptions` owns rule configuration; `selection` stores an immutable
   snapshot of the effective rules used by every consequential decision.
-- `selection` commits a download request before `downloads` contacts
-  qBittorrent. The downloader result cannot rewrite the reason for selection.
+- `selection` commits an automatic download request before `downloads` contacts
+  qBittorrent. `downloads` may also own an explicit manual Release request, but
+  it never fabricates a Candidate or Decision for one. The downloader result
+  cannot rewrite either origin.
 - `downloads` mirrors external task state. An external deletion updates task
   state but cannot reopen or erase the original decision.
 - `audit` receives redacted facts from every module. Business modules never
@@ -278,21 +281,24 @@ it never mutates history to look as if the old decision did not happen.
 The service provides effectively-once submission across an API that cannot offer
 a transaction with the local database.
 
-1. `selection` creates a committed decision and unique download request in one
-   transaction.
+1. `selection` creates a committed decision and unique automatic download
+   request in one transaction, or `downloads` records an explicit manual Release
+   request without creating selection history.
 2. `downloads` records a `planned` submission attempt with a durable idempotency
    key before making a network request.
 3. Before every add or retry, it queries qBittorrent by info hash.
 4. If the prior call succeeded but its response was lost, reconciliation links
    the existing torrent instead of adding it again.
-5. A unique database constraint prevents more than one active request for the
-   same decision and release identity.
+5. A unique database constraint prevents more than one request for the same
+   decision or manual Release intent; the manual command also reuses any task
+   already linked to that Release.
 6. External deletion moves the task to `externally_removed`; automatic retry is
    disabled unless the administrator explicitly requests it.
 
-The idempotency key should be derived from immutable IDs, for example
-`download-request:{decision_id}:{release_id}:{operation_revision}`. The info hash
-remains the final cross-feed release identity.
+The idempotency key is derived from immutable IDs, for example
+`download-request:{decision_id}:{release_id}:{operation_revision}` or
+`manual-release:{release_id}:{operation_revision}`. The info hash remains the
+final cross-feed release identity.
 
 Revision replacement is an explicit saga owned by `selection`:
 

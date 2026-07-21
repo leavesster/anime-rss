@@ -161,7 +161,8 @@ packaged as a first-run authenticated, recoverable Compose service.
 
 - Responsive dashboard and feed management.
 - Feed test, refresh, history, and normalized entry views.
-- Raw Release identity library.
+- Raw Release identity library with explicit manual BTIH download submission and
+  existing-task status.
 - Episode candidate groups showing every subtitle-group version and its parsed
   attributes.
 - Anime creation/import, subscription creation and lifecycle controls, backfill
@@ -484,6 +485,26 @@ otherwise the planned task records the instance defaults as an intent snapshot.
 
 **Reason:** Setup needs one useful default without forcing every subscription to
 repeat paths, while persisted tasks must not drift when configuration changes.
+
+### DL-009: Manual Release downloads are a second explicit task origin
+
+**Choice:** Migration `0016` gives every DownloadTask an immutable
+`origin_kind`. Automatic tasks remain `selection_decision` and require both a
+Decision and Subscription; a `manual_release` task requires both references to
+be absent. The database enforces this distinction. `POST
+/api/v1/downloads/releases/{release_id}/submit` reuses any task already linked to
+the Release or inserts one `manual-release:{release_id}:1` intent before the
+worker performs network I/O.
+
+**Reason:** Unsupported title/content recognition may have no Candidate,
+Subscription, or episode identity, so manufacturing a Decision would corrupt
+selection history. A direct qBittorrent call would instead bypass durable retry
+and audit behavior. The explicit second origin preserves both boundaries while
+sharing submission and reconciliation. Pure BTMH releases remain unavailable
+until the downloader can reconcile v2 identities reliably; manual intent does
+not weaken that safety boundary. DownloadTask references also join the retention
+protection set so an old manually submitted Release cannot be pruned underneath
+its execution history.
 
 ### OPS-001: One durable scheduler replaces module-local polling loops
 
@@ -877,7 +898,7 @@ truth; a row is complete only when code and proportionate evidence both exist.
 |---|---|---|
 | Episode span coverage | `0015`, domain/integration/migration/frontend tests | Complete |
 | Subscription lifecycle | All legal commands, archived view, revision-only completed behavior, and archived-stop integration coverage | Complete |
-| Unsupported release handling | Raw releases are visible | Add explicit manual qBittorrent submission |
+| Unsupported release handling | `0016`, durable manual task origin, idempotent API, audit evidence, release-page command, backend/frontend tests | Complete |
 | Parser regression contract | Deterministic bounded parser and focused fixtures | Build the planned 300+ golden corpus and Unicode/property gates |
 | HTTP consistency | CSRF token and some optimistic versions exist | Apply mutation idempotency, resource preconditions, cursor pagination, structured errors, and correlation IDs consistently |
 | Browser-origin security | Double-submit CSRF exists | Add Origin/Host validation and rate limits for setup, login, and connection tests |
@@ -887,23 +908,23 @@ truth; a row is complete only when code and proportionate evidence both exist.
 | Stable engineering gates | lint, typecheck, unit/integration, OpenAPI generation, Compose acceptance | Add doctor, checked OpenAPI drift, security scan, clean-room, and release-evidence commands |
 | External acceptance | Durable seven-day evidence tooling exists | Configure two real feeds, two Bangumi subscriptions, qBittorrent, then complete seven natural days |
 
-The next implementation unit is unsupported-release manual submission. Security
-and release gates then proceed as independent reviewable units; the seven-day
-clock starts only after its external preflight is genuinely satisfied.
+The next implementation unit is the parser regression corpus. Security and
+release gates then proceed as independent reviewable units; the seven-day clock
+starts only after its external preflight is genuinely satisfied.
 
 ## 7. Current Verification Evidence
 
-Verified on 2026-07-22 with `make verify` after migration `0015`:
+Verified on 2026-07-22 with `make verify` after migration `0016`:
 
 - Ruff formatting and lint: passed.
 - Pyright: passed with zero errors.
-- Backend: 80 tests passed, 88.25% statement coverage.
-- Frontend: ESLint and TypeScript passed; 11 Vitest tests passed.
+- Backend: 81 tests passed, 88.42% statement coverage.
+- Frontend: ESLint and TypeScript passed; 12 Vitest tests passed.
 - Production Vite build: passed.
 - Disposable Compose lifecycle: passed for clean setup, operator backup,
-  in-place upgrade from the pre-`0012` baseline, clean-volume restore, and
-  backup-based rollback, including audit history, waiting work, Decision, and
-  DownloadTask associations.
+  in-place upgrade through `0016`, clean-volume restore, and backup-based
+  rollback, including audit history, waiting work, Decision, and DownloadTask
+  associations.
 - Container publishing workflow: statically validated for `linux/amd64` and
   `linux/arm64`, GHCR tags, BuildKit provenance, SBOM, and GitHub attestation;
   registry publication still requires an actual GitHub Actions run.
@@ -944,6 +965,13 @@ Verified on 2026-07-22 with `make verify` after migration `0015`:
   separate archived view. A disposable no-auth browser instance verified the
   active and archived views at 914px and 390px with no horizontal overflow,
   action overlap, or clipped lifecycle menu.
+- Manual-Release evidence covers the database-enforced origin split, idempotent
+  task reuse, reuse of automatic tasks, unsupported/missing Release rejection,
+  audit correlation, and retention protection. Migration `0016` passed an
+  `0015 -> head -> 0015 -> head` round trip. A disposable no-auth browser
+  instance verified successful BTIH submission, existing-queue status, disabled
+  pure-BTMH actions, and the Release table at desktop and 390px widths with no
+  horizontal overflow or console errors.
 - Soak acceptance evidence covers incomplete-preflight refusal, idempotent start,
   the exact seven-day boundary, redacted reporting, cross-feed observation counts,
   and duplicate task identity signals.

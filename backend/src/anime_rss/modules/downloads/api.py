@@ -17,6 +17,7 @@ from anime_rss.modules.downloads.domain import (
     Downloader,
     DownloaderConnection,
     DownloaderError,
+    DownloadOriginKind,
     DownloadState,
 )
 from anime_rss.modules.downloads.persistence import DownloaderConfigRecord, DownloadTaskRecord
@@ -45,9 +46,10 @@ class DownloadConfig:
 @dataclass(frozen=True, slots=True)
 class DownloadTask:
     id: str
-    decision_id: str
+    origin_kind: str
+    decision_id: str | None
     release_id: str
-    subscription_id: str
+    subscription_id: str | None
     info_hash: str
     state: str
     requested_save_path: str | None
@@ -72,6 +74,14 @@ class DownloadConfigNotFoundError(LookupError):
 
 
 class DownloadTaskNotFoundError(LookupError):
+    pass
+
+
+class DownloadReleaseNotFoundError(LookupError):
+    pass
+
+
+class DownloadSourceUnavailableError(RuntimeError):
     pass
 
 
@@ -255,6 +265,7 @@ class DownloadService:
                     insert(DownloadTaskRecord)
                     .values(
                         id=task_id,
+                        origin_kind=DownloadOriginKind.SELECTION_DECISION.value,
                         decision_id=decision_id,
                         release_id=release_id,
                         subscription_id=subscription_id,
@@ -302,6 +313,77 @@ class DownloadService:
                 )
         return self.get_task(task_id)
 
+    def submit_release_manually(self, release_id: str) -> DownloadTask:
+        if not self._releases.has_release(release_id):
+            raise DownloadReleaseNotFoundError(release_id)
+        source = self._releases.get_download_source(release_id)
+        if source is None:
+            raise DownloadSourceUnavailableError(
+                "release has no qBittorrent-compatible BTIH download source"
+            )
+        config = self.get_config()
+        now = self._clock()
+        task_id = new_id()
+        idempotency_key = f"manual-release:{release_id}:1"
+        with self._session_factory.begin() as session:
+            existing = session.scalar(
+                select(DownloadTaskRecord)
+                .where(DownloadTaskRecord.release_id == release_id)
+                .order_by(DownloadTaskRecord.created_at, DownloadTaskRecord.id)
+                .limit(1)
+            )
+            if existing is not None:
+                task_id = existing.id
+            else:
+                result = cast(
+                    CursorResult[object],
+                    session.execute(
+                        insert(DownloadTaskRecord)
+                        .values(
+                            id=task_id,
+                            origin_kind=DownloadOriginKind.MANUAL_RELEASE.value,
+                            decision_id=None,
+                            release_id=release_id,
+                            subscription_id=None,
+                            info_hash=source.info_hash,
+                            adapter="qbittorrent",
+                            idempotency_key=idempotency_key,
+                            state=DownloadState.PLANNED.value,
+                            requested_save_path=(config.default_save_path if config else None),
+                            category=config.default_category if config else None,
+                            tags=config.default_tags if config else [],
+                            progress=0.0,
+                            stale=False,
+                            observed_once=False,
+                            cancellation_requested=False,
+                            attempt_count=0,
+                            next_retry_at=now,
+                            version=1,
+                            created_at=now,
+                            updated_at=now,
+                        )
+                        .on_conflict_do_nothing(index_elements=["idempotency_key"])
+                    ),
+                )
+                if not result.rowcount:
+                    existing = session.scalar(
+                        select(DownloadTaskRecord).where(
+                            DownloadTaskRecord.idempotency_key == idempotency_key
+                        )
+                    )
+                    if existing is None:
+                        raise RuntimeError("manual download task conflict could not be resolved")
+                    task_id = existing.id
+                else:
+                    record_event(
+                        session,
+                        event_type="download.manual_planned",
+                        entity_type="download_task",
+                        entity_id=task_id,
+                        payload={"release_id": release_id, "info_hash": source.info_hash},
+                    )
+        return self.get_task(task_id)
+
     def list_tasks(self, *, limit: int = 200) -> list[DownloadTask]:
         with self._session_factory() as session:
             records = session.scalars(
@@ -310,6 +392,10 @@ class DownloadService:
                 .limit(limit)
             ).all()
             return [self._to_task(record) for record in records]
+
+    def retained_release_ids(self) -> set[str]:
+        with self._session_factory() as session:
+            return set(session.scalars(select(DownloadTaskRecord.release_id).distinct()))
 
     def get_task(self, task_id: str) -> DownloadTask:
         with self._session_factory() as session:
@@ -413,6 +499,7 @@ class DownloadService:
     def _to_task(record: DownloadTaskRecord) -> DownloadTask:
         return DownloadTask(
             id=record.id,
+            origin_kind=record.origin_kind,
             decision_id=record.decision_id,
             release_id=record.release_id,
             subscription_id=record.subscription_id,

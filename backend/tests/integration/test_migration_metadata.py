@@ -95,6 +95,19 @@ def test_episode_coverage_migration_backfills_existing_decisions_and_manual_acqu
         connection.execute(
             sa.text(
                 """
+                INSERT INTO release_releases (
+                    id, identity_kind, identity_value, btih, automation_eligible, first_seen_at
+                ) VALUES (
+                    'release', 'btih', '0123456789abcdef0123456789abcdef01234567',
+                    '0123456789abcdef0123456789abcdef01234567', 1, :timestamp
+                )
+                """
+            ),
+            {"timestamp": timestamp},
+        )
+        connection.execute(
+            sa.text(
+                """
                 INSERT INTO sub_subscriptions (
                     id, anime_id, anime_title, state, match_keys, rules,
                     activation_at, version, created_at, updated_at
@@ -137,6 +150,23 @@ def test_episode_coverage_migration_backfills_existing_decisions_and_manual_acqu
         connection.execute(
             sa.text(
                 """
+                INSERT INTO download_tasks (
+                    id, decision_id, release_id, subscription_id, info_hash, adapter,
+                    idempotency_key, state, tags, progress, stale, observed_once,
+                    cancellation_requested, attempt_count, version, created_at, updated_at
+                ) VALUES (
+                    'download-task', 'decision-range', 'release', 'subscription',
+                    '0123456789abcdef0123456789abcdef01234567', 'qbittorrent',
+                    'download-request:decision-range:release:1', 'planned', '[]', 0, 0, 0,
+                    0, 0, 1, :timestamp, :timestamp
+                )
+                """
+            ),
+            {"timestamp": timestamp},
+        )
+        connection.execute(
+            sa.text(
+                """
                 INSERT INTO select_manual_actions (
                     id, subscription_id, episode_key, action, reason, created_at
                 ) VALUES (
@@ -160,11 +190,15 @@ def test_episode_coverage_migration_backfills_existing_decisions_and_manual_acqu
                 )
             )
         )
+        task_origin = connection.execute(
+            sa.text("SELECT origin_kind FROM download_tasks WHERE id = 'download-task'")
+        ).scalar_one()
     assert coverage == [
         ("1", 1000, "decision"),
         ("2", 2000, "decision"),
         ("3.5", 3500, "manual_action"),
     ]
+    assert task_origin == "selection_decision"
     engine.dispose()
 
     command.downgrade(config, "0014_schedule_overrides")

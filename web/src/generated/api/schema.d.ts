@@ -673,6 +673,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/downloads/releases/{release_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit Release Download */
+        post: operations["submit_release_download_api_v1_downloads_releases__release_id__submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/downloads/tasks/{task_id}/retry": {
         parameters: {
             query?: never;
@@ -1438,12 +1455,14 @@ export interface components {
         DownloadTaskResponse: {
             /** Id */
             id: string;
+            /** Origin Kind */
+            origin_kind: string;
             /** Decision Id */
-            decision_id: string;
+            decision_id: string | null;
             /** Release Id */
             release_id: string;
             /** Subscription Id */
-            subscription_id: string;
+            subscription_id: string | null;
             /** Info Hash */
             info_hash: string;
             /** State */
@@ -3582,6 +3601,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DownloadTaskResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_release_download_api_v1_downloads_releases__release_id__submit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                release_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadTaskResponse"];
                 };
             };
             /** @description Validation Error */

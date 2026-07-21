@@ -48,17 +48,25 @@ class DownloadTaskRecord(Base):
             "'paused','completed','failed','externally_removed','canceling','superseded')",
             name="ck_download_task_state",
         ),
+        CheckConstraint(
+            "(origin_kind = 'selection_decision' AND decision_id IS NOT NULL "
+            "AND subscription_id IS NOT NULL) OR "
+            "(origin_kind = 'manual_release' AND decision_id IS NULL "
+            "AND subscription_id IS NULL)",
+            name="ck_download_task_origin",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    decision_id: Mapped[str] = mapped_column(
-        ForeignKey("select_decisions.id", ondelete="CASCADE"), index=True
+    origin_kind: Mapped[str] = mapped_column(String(32), index=True)
+    decision_id: Mapped[str | None] = mapped_column(
+        ForeignKey("select_decisions.id", ondelete="CASCADE"), nullable=True, index=True
     )
     release_id: Mapped[str] = mapped_column(
         ForeignKey("release_releases.id", ondelete="RESTRICT"), index=True
     )
-    subscription_id: Mapped[str] = mapped_column(
-        ForeignKey("sub_subscriptions.id", ondelete="CASCADE"), index=True
+    subscription_id: Mapped[str | None] = mapped_column(
+        ForeignKey("sub_subscriptions.id", ondelete="CASCADE"), nullable=True, index=True
     )
     info_hash: Mapped[str] = mapped_column(String(80), index=True)
     external_id: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)

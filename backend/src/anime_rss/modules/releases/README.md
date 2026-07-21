@@ -8,6 +8,8 @@ handler.
 
 - `ReleaseService.observe_feed_entry`
 - `ReleaseService.list_releases`
+- `ReleaseService.has_release`
+- `ReleaseService.get_download_source`
 - `ReleaseService.prune_unmatched`
 - `parse_magnet_identity`
 - `parse_torrent_identity`
