@@ -575,6 +575,13 @@ packages. This makes the documented boundary executable.
 Every operation receives a correlation ID; derived commands and events also
 carry a causation ID. Structured logs include module, operation, entity IDs,
 attempt, duration, and outcome, but never raw secrets or full private URLs.
+HTTP middleware, the durable scheduler, and integration-event dispatch are the
+three context boundaries; business services inherit context rather than accepting
+transport-specific logging parameters.
+
+Retention follows the same ownership rule as writes. `operations` schedules and
+summarizes a run, while `feeds`, `releases`, `recognition`, `selection`, and the
+event store expose public retention queries or commands for their own records.
 
 Health is separated into:
 

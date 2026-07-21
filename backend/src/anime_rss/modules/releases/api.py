@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, cast
 from urllib.parse import urlsplit
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session, sessionmaker
@@ -57,6 +57,12 @@ class ReleaseDownloadSource:
     info_hash: str
     kind: str
     content: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class ReleaseRetentionResult:
+    releases_removed: int
+    feed_entries_removed: int
 
 
 class ReleaseService:
@@ -193,6 +199,31 @@ class ReleaseService:
                 kind=payload.kind,
                 content=content,
             )
+
+    def prune_unmatched(
+        self, *, before: datetime, retained_release_ids: set[str]
+    ) -> ReleaseRetentionResult:
+        with self._session_factory() as session:
+            statement = select(ReleaseRecord.id).where(ReleaseRecord.first_seen_at < before)
+            if retained_release_ids:
+                statement = statement.where(ReleaseRecord.id.not_in(retained_release_ids))
+            release_ids = set(session.scalars(statement))
+            if not release_ids:
+                return ReleaseRetentionResult(0, 0)
+            entry_ids = set(
+                session.scalars(
+                    select(ReleaseSourceRecord.feed_entry_id).where(
+                        ReleaseSourceRecord.release_id.in_(release_ids)
+                    )
+                )
+            )
+        removed_entries = self._feed_entries.delete_entries(entry_ids)
+        with self._session_factory.begin() as session:
+            result = cast(
+                CursorResult[Any],
+                session.execute(delete(ReleaseRecord).where(ReleaseRecord.id.in_(release_ids))),
+            )
+        return ReleaseRetentionResult(result.rowcount, removed_entries)
 
     def _resolve_identity(self, entry: FeedEntrySecret) -> tuple[TorrentIdentity, bytes, str]:
         reference = entry.torrent_reference

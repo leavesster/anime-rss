@@ -8,6 +8,7 @@ handler.
 
 - `ReleaseService.observe_feed_entry`
 - `ReleaseService.list_releases`
+- `ReleaseService.prune_unmatched`
 - `parse_magnet_identity`
 - `parse_torrent_identity`
 
@@ -19,6 +20,8 @@ handler.
 - Pure BitTorrent v2 releases are collected but are not automation eligible.
 - `(identity_kind, identity_value)` and `(release_id, feed_entry_id)` are unique.
 - Stored magnet and torrent payloads are encrypted.
+- Old releases are removable only when selection and recognition public queries
+  do not protect their identities.
 
 ## Does not own
 

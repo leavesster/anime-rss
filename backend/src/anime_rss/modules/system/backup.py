@@ -47,7 +47,7 @@ class BackupService:
         database_url: str,
         master_key_file: Path,
         data_dir: Path,
-        retention_count: int = 14,
+        retention_count: int = 7,
         max_restore_bytes: int = 512 * 1024 * 1024,
         clock: Clock = utc_now,
     ) -> None:

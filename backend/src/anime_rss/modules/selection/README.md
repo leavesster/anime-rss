@@ -12,3 +12,7 @@ decision emits `DownloadRequested.v1`; replacement also emits
 Recognition remaps append selection correction actions. Undecided slots using
 the old candidate reopen; decided slots retain their immutable decision snapshot
 while the replacement candidate is evaluated through the normal path.
+
+`SelectionService.retained_release_ids` exposes the releases referenced by
+evaluations, decisions, or manual actions so operations can apply retention
+without querying selection-owned tables.

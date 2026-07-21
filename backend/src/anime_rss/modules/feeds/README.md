@@ -6,7 +6,7 @@ stored.
 
 ## Public surface
 
-- `FeedService`: create, update, delete, list, test, and refresh feeds
+- `FeedService`: create, update, delete, list, test, refresh, and prune feed history
 - `FeedEntryQueries`: read a normalized entry and decrypt its torrent reference
 - `FeedEntryObserved.v1`: payload contains only `feed_entry_id`
 
@@ -19,6 +19,8 @@ stored.
 - `(feed_id, guid_hash)` is unique even if concurrent refreshes overlap.
 - HTTP 401/403 enters `auth_failed` without automatic retry.
 - Successful 304 responses reset transient failures.
+- Failed fetch diagnostics expire after seven days; other fetch history and
+  unresolved entries expire after 90 days by default.
 
 ## Does not own
 

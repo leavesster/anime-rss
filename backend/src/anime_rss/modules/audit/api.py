@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from anime_rss.infrastructure.observability import current_correlation_id
 from anime_rss.modules.audit.persistence import AuditEventRecord
 
 
@@ -23,7 +24,7 @@ def record_event(
             entity_type=entity_type,
             entity_id=entity_id,
             payload=payload or {},
-            correlation_id=correlation_id,
+            correlation_id=correlation_id or current_correlation_id(),
         )
     )
 

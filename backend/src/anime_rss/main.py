@@ -1,8 +1,10 @@
 import asyncio
 import hmac
+import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 import httpx
@@ -16,6 +18,14 @@ from anime_rss.infrastructure.database import create_database_engine, create_ses
 from anime_rss.infrastructure.events import EventDispatcher, RegisteredHandler
 from anime_rss.infrastructure.http import SafeHttpClient
 from anime_rss.infrastructure.migrations import run_migrations
+from anime_rss.infrastructure.observability import (
+    configure_logging,
+    log_event,
+    log_exception,
+    normalize_correlation_id,
+    observation_context,
+    shutdown_logging,
+)
 from anime_rss.infrastructure.web import SpaStaticFiles
 from anime_rss.kernel.time import Clock, utc_now
 from anime_rss.modules.audit.api import AuditService
@@ -59,6 +69,8 @@ from anime_rss.modules.system.http import (
 from anime_rss.modules.system.settings_http import router as settings_router
 from anime_rss.runtime import ApplicationRuntime
 
+logger = logging.getLogger(__name__)
+
 
 async def _run_scheduler(
     scheduler: Scheduler, stop: asyncio.Event, interval_seconds: float
@@ -99,6 +111,11 @@ def create_app(
         backups.apply_pending_restore()
         if runtime_settings.auto_migrate:
             run_migrations(runtime_settings.resolved_database_url)
+        configure_logging(
+            data_dir=runtime_settings.data_dir,
+            level=runtime_settings.log_level,
+            retention_days=runtime_settings.log_retention_days,
+        )
 
         cipher = FileSecretCipher.load_or_create(runtime_settings.resolved_master_key_file)
         engine = create_database_engine(runtime_settings.resolved_database_url)
@@ -229,6 +246,7 @@ def create_app(
             selection=selection,
             downloads=downloads,
             recognition=recognition,
+            releases=releases,
             jobs=jobs,
             notifications=notifications,
             schedule=schedule,
@@ -237,6 +255,12 @@ def create_app(
             selection_interval_seconds=max(1, int(runtime_settings.selection_poll_seconds)),
             download_interval_seconds=max(1, int(runtime_settings.download_poll_seconds)),
             backup_interval_hours=runtime_settings.backup_interval_hours,
+            retention_interval_hours=runtime_settings.retention_interval_hours,
+            feed_failure_retention_days=runtime_settings.feed_failure_retention_days,
+            unmatched_retention_days=runtime_settings.unmatched_retention_days,
+            operational_history_retention_days=(
+                runtime_settings.operational_history_retention_days
+            ),
         )
         scheduler = Scheduler(
             jobs,
@@ -299,6 +323,7 @@ def create_app(
             scheduler_stop.set()
             await scheduler_task
             services.close()
+            shutdown_logging()
 
     app = FastAPI(
         title="Anime RSS Service",
@@ -342,6 +367,42 @@ def create_app(
             ):
                 return JSONResponse(status_code=403, content={"detail": "csrf validation failed"})
         return await call_next(request)
+
+    @app.middleware("http")
+    async def correlation_boundary(  # pyright: ignore[reportUnusedFunction]
+        request: Request, call_next: Any
+    ) -> Any:
+        correlation_id = normalize_correlation_id(request.headers.get("x-correlation-id"))
+        started_at = perf_counter()
+        with observation_context(
+            correlation_id=correlation_id,
+            module="http",
+            operation=f"{request.method} {request.url.path}",
+        ):
+            try:
+                response = await call_next(request)
+            except Exception:
+                log_exception(
+                    logger,
+                    "http.request_failed",
+                    method=request.method,
+                    path=request.url.path,
+                    duration_ms=round((perf_counter() - started_at) * 1000, 2),
+                    outcome="failed",
+                )
+                raise
+            response.headers["x-correlation-id"] = correlation_id
+            if request.url.path not in {"/api/v1/health/live", "/api/v1/health/ready"}:
+                log_event(
+                    logger,
+                    "http.request_completed",
+                    method=request.method,
+                    path=request.url.path,
+                    status_code=response.status_code,
+                    duration_ms=round((perf_counter() - started_at) * 1000, 2),
+                    outcome="success" if response.status_code < 500 else "failed",
+                )
+            return response
 
     api = APIRouter(prefix="/api/v1")
 

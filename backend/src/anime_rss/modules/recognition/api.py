@@ -497,6 +497,18 @@ class RecognitionService:
             )
             return [self._to_candidate(record) for record in records]
 
+    def permanent_release_ids(self) -> set[str]:
+        with self._session_factory() as session:
+            return set(
+                session.scalars(
+                    select(MatchAttemptRecord.release_id)
+                    .join(
+                        ManualActionRecord, ManualActionRecord.attempt_id == MatchAttemptRecord.id
+                    )
+                    .distinct()
+                )
+            )
+
     @staticmethod
     def _to_group(key: tuple[str, str], records: list[CandidateRecord]) -> EpisodeGroup:
         series_key, episode_key = key

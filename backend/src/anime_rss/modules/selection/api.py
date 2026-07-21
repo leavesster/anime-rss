@@ -184,6 +184,21 @@ class SelectionService:
                     slot.version += 1
                     slot.updated_at = now
 
+    def retained_release_ids(self) -> set[str]:
+        with self._session_factory() as session:
+            values = set(session.scalars(select(EvaluationRecord.release_id).distinct()))
+            values.update(session.scalars(select(DecisionRecord.release_id).distinct()))
+            values.update(
+                value
+                for value in session.scalars(
+                    select(ManualActionRecord.release_id)
+                    .where(ManualActionRecord.release_id.is_not(None))
+                    .distinct()
+                )
+                if value is not None
+            )
+            return values
+
     def process_due(self, *, limit: int = 100) -> int:
         now = self._clock()
         with self._session_factory() as session:

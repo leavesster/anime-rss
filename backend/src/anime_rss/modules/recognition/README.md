@@ -11,6 +11,7 @@ consumes `ReleaseIdentified.v1` and reads release observations only through the
 - `RecognitionService.list_unmatched`
 - `RecognitionService.confirm_candidate`
 - `RecognitionService.remap_release`
+- `RecognitionService.permanent_release_ids`
 - `parse_release_title`
 
 ## Invariants
@@ -25,6 +26,8 @@ consumes `ReleaseIdentified.v1` and reads release observations only through the
   rewrite the parser attempt that required intervention.
 - Superseded candidates remain addressable for historical decisions but are
   excluded from current grouping and automatic selection queries.
+- A manually confirmed or corrected release fingerprint is permanently protected
+  from unmatched-release retention.
 
 ## Does not own
 

@@ -1,15 +1,26 @@
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from time import perf_counter
+from typing import Any, cast
 
-from sqlalchemy import JSON, ForeignKey, String, UniqueConstraint, select
+from sqlalchemy import JSON, ForeignKey, String, UniqueConstraint, delete, select
 from sqlalchemy.dialects.sqlite import insert
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Mapped, Session, mapped_column, sessionmaker
 
 from anime_rss.infrastructure.database import Base, UTCDateTime
+from anime_rss.infrastructure.observability import (
+    current_causation_id,
+    current_correlation_id,
+    new_correlation_id,
+    observation_context,
+)
 from anime_rss.kernel.ids import new_id
 from anime_rss.kernel.time import Clock, utc_now
+
+logger = logging.getLogger(__name__)
 
 
 class IntegrationEventRecord(Base):
@@ -19,6 +30,8 @@ class IntegrationEventRecord(Base):
     name: Mapped[str] = mapped_column(String(120), index=True)
     version: Mapped[int] = mapped_column(default=1)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON)
+    correlation_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    causation_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     occurred_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
 
 
@@ -41,6 +54,8 @@ class IntegrationEvent:
     version: int
     payload: dict[str, Any]
     occurred_at: datetime
+    correlation_id: str = ""
+    causation_id: str | None = None
 
 
 def append_event(
@@ -50,7 +65,13 @@ def append_event(
     payload: dict[str, Any],
     version: int = 1,
 ) -> str:
-    record = IntegrationEventRecord(name=name, version=version, payload=payload)
+    record = IntegrationEventRecord(
+        name=name,
+        version=version,
+        payload=payload,
+        correlation_id=current_correlation_id() or new_correlation_id(),
+        causation_id=current_causation_id(),
+    )
     session.add(record)
     session.flush()
     return record.id
@@ -95,9 +116,45 @@ class EventDispatcher:
                         name=record.name,
                         version=record.version,
                         payload=record.payload,
+                        correlation_id=record.correlation_id or new_correlation_id(),
+                        causation_id=record.causation_id,
                         occurred_at=record.occurred_at,
                     )
-                    registration.handler(event)
+                    with observation_context(
+                        correlation_id=event.correlation_id,
+                        causation_id=event.id,
+                        module=registration.consumer.split(".", 1)[0],
+                        operation=event.name,
+                    ):
+                        started_at = perf_counter()
+                        try:
+                            registration.handler(event)
+                        except Exception:
+                            logger.exception(
+                                "integration_event.failed",
+                                extra={
+                                    "structured_fields": {
+                                        "event_id": event.id,
+                                        "consumer": registration.consumer,
+                                        "duration_ms": round(
+                                            (perf_counter() - started_at) * 1000, 2
+                                        ),
+                                        "outcome": "failed",
+                                    }
+                                },
+                            )
+                            raise
+                        logger.info(
+                            "integration_event.delivered",
+                            extra={
+                                "structured_fields": {
+                                    "event_id": event.id,
+                                    "consumer": registration.consumer,
+                                    "duration_ms": round((perf_counter() - started_at) * 1000, 2),
+                                    "outcome": "success",
+                                }
+                            },
+                        )
                     self._mark_delivered(event.id, registration.consumer)
                     delivered += 1
         return delivered
@@ -118,6 +175,41 @@ class EventDispatcher:
             if delivered == 0:
                 break
         return total
+
+    def prune_delivered(self, *, before: datetime) -> int:
+        removable: list[str] = []
+        with self._session_factory() as session:
+            records = list(
+                session.scalars(
+                    select(IntegrationEventRecord)
+                    .where(IntegrationEventRecord.occurred_at < before)
+                    .order_by(IntegrationEventRecord.occurred_at)
+                )
+            )
+            for record in records:
+                expected = len(self._handlers.get(record.name, []))
+                delivered_consumers = set(
+                    session.scalars(
+                        select(IntegrationEventDeliveryRecord.consumer).where(
+                            IntegrationEventDeliveryRecord.event_id == record.id
+                        )
+                    )
+                )
+                registered_consumers = {
+                    registration.consumer for registration in self._handlers.get(record.name, [])
+                }
+                if expected == 0 or registered_consumers.issubset(delivered_consumers):
+                    removable.append(record.id)
+        if not removable:
+            return 0
+        with self._session_factory.begin() as session:
+            result = cast(
+                CursorResult[Any],
+                session.execute(
+                    delete(IntegrationEventRecord).where(IntegrationEventRecord.id.in_(removable))
+                ),
+            )
+            return result.rowcount
 
     def _pending_for_consumer(
         self, event_name: str, consumer: str, *, limit: int

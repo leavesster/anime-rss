@@ -14,6 +14,7 @@ from anime_rss.modules.operations.ports import (
     JobSchedule,
 )
 from anime_rss.modules.recognition.api import RecognitionService
+from anime_rss.modules.releases.api import ReleaseService
 from anime_rss.modules.schedule.api import ScheduleService
 from anime_rss.modules.selection.api import SelectionService
 from anime_rss.modules.system.backup import BackupService
@@ -30,6 +31,7 @@ class ApplicationRuntime:
         selection: SelectionService,
         downloads: DownloadService,
         recognition: RecognitionService,
+        releases: ReleaseService,
         jobs: JobService,
         notifications: NotificationService,
         schedule: ScheduleService,
@@ -40,12 +42,17 @@ class ApplicationRuntime:
         download_interval_seconds: int = 30,
         backup_interval_hours: int = 24,
         schedule_interval_minutes: int = 60,
+        retention_interval_hours: int = 24,
+        feed_failure_retention_days: int = 7,
+        unmatched_retention_days: int = 90,
+        operational_history_retention_days: int = 90,
     ) -> None:
         self._feeds = feeds
         self._events = events
         self._selection = selection
         self._downloads = downloads
         self._recognition = recognition
+        self._releases = releases
         self._jobs = jobs
         self._notifications = notifications
         self._schedule = schedule
@@ -56,6 +63,10 @@ class ApplicationRuntime:
         self._download_interval_seconds = download_interval_seconds
         self._backup_interval_hours = backup_interval_hours
         self._schedule_interval_minutes = schedule_interval_minutes
+        self._retention_interval_hours = retention_interval_hours
+        self._feed_failure_retention_days = feed_failure_retention_days
+        self._unmatched_retention_days = unmatched_retention_days
+        self._operational_history_retention_days = operational_history_retention_days
 
     @property
     def handlers(self) -> dict[str, JobHandler]:
@@ -67,6 +78,7 @@ class ApplicationRuntime:
             "notifications.process_deliveries": self._process_notifications,
             "schedule.sync": self._sync_schedule,
             "system.backup": self._create_backup,
+            "system.retention": self._run_retention,
         }
 
     def schedules(self) -> list[JobSchedule]:
@@ -78,6 +90,7 @@ class ApplicationRuntime:
             JobSchedule("notifications.process_deliveries", "singleton", now),
             JobSchedule("schedule.sync", "singleton", now),
             JobSchedule("system.backup", "daily", now),
+            JobSchedule("system.retention", "daily", now),
         ]
         schedules.extend(
             JobSchedule(
@@ -295,4 +308,30 @@ class ApplicationRuntime:
         return JobResult(
             self._clock() + timedelta(hours=self._backup_interval_hours),
             {"filename": result.filename, "size_bytes": result.size_bytes},
+        )
+
+    def _run_retention(self, job: ClaimedJob) -> JobResult:
+        now = self._clock()
+        unmatched_before = now - timedelta(days=self._unmatched_retention_days)
+        history_before = now - timedelta(days=self._operational_history_retention_days)
+        failure_before = now - timedelta(days=self._feed_failure_retention_days)
+        retained_release_ids = self._selection.retained_release_ids()
+        retained_release_ids.update(self._recognition.permanent_release_ids())
+        releases = self._releases.prune_unmatched(
+            before=unmatched_before,
+            retained_release_ids=retained_release_ids,
+        )
+        feeds = self._feeds.prune_history(
+            failure_before=failure_before,
+            history_before=unmatched_before,
+        )
+        return JobResult(
+            now + timedelta(hours=self._retention_interval_hours),
+            {
+                "feed_fetches_removed": feeds.fetches_removed,
+                "feed_entries_removed": feeds.entries_removed + releases.feed_entries_removed,
+                "releases_removed": releases.releases_removed,
+                "events_removed": self._events.prune_delivered(before=history_before),
+                "job_runs_removed": self._jobs.prune_run_history(before=history_before),
+            },
         )

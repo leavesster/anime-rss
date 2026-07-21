@@ -44,8 +44,9 @@ docker compose up -d --build
 ```
 
 Open `http://127.0.0.1:8080` and complete the administrator setup. Compose stores
-the database, encryption key, and backup archives in the `anime-rss-data` volume.
-Do not delete or recreate that volume during an image upgrade.
+the database, encryption key, seven rolling backup archives, and 14 days of JSONL
+application logs in the `anime-rss-data` volume. Do not delete or recreate that
+volume during an image upgrade.
 
 Create an operator backup before upgrades either in the system page or with:
 

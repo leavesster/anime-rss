@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from typing import Any, cast
 from urllib.parse import urlsplit
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
@@ -38,6 +38,12 @@ class FeedNotFoundError(LookupError):
 
 class FeedConflictError(RuntimeError):
     pass
+
+
+@dataclass(frozen=True, slots=True)
+class FeedRetentionResult:
+    fetches_removed: int
+    entries_removed: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -339,6 +345,45 @@ class FeedService:
                 )
                 for record in records
             ]
+
+    def prune_history(
+        self, *, failure_before: datetime, history_before: datetime
+    ) -> FeedRetentionResult:
+        failure_statuses = {
+            "auth_failed",
+            "transient_failure",
+            "invalid_response",
+        }
+        unmatched_statuses = {"pending", "no_reference", "invalid"}
+        with self._session_factory.begin() as session:
+            failed = cast(
+                CursorResult[Any],
+                session.execute(
+                    delete(FeedFetchRecord).where(
+                        FeedFetchRecord.status.in_(failure_statuses),
+                        FeedFetchRecord.finished_at < failure_before,
+                    )
+                ),
+            )
+            history = cast(
+                CursorResult[Any],
+                session.execute(
+                    delete(FeedFetchRecord).where(FeedFetchRecord.finished_at < history_before)
+                ),
+            )
+            entries = cast(
+                CursorResult[Any],
+                session.execute(
+                    delete(FeedEntryRecord).where(
+                        FeedEntryRecord.release_status.in_(unmatched_statuses),
+                        FeedEntryRecord.first_seen_at < history_before,
+                    )
+                ),
+            )
+        return FeedRetentionResult(
+            fetches_removed=failed.rowcount + history.rowcount,
+            entries_removed=entries.rowcount,
+        )
 
     def test_feed(self, *, url: str, headers: dict[str, str] | None = None) -> FeedTestResult:
         self._validate_configuration(name="test", url=url, interval_seconds=600)
@@ -712,3 +757,13 @@ class FeedEntryQueries:
                 return
             entry.release_status = status
             entry.release_error_code = error_code
+
+    def delete_entries(self, entry_ids: set[str]) -> int:
+        if not entry_ids:
+            return 0
+        with self._session_factory.begin() as session:
+            result = cast(
+                CursorResult[Any],
+                session.execute(delete(FeedEntryRecord).where(FeedEntryRecord.id.in_(entry_ids))),
+            )
+            return result.rowcount

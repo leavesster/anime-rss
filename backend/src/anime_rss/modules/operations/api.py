@@ -405,3 +405,16 @@ class JobService:
                 )
                 for item in records
             ]
+
+    def prune_run_history(self, *, before: datetime) -> int:
+        with self._session_factory.begin() as session:
+            result = cast(
+                CursorResult[Any],
+                session.execute(
+                    delete(JobRunRecord).where(
+                        JobRunRecord.started_at < before,
+                        JobRunRecord.status != "running",
+                    )
+                ),
+            )
+            return result.rowcount

@@ -586,11 +586,48 @@ keeps every module on one database generation.
 ### BACKUP-003: Retention is count-based and scheduler-owned
 
 **Choice:** The generic scheduler creates one backup every 24 hours by default and
-keeps the newest 14 archives. Manual and pre-restore archives participate in the
+keeps the newest seven archives. Manual and pre-restore archives participate in the
 same configurable count.
 
 **Reason:** Count retention is predictable on small NAS volumes and does not add a
 second timer loop or a hidden file owner.
+
+### OPS-004: Correlation context is persisted across every execution boundary
+
+**Choice:** HTTP requests accept only canonical UUID correlation IDs and generate
+one otherwise. Background jobs create a new correlation ID and use the durable job
+ID as causation. Integration events persist both IDs; dispatch restores the
+correlation and makes the event ID the next causation ID. Audit writes inherit the
+active correlation automatically.
+
+**Reason:** One identifier now follows feed fetch, release parsing, candidate
+selection, task planning, and external submission without coupling domain APIs to
+HTTP request objects or logger arguments.
+
+### OPS-005: JSON logs and diagnostic history are bounded independently
+
+**Choice:** The process writes structured JSON to stdout and
+`data/logs/application.jsonl`; the file rotates at UTC midnight and keeps 14 days
+by default. Probe requests are excluded. A central formatter redacts URL query
+values and sensitive fields, including messages emitted by dependencies.
+
+**Tradeoff:** Container-runtime stdout retention remains an operator concern. The
+application-owned file provides a predictable local diagnostic window without
+trying to configure Docker or NAS logging policy.
+
+### RET-001: Each module applies retention to its owned records
+
+**Choice:** A daily `system.retention` job asks selection and recognition for
+release IDs that must survive, then invokes public cleanup commands. Subscription
+evaluations, decisions, and manual actions protect their releases. Recognition
+manual corrections protect fingerprints permanently. Other unmatched releases
+and unresolved feed entries expire after 90 days; redacted fetch failures expire
+after seven days. Delivered integration events and completed job runs expire after
+90 days.
+
+**Reason:** `operations` owns timing and evidence, but never deletes another
+module's tables. This preserves module extraction boundaries and prevents cleanup
+from rewriting decisions or deleting corrected fingerprints.
 
 ### UI-002: Security and recovery live behind one application gate
 
@@ -710,24 +747,27 @@ attempts are not silently rewritten.
 
 ## 6. Next Planned Slice
 
-The next coherent delivery unit is `release acceptance hardening`:
+The next coherent delivery unit is `disposable deployment acceptance`:
 
-1. Implement data/log retention and structured correlation IDs.
-2. Run disposable Compose acceptance for first setup, backup into a clean volume,
+1. Run disposable Compose acceptance for first setup, backup into a clean volume,
    restore, upgrade, and rollback.
-3. Add multi-architecture image CI and published image provenance.
-4. Start and record the seven-day real-feed soak required by `DESIGN.md`; this is
+2. Add multi-architecture image CI and published image provenance.
+3. Start and record the seven-day real-feed soak required by `DESIGN.md`; this is
    elapsed-time validation and is not claimed by the current automated suite.
 
 ## 7. Current Verification Evidence
 
-Verified on 2026-07-22 with `make verify` after migration `0011`:
+Verified on 2026-07-22 with `make verify` after migration `0012`:
 
 - Ruff formatting and lint: passed.
 - Pyright: passed with zero errors.
-- Backend: 64 tests passed, 88.27% statement coverage.
+- Backend: 66 tests passed, 88.45% statement coverage.
 - Frontend: ESLint and TypeScript passed; 6 Vitest tests passed.
 - Production Vite build: passed.
+- Observability and retention integration evidence covers caller-supplied and
+  generated correlation IDs, audit/event propagation, private URL redaction,
+  scheduled cleanup of unmatched history, and preservation of subscription and
+  manual-correction evidence.
 - Feed and recognition integration evidence covers private-URL duplicate
   rejection, distinct tokenized URLs, encrypted-at-rest URL handling, candidate
   supersession, immutable prior decisions, and normal evaluation of the corrected
