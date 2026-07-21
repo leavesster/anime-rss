@@ -651,6 +651,29 @@ port, and probes database readiness.
 one portable volume, and avoids process-manager behavior that could duplicate the
 embedded scheduler.
 
+### PKG-002: Release images are reproducible across lifecycle transitions
+
+**Choice:** GitHub Actions publishes `linux/amd64` and `linux/arm64` images to
+GHCR for `master`, version tags, and commit SHAs. BuildKit emits maximum-mode
+provenance and an SBOM, and GitHub attaches a registry-backed build provenance
+attestation. Compose accepts an `ANIME_RSS_IMAGE` override while retaining the
+local-build default.
+
+The `make acceptance-compose` harness selects the newest historical commit before
+the current migration, builds baseline and current images, and exercises setup,
+operator backup, in-place upgrade, clean-volume restore, and backup-based rollback.
+Every transition starts the full service, logs in again, and verifies settings,
+subscription, and feed projections. Test projects and volumes are uniquely named
+and removed on both success and failure.
+
+**Reason:** Schema migration, encryption-key portability, and rollback behavior
+must be proven at the container boundary. Unit-level backup tests cannot detect
+image entrypoint, volume ownership, static asset, or Compose wiring regressions.
+
+**Tradeoff:** The local acceptance harness validates one native architecture.
+Cross-architecture builds, registry publication, SBOM attachment, and attestation
+are verified only when the GitHub Actions workflow runs.
+
 ### SCH-001: Schedule is a downstream projection, never an acquisition source
 
 **Choice:** `schedule` reads catalog metadata, subscriptions, selection slots,
@@ -747,13 +770,14 @@ attempts are not silently rewritten.
 
 ## 6. Next Planned Slice
 
-The next coherent delivery unit is `disposable deployment acceptance`:
+The next coherent delivery unit is `real-feed release acceptance`:
 
-1. Run disposable Compose acceptance for first setup, backup into a clean volume,
-   restore, upgrade, and rollback.
-2. Add multi-architecture image CI and published image provenance.
-3. Start and record the seven-day real-feed soak required by `DESIGN.md`; this is
-   elapsed-time validation and is not claimed by the current automated suite.
+1. Connect two real feeds and subscribe to two currently airing anime through
+   Bangumi, recording only redacted identifiers in acceptance evidence.
+2. Run continuously for seven natural days while recording refreshes, decisions,
+   duplicate suppression, downloader reconciliation, and any manual corrections.
+3. Produce a final evidence table for all twelve `DESIGN.md` acceptance criteria,
+   separating automated proof from observations that require real external systems.
 
 ## 7. Current Verification Evidence
 
@@ -764,6 +788,12 @@ Verified on 2026-07-22 with `make verify` after migration `0012`:
 - Backend: 66 tests passed, 88.45% statement coverage.
 - Frontend: ESLint and TypeScript passed; 6 Vitest tests passed.
 - Production Vite build: passed.
+- Disposable Compose lifecycle: passed for clean setup, operator backup,
+  in-place upgrade from the pre-`0012` baseline, clean-volume restore, and
+  backup-based rollback.
+- Container publishing workflow: statically validated for `linux/amd64` and
+  `linux/arm64`, GHCR tags, BuildKit provenance, SBOM, and GitHub attestation;
+  registry publication still requires an actual GitHub Actions run.
 - Observability and retention integration evidence covers caller-supplied and
   generated correlation IDs, audit/event propagation, private URL redaction,
   scheduled cleanup of unmatched history, and preservation of subscription and
@@ -779,5 +809,5 @@ Verified on 2026-07-22 with `make verify` after migration `0012`:
   one-time missing notification, acquired-elsewhere recovery, and the absence of
   download tasks from schedule processing.
 
-The seven-day real-feed soak and disposable Compose lifecycle remain
-elapsed/runtime acceptance work and are not inferred from this automated suite.
+The two-feed/two-anime external acceptance and seven-day real-feed soak remain
+runtime work and are not inferred from the automated suites.

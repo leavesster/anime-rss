@@ -2,7 +2,7 @@ services:
   anime-rss:
     build:
       context: .
-    image: anime-rss-service:local
+    image: ${ANIME_RSS_IMAGE:-anime-rss-service:local}
     restart: unless-stopped
     ports:
       - "${ANIME_RSS_PORT:-8080}:8080"

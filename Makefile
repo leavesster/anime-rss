@@ -1,4 +1,4 @@
-.PHONY: bootstrap bootstrap-web format lint lint-web typecheck typecheck-web test test-web test-unit test-integration migrate run run-web build-web verify verify-backend verify-web
+.PHONY: bootstrap bootstrap-web format lint lint-web typecheck typecheck-web test test-web test-unit test-integration migrate run run-web build-web verify verify-backend verify-web acceptance-compose
 
 PYTHON := .venv/bin/python
 
@@ -55,3 +55,6 @@ verify-web:
 	npm --prefix web run verify
 
 verify: verify-backend verify-web
+
+acceptance-compose:
+	./scripts/acceptance-compose.sh

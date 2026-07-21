@@ -48,6 +48,12 @@ the database, encryption key, seven rolling backup archives, and 14 days of JSON
 application logs in the `anime-rss-data` volume. Do not delete or recreate that
 volume during an image upgrade.
 
+To run a published image instead of building locally, set `ANIME_RSS_IMAGE`:
+
+```bash
+ANIME_RSS_IMAGE=ghcr.io/OWNER/anime-rss-service:VERSION docker compose up -d
+```
+
 Create an operator backup before upgrades either in the system page or with:
 
 ```bash
@@ -86,6 +92,11 @@ the interface and API at `http://127.0.0.1:8080`; OpenAPI remains available at
 `/docs`. During frontend development, run `make run-web` in a second terminal
 and open `http://127.0.0.1:5173`; Vite proxies API calls to the backend. Runtime
 data defaults to `./data` and is ignored by Git.
+
+Run `make acceptance-compose` before changing image packaging, migrations, or
+backup behavior. It builds a historical baseline and the current image, then
+verifies clean setup, backup, in-place upgrade, clean-volume restore, and
+backup-based rollback with disposable Compose projects.
 
 ## Implemented API
 
