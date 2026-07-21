@@ -6,6 +6,9 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, cast
 
+from argon2 import PasswordHasher
+from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
+from argon2.low_level import Type
 from sqlalchemy import delete, select
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session, sessionmaker
@@ -17,9 +20,15 @@ from anime_rss.modules.system.api import complete_setup_step
 from anime_rss.modules.system.persistence import AdminAccountRecord, AdminSessionRecord
 
 _ADMIN_ID = "administrator"
-_SCRYPT_N = 2**14
-_SCRYPT_R = 8
-_SCRYPT_P = 1
+_LEGACY_SCRYPT_PARAMS = (2**14, 8, 1)
+_ARGON2_HASHER = PasswordHasher(
+    time_cost=3,
+    memory_cost=64 * 1024,
+    parallelism=1,
+    hash_len=32,
+    salt_len=16,
+    type=Type.ID,
+)
 
 
 class SetupConflictError(RuntimeError):
@@ -51,6 +60,12 @@ class AuthenticatedSession:
     account_id: str
     username: str
     expires_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class PasswordVerification:
+    valid: bool
+    needs_rehash: bool = False
 
 
 class AuthService:
@@ -104,12 +119,27 @@ class AuthService:
         return self._create_session(_ADMIN_ID, clean_username)
 
     def login(self, *, username: str, password: str) -> CreatedSession:
-        with self._session_factory() as session:
+        with self._session_factory.begin() as session:
             account = session.scalar(
                 select(AdminAccountRecord).where(AdminAccountRecord.username == username.strip())
             )
-            if account is None or not self._verify_password(password, account.password_hash):
+            verification = (
+                self._verify_password(password, account.password_hash)
+                if account is not None
+                else PasswordVerification(valid=False)
+            )
+            if account is None or not verification.valid:
                 raise AuthenticationError("invalid credentials")
+            if verification.needs_rehash:
+                now = self._clock()
+                account.password_hash = self._hash_password(password)
+                account.updated_at = now
+                record_event(
+                    session,
+                    event_type="system.password_hash_upgraded",
+                    entity_type="administrator",
+                    entity_id=account.id,
+                )
             account_id = account.id
             clean_username = account.username
         return self._create_session(account_id, clean_username)
@@ -208,35 +238,43 @@ class AuthService:
 
     @staticmethod
     def _hash_password(password: str) -> str:
-        salt = secrets.token_bytes(16)
-        derived = hashlib.scrypt(
-            password.encode(), salt=salt, n=_SCRYPT_N, r=_SCRYPT_R, p=_SCRYPT_P, dklen=32
-        )
-        return "$".join(
-            (
-                "scrypt-v1",
-                str(_SCRYPT_N),
-                str(_SCRYPT_R),
-                str(_SCRYPT_P),
-                base64.urlsafe_b64encode(salt).decode(),
-                base64.urlsafe_b64encode(derived).decode(),
+        return _ARGON2_HASHER.hash(password)
+
+    @staticmethod
+    def _verify_password(password: str, stored: str) -> PasswordVerification:
+        if stored.startswith("$argon2id$"):
+            try:
+                valid = _ARGON2_HASHER.verify(stored, password)
+            except (InvalidHashError, VerificationError, VerifyMismatchError):
+                return PasswordVerification(valid=False)
+            return PasswordVerification(
+                valid=valid,
+                needs_rehash=valid and _ARGON2_HASHER.check_needs_rehash(stored),
             )
+        return PasswordVerification(
+            valid=AuthService._verify_legacy_scrypt(password, stored),
+            needs_rehash=True,
         )
 
     @staticmethod
-    def _verify_password(password: str, stored: str) -> bool:
+    def _verify_legacy_scrypt(password: str, stored: str) -> bool:
         try:
             version, n_text, r_text, p_text, salt_text, expected_text = stored.split("$")
             if version != "scrypt-v1":
                 return False
+            params = (int(n_text), int(r_text), int(p_text))
+            if params != _LEGACY_SCRYPT_PARAMS:
+                return False
             salt = base64.urlsafe_b64decode(salt_text)
             expected = base64.urlsafe_b64decode(expected_text)
+            if len(salt) != 16 or len(expected) != 32:
+                return False
             actual = hashlib.scrypt(
                 password.encode(),
                 salt=salt,
-                n=int(n_text),
-                r=int(r_text),
-                p=int(p_text),
+                n=params[0],
+                r=params[1],
+                p=params[2],
                 dklen=len(expected),
             )
         except (ValueError, TypeError):

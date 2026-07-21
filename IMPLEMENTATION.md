@@ -138,7 +138,8 @@ packaged as a first-run authenticated, recoverable Compose service.
 
 ### Product hardening and delivery
 
-- First-run administrator setup, salted scrypt password storage, opaque sessions,
+- First-run administrator setup, Argon2id password storage with login-time legacy
+  scrypt migration, opaque sessions,
   password-reset CLI, and explicit logout.
 - HTTP-only session cookie plus readable CSRF cookie; every authenticated mutation
   must echo the CSRF value in `X-CSRF-Token`.
@@ -613,9 +614,13 @@ secret, and setup state remains part of the restored application state.
 
 ### SEC-002: Sessions are opaque and revocable
 
-**Choice:** Passwords use salted scrypt. Session and CSRF tokens use independent
-random values, and only SHA-256 hashes are stored. Password reset revokes every
-session.
+**Choice:** New and reset passwords use Argon2id with 64 MiB memory, time cost 3,
+parallelism 1, a 32-byte hash, and a 16-byte salt. The prior fixed-parameter
+`scrypt-v1` format remains verification-only: a successful login replaces it in
+the same transaction, preserves `password_changed_at`, and records
+`system.password_hash_upgraded`. Unknown, malformed, or altered legacy parameter
+sets fail as invalid credentials. Session and CSRF tokens use independent random
+values, and only SHA-256 hashes are stored. Password reset revokes every session.
 
 **Reason:** Database disclosure does not reveal reusable browser tokens, while a
 single-user operator retains a direct recovery command.
@@ -1000,14 +1005,14 @@ truth; a row is complete only when code and proportionate evidence both exist.
 | Parser regression contract | `title-rules.v2`, 320-case golden matrix, focused malformed cases, and 512-case Unicode/property gates | Complete |
 | HTTP consistency | `0017`, durable replay/conflict tests, version/precondition tests, cursor traversal tests, structured error tests, and checked OpenAPI/TypeScript contract | Complete |
 | Browser-origin security | Host/IP and proxy-origin policy, Fetch Metadata rejection, bounded per-client setup/login and connection-test limits, deployment documentation, and security integration tests | Complete |
-| Password KDF | Versioned salted scrypt is implemented and documented | Record a formal ADR deviation or migrate the plan's Argon2id choice |
+| Password KDF | Argon2id setup/reset, fixed parameters, successful-login legacy scrypt migration, timestamp preservation, audit event, malformed-hash rejection, and integration coverage | Complete |
 | Startup migration safety | Alembic startup migration and portable backups exist | Add migration lock and automatic consistent pre-migration backup |
 | qBittorrent contract | Adapter unit tests cover idempotent add/retry paths | Prove supported real versions, two-success external removal, and upgrade cancellation ordering |
 | Stable engineering gates | lint, typecheck, unit/integration, OpenAPI generation, Compose acceptance | Add doctor, checked OpenAPI drift, security scan, clean-room, and release-evidence commands |
 | External acceptance | Durable seven-day evidence tooling exists | Configure two real feeds, two Bangumi subscriptions, qBittorrent, then complete seven natural days |
 
-The next implementation unit is the password KDF decision, followed by startup
-migration safety. Release gates then proceed as independent reviewable units; the
+The next implementation unit is startup migration safety. Release gates then
+proceed as independent reviewable units; the
 seven-day clock starts only after its external preflight is genuinely satisfied.
 
 ## 7. Current Verification Evidence
@@ -1017,9 +1022,12 @@ Verified on 2026-07-22 with `make verify` after migration `0017` and parser
 
 - Ruff formatting and lint: passed.
 - Pyright: passed with zero errors.
-- Backend: 96 tests passed, 88.80% statement coverage.
+- Backend: 99 tests passed, 88.99% statement coverage.
 - Frontend: ESLint and TypeScript passed; 14 Vitest tests passed.
 - Production Vite build: passed.
+- Authentication integration evidence covers Argon2id setup and reset, valid
+  legacy scrypt login migration, timestamp preservation, one-time audit output,
+  session revocation, and malformed or unknown hash rejection.
 - Disposable Compose lifecycle: passed for clean setup, operator backup,
   in-place upgrade through `0017`, clean-volume restore, and backup-based
   rollback, including audit history, waiting work, Decision, and DownloadTask

@@ -17,7 +17,11 @@ plaintext credentials.
 
 ## Invariants
 
-- Passwords use salted scrypt; session and CSRF values are stored only as hashes.
+- New and reset passwords use Argon2id with 64 MiB memory, three iterations,
+  one lane, a 32-byte hash, and a 16-byte salt. A valid legacy `scrypt-v1`
+  password is upgraded in the successful login transaction without changing
+  `password_changed_at`; the upgrade emits `system.password_hash_upgraded`.
+- Session and CSRF values are stored only as hashes.
 - Mutating authenticated HTTP requests require a matching CSRF cookie and header.
 - A restore is validated and staged while live, then applied before migrations on restart.
 - Backup archives include the master key and are therefore sensitive credentials.
