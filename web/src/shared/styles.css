@@ -103,6 +103,25 @@ h3 { font-size: 15px; letter-spacing: 0; }
 .overview-metric small { color: var(--muted); font-size: 11px; font-weight: 650; }
 .overview-metric strong { font-size: 23px; line-height: 1; }
 .overview-metric strong span { color: #8b9591; font-size: 13px; font-weight: 600; }
+.selection-logic { margin-bottom: 34px; }
+.selection-logic__heading { min-height: 0; }
+.selection-flow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); background: var(--surface); border: 1px solid var(--line); border-radius: 8px 8px 0 0; }
+.selection-flow__step { position: relative; min-width: 0; min-height: 154px; padding: 18px 20px; border-right: 1px solid var(--soft-line); }
+.selection-flow__step:last-child { border-right: 0; }
+.selection-flow__title { display: flex; align-items: center; gap: 10px; }
+.selection-flow__title > div { display: flex; flex-direction: column; gap: 2px; }
+.selection-flow__title small { color: var(--muted); font-size: 9px; font-weight: 700; }
+.selection-flow__title strong { font-size: 13px; }
+.selection-flow__icon { width: 32px; height: 32px; flex: 0 0 32px; display: grid; place-items: center; color: var(--blue); background: var(--blue-soft); border-radius: 6px; }
+.selection-flow__step p { margin-top: 13px; color: #53615c; font-size: 11px; line-height: 1.65; overflow-wrap: anywhere; }
+.selection-flow__arrow { position: absolute; top: 26px; right: -9px; padding: 2px; color: #9ba6a1; background: var(--surface); z-index: 1; }
+.manual-boundary { min-height: 70px; display: flex; align-items: flex-start; gap: 11px; padding: 14px 18px; background: #f7f9f8; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 8px 8px; }
+.manual-boundary__icon { width: 32px; height: 32px; flex: 0 0 32px; display: grid; place-items: center; color: var(--amber); background: var(--amber-soft); border-radius: 6px; }
+.manual-boundary > div { min-width: 0; display: grid; grid-template-columns: auto 1fr 1.4fr; align-items: center; gap: 12px 18px; width: 100%; }
+.manual-boundary strong { font-size: 12px; white-space: nowrap; }
+.manual-boundary p { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.manual-boundary p:first-of-type { color: var(--accent-dark); }
+.manual-boundary p svg { flex: 0 0 auto; }
 .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; }
 .dashboard-section, .data-section { min-width: 0; }
 .section-heading { min-height: 48px; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 13px; }
@@ -250,6 +269,13 @@ a.compact-row:hover { background: var(--surface-soft); }
   .feed-actions { grid-column: 2; grid-row: 1; }
   .release-grid { grid-template-columns: minmax(190px, 1fr) 110px 65px 100px; }
   .release-grid > :last-child { display: none; }
+  .selection-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .selection-flow__step { min-height: 138px; border-bottom: 1px solid var(--soft-line); }
+  .selection-flow__step:nth-child(2) { border-right: 0; }
+  .selection-flow__step:nth-last-child(-n+2) { border-bottom: 0; }
+  .selection-flow__arrow { display: none; }
+  .manual-boundary > div { grid-template-columns: auto 1fr; }
+  .manual-boundary p:last-child { grid-column: 1 / -1; }
 }
 
 @media (max-width: 780px) {
@@ -319,6 +345,12 @@ a.compact-row:hover { background: var(--surface-soft); }
   .toolbar { align-items: stretch; flex-direction: column; }
   .candidate-toolbar { align-items: stretch; flex-direction: column; }
   .candidate-toolbar .segmented, .candidate-search { width: 100%; max-width: none; }
+  .selection-flow { grid-template-columns: 1fr; }
+  .selection-flow__step { min-height: 0; border-right: 0; border-bottom: 1px solid var(--soft-line); }
+  .selection-flow__step:nth-child(2) { border-right: 0; }
+  .selection-flow__step:nth-last-child(2) { border-bottom: 1px solid var(--soft-line); }
+  .selection-flow__step:last-child { border-bottom: 0; }
+  .manual-boundary > div { display: flex; align-items: flex-start; flex-direction: column; gap: 7px; }
   .episode-group__header { align-items: flex-start; }
   .episode-group__header > div { align-items: flex-start; flex-direction: column; gap: 8px; }
   .candidate-row { min-width: 0; grid-template-columns: minmax(0, 1fr) auto; }

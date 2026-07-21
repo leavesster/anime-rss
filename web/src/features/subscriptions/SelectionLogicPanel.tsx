@@ -1,0 +1,67 @@
+import {
+  ArrowRight,
+  CheckCircle2,
+  Clock3,
+  GitCompareArrows,
+  Hand,
+  RefreshCw,
+  ShieldCheck,
+} from "lucide-react";
+
+const steps = [
+  {
+    icon: ShieldCheck,
+    title: "硬过滤",
+    detail: "仅接收高置信度单集；默认要求中文字幕、1080p/720p 和 HEVC/AVC/AV1。",
+  },
+  {
+    icon: GitCompareArrows,
+    title: "依次比较",
+    detail: "字幕组 -> 字幕 -> 清晰度 -> 编码 -> 高版本 -> 首次发现时间。前项优先级更高。",
+  },
+  {
+    icon: Clock3,
+    title: "等待或决定",
+    detail: "所有第一偏好都命中时立即决定；否则等待，期间只替换更优候选，不延长截止时间。",
+  },
+  {
+    icon: RefreshCw,
+    title: "版本升级",
+    detail: "决定后仅接受同字幕组、更高 revision 的自动升级；其他字幕组不会覆盖已有选择。",
+  },
+];
+
+export function SelectionLogicPanel() {
+  return (
+    <section className="selection-logic" aria-labelledby="selection-logic-title">
+      <div className="section-heading selection-logic__heading">
+        <div>
+          <h2 id="selection-logic-title">当前选择逻辑</h2>
+          <p>每一集独立评估；允许列表决定能否参与，偏好顺序决定谁更优。</p>
+        </div>
+      </div>
+
+      <div className="selection-flow">
+        {steps.map(({ icon: Icon, title, detail }, index) => (
+          <div className="selection-flow__step" data-testid="selection-step" key={title}>
+            <div className="selection-flow__title">
+              <span className="selection-flow__icon"><Icon size={17} /></span>
+              <div><small>步骤 {index + 1}</small><strong>{title}</strong></div>
+            </div>
+            <p>{detail}</p>
+            {index < steps.length - 1 && <ArrowRight className="selection-flow__arrow" size={16} aria-hidden="true" />}
+          </div>
+        ))}
+      </div>
+
+      <div className="manual-boundary">
+        <span className="manual-boundary__icon"><Hand size={17} /></span>
+        <div>
+          <strong>人工处理边界</strong>
+          <p><CheckCircle2 size={14} />已支持历史回填逐集确认。</p>
+          <p>中置信度放行、同集人工改选和撤换既有决策将在后续阶段实现。</p>
+        </div>
+      </div>
+    </section>
+  );
+}

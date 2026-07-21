@@ -90,6 +90,8 @@ does not yet contact qBittorrent.
   attributes.
 - Anime creation/import, subscription creation and lifecycle controls, backfill
   preview, waiting-state summary, and immutable decision history.
+- In-page selection flow showing hard filters, comparison order, wait behavior,
+  revision upgrades, and the explicit boundary of current manual operations.
 - Generated TypeScript API types from the checked OpenAPI contract.
 
 ## 3. Decision Log
@@ -252,6 +254,16 @@ release group with a higher revision can create an automatic upgrade decision.
 **Reason:** A later release from a different group is an alternative, not a V2
 replacement.
 
+### UI-001: The subscription page documents the live policy boundary
+
+**Choice:** The page presents the automatic selection stages in execution order
+and distinguishes available backfill confirmation from manual candidate
+approval, per-episode override, and decision replacement that are not yet
+implemented.
+
+**Reason:** Operators must be able to predict automatic behavior without
+mistaking a visible confirmation state for an available manual command.
+
 ## 4. Parser v1 Contract
 
 Supported episode shapes:
@@ -286,6 +298,9 @@ attempts are not silently rewritten.
   profiles are not implemented.
 - Medium-confidence confirmation is represented in state but has no manual
   correction/approval command yet.
+- Per-episode manual candidate selection and replacement of an existing decision
+  are not implemented; historical backfill confirmation is the only current
+  manual selection action.
 - No qBittorrent adapter or content download exists yet.
 - `DownloadRequested.v1` events are durable intents with no consumer until the
   download slice is installed.

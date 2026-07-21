@@ -18,6 +18,7 @@ import { formatDate } from "../../shared/lib/format";
 import { AddAnimeDialog } from "./AddAnimeDialog";
 import { BackfillDialog } from "./BackfillDialog";
 import { CreateSubscriptionDialog } from "./CreateSubscriptionDialog";
+import { SelectionLogicPanel } from "./SelectionLogicPanel";
 
 const decisionLabels: Record<string, string> = {
   selected_preferred: "首选",
@@ -55,6 +56,8 @@ export function SubscriptionsPage() {
           <div className="overview-metric"><span className="metric-icon metric-icon--blue"><Clock3 size={19} /></span><div><small>等待备选</small><strong>{waiting}</strong></div></div>
           <div className="overview-metric"><span className="metric-icon metric-icon--gray"><Sparkles size={19} /></span><div><small>已形成决策</small><strong>{decisions.data.length}</strong></div></div>
         </section>
+
+        <SelectionLogicPanel />
 
         <div className="subscription-layout">
           <section className="data-section"><div className="section-heading"><div><h2>追番订阅</h2><p>暂停或恢复会切换激活时间边界。</p></div></div>
