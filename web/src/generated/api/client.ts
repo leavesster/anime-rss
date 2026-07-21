@@ -10,6 +10,9 @@ export type FeedEntry = components["schemas"]["FeedEntryResponse"];
 export type FeedFetch = components["schemas"]["FeedFetchResponse"];
 export type RefreshResult = components["schemas"]["RefreshResponse"];
 export type Release = components["schemas"]["ReleaseResponse"];
+export type EpisodeGroup = components["schemas"]["EpisodeGroupResponse"];
+export type Candidate = components["schemas"]["CandidateResponse"];
+export type UnmatchedRelease = components["schemas"]["UnmatchedReleaseResponse"];
 
 const client = createClient<paths>({ baseUrl: "" });
 
@@ -112,5 +115,21 @@ export async function listFeedFetches(feedId: string): Promise<FeedFetch[]> {
 export async function listReleases(): Promise<Release[]> {
   return unwrap(
     await client.GET("/api/v1/releases", { params: { query: { limit: 200 } } }),
+  );
+}
+
+export async function listEpisodeGroups(): Promise<EpisodeGroup[]> {
+  return unwrap(
+    await client.GET("/api/v1/recognition/episode-groups", {
+      params: { query: { limit: 200 } },
+    }),
+  );
+}
+
+export async function listUnmatchedReleases(): Promise<UnmatchedRelease[]> {
+  return unwrap(
+    await client.GET("/api/v1/recognition/unmatched", {
+      params: { query: { limit: 200 } },
+    }),
   );
 }

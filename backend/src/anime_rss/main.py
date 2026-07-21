@@ -19,6 +19,8 @@ from anime_rss.modules.feeds.adapters import FeedDocumentParser
 from anime_rss.modules.feeds.api import FeedEntryQueries, FeedService, Jitter
 from anime_rss.modules.feeds.http import router as feeds_router
 from anime_rss.modules.operations.api import JobService
+from anime_rss.modules.recognition.api import RecognitionService
+from anime_rss.modules.recognition.http import router as recognition_router
 from anime_rss.modules.releases.api import ReleaseService
 from anime_rss.modules.releases.http import router as releases_router
 from anime_rss.modules.system.api import FileSecretCipher
@@ -69,6 +71,7 @@ def create_app(
         releases = ReleaseService(
             session_factory, feed_entries, cipher, torrent_client, clock=clock
         )
+        recognition = RecognitionService(session_factory, releases, clock=clock)
         events = EventDispatcher(
             session_factory,
             {
@@ -77,7 +80,13 @@ def create_app(
                         consumer="releases.feed-entry-observer.v1",
                         handler=releases.handle_feed_entry_observed,
                     )
-                ]
+                ],
+                "ReleaseIdentified.v1": [
+                    RegisteredHandler(
+                        consumer="recognition.release-identifier.v1",
+                        handler=recognition.handle_release_identified,
+                    )
+                ],
             },
             clock=clock,
         )
@@ -87,10 +96,12 @@ def create_app(
             torrent_http_client=torrent_client,
             feeds=feeds,
             releases=releases,
+            recognition=recognition,
             jobs=JobService(session_factory, clock=clock),
             events=events,
         )
         app.state.services = services
+        events.dispatch_until_idle(event_names={"ReleaseIdentified.v1"})
         try:
             yield
         finally:
@@ -118,6 +129,7 @@ def create_app(
 
     api.include_router(feeds_router)
     api.include_router(releases_router)
+    api.include_router(recognition_router)
     app.include_router(api)
 
     repository_root = Path(__file__).resolve().parents[3]

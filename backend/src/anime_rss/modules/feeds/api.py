@@ -66,6 +66,8 @@ class FeedEntry:
 @dataclass(frozen=True, slots=True)
 class FeedEntrySecret:
     id: str
+    title: str
+    published_at: datetime | None
     feed_url: str
     headers: dict[str, str]
     torrent_reference: str | None
@@ -605,6 +607,8 @@ class FeedEntryQueries:
                 ).decode()
             return FeedEntrySecret(
                 id=entry.id,
+                title=entry.title_normalized,
+                published_at=entry.published_at,
                 feed_url=endpoint,
                 headers=headers,
                 torrent_reference=reference,

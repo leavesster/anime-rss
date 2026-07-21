@@ -461,10 +461,304 @@
           }
         }
       }
+    },
+    "/api/v1/recognition/episode-groups": {
+      "get": {
+        "tags": [
+          "recognition"
+        ],
+        "summary": "List Episode Groups",
+        "operationId": "list_episode_groups_api_v1_recognition_episode_groups_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EpisodeGroupResponse"
+                  },
+                  "title": "Response List Episode Groups Api V1 Recognition Episode Groups Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/recognition/unmatched": {
+      "get": {
+        "tags": [
+          "recognition"
+        ],
+        "summary": "List Unmatched",
+        "operationId": "list_unmatched_api_v1_recognition_unmatched_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UnmatchedReleaseResponse"
+                  },
+                  "title": "Response List Unmatched Api V1 Recognition Unmatched Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "CandidateResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "release_id": {
+            "type": "string",
+            "title": "Release Id"
+          },
+          "source_title": {
+            "type": "string",
+            "title": "Source Title"
+          },
+          "series_title": {
+            "type": "string",
+            "title": "Series Title"
+          },
+          "series_key": {
+            "type": "string",
+            "title": "Series Key"
+          },
+          "season": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season"
+          },
+          "episode_start": {
+            "type": "string",
+            "title": "Episode Start"
+          },
+          "episode_end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Episode End"
+          },
+          "episode_key": {
+            "type": "string",
+            "title": "Episode Key"
+          },
+          "release_group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Group"
+          },
+          "resolution": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution"
+          },
+          "video_codec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Codec"
+          },
+          "subtitle_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtitle Language"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "content_kind": {
+            "type": "string",
+            "title": "Content Kind"
+          },
+          "confidence": {
+            "type": "string",
+            "title": "Confidence"
+          },
+          "recognition_eligible": {
+            "type": "boolean",
+            "title": "Recognition Eligible"
+          },
+          "first_seen_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "First Seen At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "release_id",
+          "source_title",
+          "series_title",
+          "series_key",
+          "season",
+          "episode_start",
+          "episode_end",
+          "episode_key",
+          "release_group",
+          "resolution",
+          "video_codec",
+          "subtitle_language",
+          "revision",
+          "content_kind",
+          "confidence",
+          "recognition_eligible",
+          "first_seen_at"
+        ],
+        "title": "CandidateResponse"
+      },
+      "EpisodeGroupResponse": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "series_title": {
+            "type": "string",
+            "title": "Series Title"
+          },
+          "series_key": {
+            "type": "string",
+            "title": "Series Key"
+          },
+          "season": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season"
+          },
+          "episode_key": {
+            "type": "string",
+            "title": "Episode Key"
+          },
+          "candidate_count": {
+            "type": "integer",
+            "title": "Candidate Count"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/CandidateResponse"
+            },
+            "type": "array",
+            "title": "Candidates"
+          },
+          "latest_seen_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Latest Seen At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "series_title",
+          "series_key",
+          "season",
+          "episode_key",
+          "candidate_count",
+          "candidates",
+          "latest_seen_at"
+        ],
+        "title": "EpisodeGroupResponse"
+      },
       "FeedCreateRequest": {
         "properties": {
           "name": {
@@ -987,6 +1281,45 @@
           "source_count"
         ],
         "title": "ReleaseResponse"
+      },
+      "UnmatchedReleaseResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "release_id": {
+            "type": "string",
+            "title": "Release Id"
+          },
+          "source_title": {
+            "type": "string",
+            "title": "Source Title"
+          },
+          "confidence": {
+            "type": "string",
+            "title": "Confidence"
+          },
+          "reason_code": {
+            "type": "string",
+            "title": "Reason Code"
+          },
+          "parsed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Parsed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "release_id",
+          "source_title",
+          "confidence",
+          "reason_code",
+          "parsed_at"
+        ],
+        "title": "UnmatchedReleaseResponse"
       },
       "ValidationError": {
         "properties": {

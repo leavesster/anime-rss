@@ -14,6 +14,9 @@ const labels: Record<string, string> = {
   weak: "弱标识",
   resolved: "已解析",
   unresolved: "待解析",
+  high: "高置信",
+  medium: "中置信",
+  low: "低置信",
 };
 
 export function statusLabel(status: string): string {
@@ -22,8 +25,9 @@ export function statusLabel(status: string): string {
 
 export function statusTone(status: string): StatusTone {
   if (["healthy", "success", "ready", "resolved", "strong"].includes(status)) return "positive";
+  if (status === "high") return "positive";
   if (["auth_failed", "failed", "failing"].includes(status)) return "danger";
-  if (["never_fetched", "pending", "weak"].includes(status)) return "warning";
+  if (["never_fetched", "pending", "weak", "medium", "low"].includes(status)) return "warning";
   if (["not_modified"].includes(status)) return "info";
   return "neutral";
 }

@@ -2,7 +2,8 @@
 
 Single-user, self-hosted anime RSS ingestion and download automation. Product
 requirements live in `DESIGN.md`; module boundaries and dependency rules live
-in `ARCHITECTURE.md`.
+in `ARCHITECTURE.md`; implemented behavior and concrete choices are tracked in
+`IMPLEMENTATION.md`.
 
 ## Current implementation status
 
@@ -17,10 +18,12 @@ The ingestion slice and its first management interface are implemented:
 - durable scheduler job leases
 - responsive React dashboard, feed management, fetch history, and release library
 - generated TypeScript API types and production static asset serving
+- deterministic title recognition and same-episode candidate grouping
+- versioned implementation decision record for handoff and review
 
-Authentication, anime metadata, title recognition, subscription decisions, and
-qBittorrent submission are later slices. The current application is therefore a
-development build and must not be exposed publicly.
+Authentication, authoritative anime metadata, subscription decisions, and
+qBittorrent submission are later slices. The current application is therefore
+a development build and must not be exposed publicly.
 
 ## Development
 
@@ -56,4 +59,6 @@ POST   /api/v1/feeds/{feed_id}/refresh
 GET    /api/v1/feeds/{feed_id}/entries
 GET    /api/v1/feeds/{feed_id}/fetches
 GET    /api/v1/releases
+GET    /api/v1/recognition/episode-groups
+GET    /api/v1/recognition/unmatched
 ```

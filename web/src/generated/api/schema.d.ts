@@ -159,10 +159,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/recognition/episode-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Episode Groups */
+        get: operations["list_episode_groups_api_v1_recognition_episode_groups_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recognition/unmatched": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Unmatched */
+        get: operations["list_unmatched_api_v1_recognition_unmatched_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** CandidateResponse */
+        CandidateResponse: {
+            /** Id */
+            id: string;
+            /** Release Id */
+            release_id: string;
+            /** Source Title */
+            source_title: string;
+            /** Series Title */
+            series_title: string;
+            /** Series Key */
+            series_key: string;
+            /** Season */
+            season: number | null;
+            /** Episode Start */
+            episode_start: string;
+            /** Episode End */
+            episode_end: string | null;
+            /** Episode Key */
+            episode_key: string;
+            /** Release Group */
+            release_group: string | null;
+            /** Resolution */
+            resolution: string | null;
+            /** Video Codec */
+            video_codec: string | null;
+            /** Subtitle Language */
+            subtitle_language: string | null;
+            /** Revision */
+            revision: number;
+            /** Content Kind */
+            content_kind: string;
+            /** Confidence */
+            confidence: string;
+            /** Recognition Eligible */
+            recognition_eligible: boolean;
+            /**
+             * First Seen At
+             * Format: date-time
+             */
+            first_seen_at: string;
+        };
+        /** EpisodeGroupResponse */
+        EpisodeGroupResponse: {
+            /** Key */
+            key: string;
+            /** Series Title */
+            series_title: string;
+            /** Series Key */
+            series_key: string;
+            /** Season */
+            season: number | null;
+            /** Episode Key */
+            episode_key: string;
+            /** Candidate Count */
+            candidate_count: number;
+            /** Candidates */
+            candidates: components["schemas"]["CandidateResponse"][];
+            /**
+             * Latest Seen At
+             * Format: date-time
+             */
+            latest_seen_at: string;
+        };
         /** FeedCreateRequest */
         FeedCreateRequest: {
             /** Name */
@@ -337,6 +435,24 @@ export interface components {
             first_seen_at: string;
             /** Source Count */
             source_count: number;
+        };
+        /** UnmatchedReleaseResponse */
+        UnmatchedReleaseResponse: {
+            /** Id */
+            id: string;
+            /** Release Id */
+            release_id: string;
+            /** Source Title */
+            source_title: string;
+            /** Confidence */
+            confidence: string;
+            /** Reason Code */
+            reason_code: string;
+            /**
+             * Parsed At
+             * Format: date-time
+             */
+            parsed_at: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -671,6 +787,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReleaseResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_episode_groups_api_v1_recognition_episode_groups_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EpisodeGroupResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_unmatched_api_v1_recognition_unmatched_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnmatchedReleaseResponse"][];
                 };
             };
             /** @description Validation Error */

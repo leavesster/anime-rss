@@ -6,6 +6,7 @@ from anime_rss.infrastructure.events import EventDispatcher
 from anime_rss.infrastructure.http import SafeHttpClient
 from anime_rss.modules.feeds.api import FeedService
 from anime_rss.modules.operations.api import JobService
+from anime_rss.modules.recognition.api import RecognitionService
 from anime_rss.modules.releases.api import ReleaseService
 
 
@@ -16,6 +17,7 @@ class ServiceContainer:
     torrent_http_client: SafeHttpClient
     feeds: FeedService
     releases: ReleaseService
+    recognition: RecognitionService
     jobs: JobService
     events: EventDispatcher
 

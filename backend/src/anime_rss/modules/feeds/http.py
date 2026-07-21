@@ -163,7 +163,7 @@ def refresh_feed(feed_id: str, request: Request) -> RefreshResponse:
     except FeedNotFoundError as error:
         raise HTTPException(status_code=404, detail="feed not found") from error
     try:
-        dispatched = services.events.dispatch_pending()
+        dispatched = services.events.dispatch_until_idle()
     except HttpFetchError:
         dispatched = 0
     return RefreshResponse.model_validate({**asdict(result), "dispatched_events": dispatched})

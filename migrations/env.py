@@ -5,6 +5,7 @@ from anime_rss.infrastructure.database import Base
 from anime_rss.modules.audit import persistence as audit_persistence  # noqa: F401
 from anime_rss.modules.feeds import persistence as feed_persistence  # noqa: F401
 from anime_rss.modules.operations import persistence as operations_persistence  # noqa: F401
+from anime_rss.modules.recognition import persistence as recognition_persistence  # noqa: F401
 from anime_rss.modules.releases import persistence as release_persistence  # noqa: F401
 from sqlalchemy import engine_from_config, pool
 

@@ -41,6 +41,16 @@ class Release:
     source_count: int
 
 
+@dataclass(frozen=True, slots=True)
+class ReleaseRecognitionSource:
+    release_id: str
+    feed_entry_id: str
+    title: str
+    published_at: datetime | None
+    first_seen_at: datetime
+    automation_eligible: bool
+
+
 class ReleaseService:
     def __init__(
         self,
@@ -124,6 +134,33 @@ class ReleaseService:
                 )
                 for record, source_count in session.execute(statement)
             ]
+
+    def get_recognition_source(
+        self, release_id: str, feed_entry_id: str
+    ) -> ReleaseRecognitionSource | None:
+        entry = self._feed_entries.get_secret(feed_entry_id)
+        if entry is None:
+            return None
+        with self._session_factory() as session:
+            statement = (
+                select(ReleaseRecord)
+                .join(ReleaseSourceRecord, ReleaseSourceRecord.release_id == ReleaseRecord.id)
+                .where(
+                    ReleaseRecord.id == release_id,
+                    ReleaseSourceRecord.feed_entry_id == feed_entry_id,
+                )
+            )
+            release = session.scalar(statement)
+            if release is None:
+                return None
+            return ReleaseRecognitionSource(
+                release_id=release.id,
+                feed_entry_id=feed_entry_id,
+                title=entry.title,
+                published_at=entry.published_at,
+                first_seen_at=release.first_seen_at,
+                automation_eligible=release.automation_eligible,
+            )
 
     def _resolve_identity(self, entry: FeedEntrySecret) -> tuple[TorrentIdentity, bytes, str]:
         reference = entry.torrent_reference

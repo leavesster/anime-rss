@@ -77,40 +77,63 @@ class EventDispatcher:
         self._handlers = handlers
         self._clock = clock
 
-    def dispatch_pending(self, *, limit: int = 100) -> int:
-        with self._session_factory() as session:
-            records = list(
-                session.scalars(
-                    select(IntegrationEventRecord)
-                    .order_by(IntegrationEventRecord.occurred_at, IntegrationEventRecord.id)
-                    .limit(limit)
-                )
-            )
-
+    def dispatch_pending(self, *, limit: int = 100, event_names: set[str] | None = None) -> int:
         delivered = 0
-        for record in records:
-            event = IntegrationEvent(
-                id=record.id,
-                name=record.name,
-                version=record.version,
-                payload=record.payload,
-                occurred_at=record.occurred_at,
-            )
-            for registration in self._handlers.get(event.name, []):
-                if self._already_delivered(event.id, registration.consumer):
-                    continue
-                registration.handler(event)
-                self._mark_delivered(event.id, registration.consumer)
-                delivered += 1
+        for event_name, registrations in self._handlers.items():
+            if event_names is not None and event_name not in event_names:
+                continue
+            for registration in registrations:
+                remaining = limit - delivered
+                if remaining <= 0:
+                    return delivered
+                records = self._pending_for_consumer(
+                    event_name, registration.consumer, limit=remaining
+                )
+                for record in records:
+                    event = IntegrationEvent(
+                        id=record.id,
+                        name=record.name,
+                        version=record.version,
+                        payload=record.payload,
+                        occurred_at=record.occurred_at,
+                    )
+                    registration.handler(event)
+                    self._mark_delivered(event.id, registration.consumer)
+                    delivered += 1
         return delivered
 
-    def _already_delivered(self, event_id: str, consumer: str) -> bool:
+    def dispatch_until_idle(
+        self,
+        *,
+        batch_size: int = 100,
+        max_deliveries: int = 1000,
+        event_names: set[str] | None = None,
+    ) -> int:
+        total = 0
+        while total < max_deliveries:
+            delivered = self.dispatch_pending(
+                limit=min(batch_size, max_deliveries - total), event_names=event_names
+            )
+            total += delivered
+            if delivered == 0:
+                break
+        return total
+
+    def _pending_for_consumer(
+        self, event_name: str, consumer: str, *, limit: int
+    ) -> list[IntegrationEventRecord]:
         with self._session_factory() as session:
-            statement = select(IntegrationEventDeliveryRecord.id).where(
-                IntegrationEventDeliveryRecord.event_id == event_id,
+            delivered = select(IntegrationEventDeliveryRecord.id).where(
+                IntegrationEventDeliveryRecord.event_id == IntegrationEventRecord.id,
                 IntegrationEventDeliveryRecord.consumer == consumer,
             )
-            return session.scalar(statement) is not None
+            statement = (
+                select(IntegrationEventRecord)
+                .where(IntegrationEventRecord.name == event_name, ~delivered.exists())
+                .order_by(IntegrationEventRecord.occurred_at, IntegrationEventRecord.id)
+                .limit(limit)
+            )
+            return list(session.scalars(statement))
 
     def _mark_delivered(self, event_id: str, consumer: str) -> None:
         with self._session_factory.begin() as session:
