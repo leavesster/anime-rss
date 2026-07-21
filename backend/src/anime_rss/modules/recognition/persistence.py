@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, ForeignKey, Index, Integer, String, UniqueConstraint, text
+from sqlalchemy import JSON, Boolean, ForeignKey, Index, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from anime_rss.infrastructure.database import Base, UTCDateTime
@@ -11,7 +11,21 @@ from anime_rss.kernel.time import utc_now
 
 class MatchAttemptRecord(Base):
     __tablename__ = "match_attempts"
-    __table_args__ = (UniqueConstraint("feed_entry_id", name="uq_match_attempt_feed_entry"),)
+    __table_args__ = (
+        Index(
+            "uq_match_attempt_initial_feed_entry",
+            "feed_entry_id",
+            unique=True,
+            sqlite_where=text("trigger = 'initial'"),
+        ),
+        Index(
+            "ix_match_attempt_feed_parser_time",
+            "feed_entry_id",
+            "parser_version",
+            "parsed_at",
+        ),
+        Index("ix_match_attempt_release_time", "release_id", "parsed_at"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     release_id: Mapped[str] = mapped_column(
@@ -20,6 +34,7 @@ class MatchAttemptRecord(Base):
     feed_entry_id: Mapped[str] = mapped_column(
         ForeignKey("feed_entries.id", ondelete="CASCADE"), index=True
     )
+    trigger: Mapped[str] = mapped_column(String(24), default="initial")
     parser_version: Mapped[str] = mapped_column(String(40))
     source_title: Mapped[str] = mapped_column(String(4096))
     release_group: Mapped[str | None] = mapped_column(String(120), nullable=True)

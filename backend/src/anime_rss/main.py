@@ -211,16 +211,22 @@ def create_app(
                         handler=recognition.handle_release_identified,
                     )
                 ],
-                "CandidateEvaluated.v1": [
-                    RegisteredHandler(
-                        consumer="selection.candidate-evaluator.v1",
-                        handler=selection.handle_candidate_evaluated,
-                    )
-                ],
                 "CandidateRemapped.v1": [
                     RegisteredHandler(
                         consumer="selection.candidate-remapped.v1",
                         handler=selection.handle_candidate_remapped,
+                    )
+                ],
+                "CandidateSuperseded.v1": [
+                    RegisteredHandler(
+                        consumer="selection.candidate-superseded.v1",
+                        handler=selection.handle_candidate_superseded,
+                    )
+                ],
+                "CandidateEvaluated.v1": [
+                    RegisteredHandler(
+                        consumer="selection.candidate-evaluator.v1",
+                        handler=selection.handle_candidate_evaluated,
                     )
                 ],
                 "DownloadRequested.v1": [

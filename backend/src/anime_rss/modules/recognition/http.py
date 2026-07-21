@@ -59,6 +59,19 @@ class UnmatchedReleaseResponse(BaseModel):
     parsed_at: datetime
 
 
+class RecognitionRerunResponse(BaseModel):
+    attempt_id: str
+    release_id: str
+    parser_version: str
+    parsed_at: datetime
+    confidence: str
+    reason_code: str
+    candidate_id: str | None
+    previous_candidate_id: str | None
+    candidate_changed: bool
+    candidate_adopted: bool
+
+
 class RecognitionHttpServices(Protocol):
     recognition: RecognitionService
     events: EventDispatcher
@@ -117,3 +130,14 @@ def remap_release(
         raise HTTPException(status_code=409, detail=str(error)) from error
     services.events.dispatch_until_idle()
     return CandidateResponse.model_validate(asdict(candidate))
+
+
+@router.post("/releases/{release_id}/rerun", response_model=RecognitionRerunResponse)
+def rerun_release(release_id: str, request: Request) -> RecognitionRerunResponse:
+    services = cast(RecognitionHttpServices, request.app.state.services)
+    try:
+        result = services.recognition.rerun_release(release_id)
+    except CandidateNotFoundError as error:
+        raise HTTPException(status_code=404, detail="release not found") from error
+    services.events.dispatch_until_idle()
+    return RecognitionRerunResponse.model_validate(asdict(result))

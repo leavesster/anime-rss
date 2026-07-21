@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, CheckCircle2, Layers3, PencilLine, Search, ShieldCheck, UsersRound, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Layers3, PencilLine, RefreshCw, Search, ShieldCheck, UsersRound, X } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 
 import {
@@ -7,12 +7,14 @@ import {
   listEpisodeGroups,
   listUnmatchedReleases,
   remapRelease,
+  rerunRecognition,
   type Candidate,
+  type RecognitionRerun,
   type ReleaseRemap,
 } from "../../generated/api/client";
 import { Button } from "../../shared/components/Button";
 import { EmptyState } from "../../shared/components/EmptyState";
-import { ErrorBanner, LoadingState } from "../../shared/components/Feedback";
+import { ErrorBanner, LoadingState, SuccessBanner } from "../../shared/components/Feedback";
 import { PageHeader } from "../../shared/components/PageHeader";
 import { StatusBadge } from "../../shared/components/StatusBadge";
 import { formatDate } from "../../shared/lib/format";
@@ -34,11 +36,27 @@ function mediaSummary(candidate: Candidate): string {
     .join(" · ") || "媒体属性未知";
 }
 
+function rerunMessage(result: RecognitionRerun): string {
+  if (result.candidate_adopted && result.previous_candidate_id) {
+    return `重新解析已采用，并替换原候选（${result.parser_version}）。`;
+  }
+  if (result.candidate_adopted) {
+    return `重新解析已采用并创建候选（${result.parser_version}）。`;
+  }
+  if (result.candidate_id) {
+    return result.confidence === "low"
+      ? "新解析结果置信度过低，当前有效候选已保留。"
+      : `解析结果未变化，已追加 ${result.parser_version} 的运行证据。`;
+  }
+  return "新解析结果仍无法安全归组，已保留为待识别证据。";
+}
+
 export function CandidatesPage() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<CandidateTab>("grouped");
   const [search, setSearch] = useState("");
   const [remapTarget, setRemapTarget] = useState<RemapTarget | null>(null);
+  const [rerunResult, setRerunResult] = useState<RecognitionRerun | null>(null);
   const groups = useQuery({ queryKey: ["episode-groups"], queryFn: listEpisodeGroups });
   const unmatched = useQuery({ queryKey: ["unmatched-releases"], queryFn: listUnmatchedReleases });
   const filteredGroups = useMemo(() => {
@@ -65,12 +83,18 @@ export function CandidatesPage() {
     mutationFn: ({ releaseId, payload }: { releaseId: string; payload: ReleaseRemap }) => remapRelease(releaseId, payload),
     onSuccess: async () => { setRemapTarget(null); await refresh(); },
   });
+  const rerun = useMutation({
+    mutationFn: rerunRecognition,
+    onMutate: () => setRerunResult(null),
+    onSuccess: async (result) => { setRerunResult(result); await refresh(); },
+  });
 
   return (
     <>
       <PageHeader eyebrow="标题识别" title="剧集候选" description="按动画和集数查看不同字幕组的发布版本，保留每个候选的解析依据。" />
       {(groups.isLoading || unmatched.isLoading) && <LoadingState label="正在整理剧集候选" />}
-      {(groups.isError || unmatched.isError || confirm.isError || remap.isError) && <ErrorBanner message="候选识别操作未完成，请检查输入后重试。" />}
+      {(groups.isError || unmatched.isError || confirm.isError || remap.isError || rerun.isError) && <ErrorBanner message="候选识别操作未完成，请检查输入后重试。" />}
+      {rerunResult && <SuccessBanner message={rerunMessage(rerunResult)} />}
       {groups.data && unmatched.data && (
         <>
           <section className="overview-band" aria-label="候选识别指标">
@@ -100,6 +124,7 @@ export function CandidatesPage() {
                   <span className={candidate.recognition_eligible ? "eligibility eligibility--yes" : "eligibility"}><CheckCircle2 size={16} />{candidate.recognition_eligible ? "可参与选择" : "需确认"}</span>
                   <div className="candidate-actions">
                     {!candidate.recognition_eligible && <Button aria-label="确认候选" title="确认候选" size="icon" variant="ghost" icon={<ShieldCheck size={16} />} disabled={confirm.isPending} onClick={() => confirm.mutate(candidate.id)} />}
+                    <Button aria-label="重新解析" title="重新解析" size="icon" variant="ghost" icon={<RefreshCw className={rerun.isPending && rerun.variables === candidate.release_id ? "spin" : ""} size={16} />} disabled={rerun.isPending} onClick={() => rerun.mutate(candidate.release_id)} />
                     <Button aria-label="修正映射" title="修正映射" size="icon" variant="ghost" icon={<PencilLine size={16} />} onClick={() => setRemapTarget(candidate)} />
                   </div>
                 </div>
@@ -108,7 +133,7 @@ export function CandidatesPage() {
           ))}</div>}
 
           {tab === "unmatched" && unmatched.data.length === 0 && <EmptyState icon={CheckCircle2} title="没有待识别条目" description="当前所有可用 Release 都已经获得动画和集数候选。" />}
-          {tab === "unmatched" && unmatched.data.length > 0 && <div className="unmatched-list">{unmatched.data.map((release) => <article key={release.id}><div><strong>{release.source_title}</strong><small>{formatDate(release.parsed_at)}</small></div><span className="reason-code">{release.reason_code}</span><Button aria-label="人工映射" title="人工映射" size="icon" variant="ghost" icon={<PencilLine size={16} />} onClick={() => setRemapTarget(release)} /></article>)}</div>}
+          {tab === "unmatched" && unmatched.data.length > 0 && <div className="unmatched-list">{unmatched.data.map((release) => <article key={release.id}><div className="unmatched-copy"><strong>{release.source_title}</strong><small>{formatDate(release.parsed_at)}</small></div><span className="reason-code">{release.reason_code}</span><div className="candidate-actions"><Button aria-label="重新解析" title="重新解析" size="icon" variant="ghost" icon={<RefreshCw className={rerun.isPending && rerun.variables === release.release_id ? "spin" : ""} size={16} />} disabled={rerun.isPending} onClick={() => rerun.mutate(release.release_id)} /><Button aria-label="人工映射" title="人工映射" size="icon" variant="ghost" icon={<PencilLine size={16} />} onClick={() => setRemapTarget(release)} /></div></article>)}</div>}
         </>
       )}
       {remapTarget && <RemapDialog release={remapTarget} pending={remap.isPending} onClose={() => setRemapTarget(null)} onSubmit={(payload) => remap.mutate({ releaseId: remapTarget.release_id, payload })} />}

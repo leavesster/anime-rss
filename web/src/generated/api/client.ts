@@ -13,6 +13,7 @@ export type Release = components["schemas"]["ReleaseResponse"];
 export type EpisodeGroup = components["schemas"]["EpisodeGroupResponse"];
 export type Candidate = components["schemas"]["CandidateResponse"];
 export type UnmatchedRelease = components["schemas"]["UnmatchedReleaseResponse"];
+export type RecognitionRerun = components["schemas"]["RecognitionRerunResponse"];
 export type Anime = components["schemas"]["AnimeResponse"];
 export type BangumiAnime = components["schemas"]["BangumiAnimeResponse"];
 export type CatalogSearch = components["schemas"]["CatalogSearchResponse"];
@@ -224,6 +225,14 @@ export async function remapRelease(releaseId: string, payload: ReleaseRemap): Pr
     await client.POST("/api/v1/recognition/releases/{release_id}/remap", {
       params: { path: { release_id: releaseId } },
       body: payload,
+    }),
+  );
+}
+
+export async function rerunRecognition(releaseId: string): Promise<RecognitionRerun> {
+  return unwrap(
+    await client.POST("/api/v1/recognition/releases/{release_id}/rerun", {
+      params: { path: { release_id: releaseId } },
     }),
   );
 }

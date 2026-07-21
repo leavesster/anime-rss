@@ -1,12 +1,12 @@
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Protocol, cast
 
 from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.engine import CursorResult
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session, aliased, sessionmaker
 
 from anime_rss.infrastructure.events import IntegrationEvent, append_event
 from anime_rss.kernel.ids import new_id
@@ -81,6 +81,20 @@ class UnmatchedRelease:
     parsed_at: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class RecognitionRerun:
+    attempt_id: str
+    release_id: str
+    parser_version: str
+    parsed_at: datetime
+    confidence: str
+    reason_code: str
+    candidate_id: str | None
+    previous_candidate_id: str | None
+    candidate_changed: bool
+    candidate_adopted: bool
+
+
 class CandidateNotFoundError(LookupError):
     pass
 
@@ -127,6 +141,7 @@ class RecognitionService:
                         id=attempt_id,
                         release_id=release_id,
                         feed_entry_id=feed_entry_id,
+                        trigger="initial",
                         parser_version=parsed.parser_version,
                         source_title=parsed.source_title,
                         release_group=parsed.release_group,
@@ -145,7 +160,10 @@ class RecognitionService:
                         reason_code=parsed.reason_code,
                         parsed_at=now,
                     )
-                    .on_conflict_do_nothing(index_elements=["feed_entry_id"])
+                    .on_conflict_do_nothing(
+                        index_elements=["feed_entry_id"],
+                        index_where=MatchAttemptRecord.trigger == "initial",
+                    )
                 ),
             )
             if not result.rowcount:
@@ -181,6 +199,204 @@ class RecognitionService:
                     "reason_code": parsed.reason_code,
                     "episode_key": parsed.episode_key,
                 },
+            )
+        return candidate_id
+
+    def rerun_release(self, release_id: str) -> RecognitionRerun:
+        now = self._clock()
+        with self._session_factory.begin() as session:
+            active = session.scalar(
+                select(CandidateRecord).where(
+                    CandidateRecord.release_id == release_id,
+                    CandidateRecord.superseded_by_candidate_id.is_(None),
+                )
+            )
+            previous_attempt = (
+                session.get(MatchAttemptRecord, active.attempt_id)
+                if active is not None
+                else session.scalar(
+                    select(MatchAttemptRecord)
+                    .where(MatchAttemptRecord.release_id == release_id)
+                    .order_by(MatchAttemptRecord.parsed_at.desc(), MatchAttemptRecord.id.desc())
+                    .limit(1)
+                )
+            )
+            if previous_attempt is None:
+                raise CandidateNotFoundError(release_id)
+            source = self._sources.get_recognition_source(
+                release_id, previous_attempt.feed_entry_id
+            )
+            if source is None:
+                raise CandidateNotFoundError(release_id)
+
+            parsed = parse_release_title(source.title)
+            attempt_id = new_id()
+            parsed_at = max(now, previous_attempt.parsed_at + timedelta(microseconds=1))
+            session.add(
+                MatchAttemptRecord(
+                    id=attempt_id,
+                    release_id=release_id,
+                    feed_entry_id=previous_attempt.feed_entry_id,
+                    trigger="explicit_rerun",
+                    parser_version=parsed.parser_version,
+                    source_title=parsed.source_title,
+                    release_group=parsed.release_group,
+                    series_title=parsed.series_title,
+                    series_key=parsed.series_key,
+                    season=parsed.season,
+                    episode_start=parsed.episode_start,
+                    episode_end=parsed.episode_end,
+                    episode_key=parsed.episode_key,
+                    resolution=parsed.resolution,
+                    video_codec=parsed.video_codec,
+                    subtitle_language=parsed.subtitle_language,
+                    revision=parsed.revision,
+                    content_kind=parsed.content_kind.value,
+                    confidence=parsed.confidence.value,
+                    reason_code=parsed.reason_code,
+                    parsed_at=parsed_at,
+                )
+            )
+            previous_candidate_id = active.id if active is not None else None
+            candidate_id = previous_candidate_id
+            candidate_changed = False
+            candidate_adopted = False
+            structurally_valid = all(
+                (parsed.series_title, parsed.series_key, parsed.episode_start, parsed.episode_key)
+            )
+            safely_adoptable = structurally_valid and parsed.confidence != MatchConfidence.LOW
+            unchanged = active is not None and (
+                self._attempt_matches_parsed(previous_attempt, parsed)
+                or self._candidate_matches_parsed(active, parsed)
+            )
+
+            if safely_adoptable and not unchanged:
+                candidate_id = self._supersede_candidate(
+                    session,
+                    release_id=release_id,
+                    attempt_id=attempt_id,
+                    parsed=parsed,
+                    source_automation_eligible=source.automation_eligible,
+                    first_seen_at=source.first_seen_at,
+                    previous=active,
+                    superseded_at=now,
+                )
+                candidate_changed = True
+                candidate_adopted = True
+            elif not safely_adoptable and active is None:
+                append_event(
+                    session,
+                    name="ReleaseMappingRequired.v1",
+                    payload={"release_id": release_id, "reason_code": parsed.reason_code},
+                )
+
+            record_event(
+                session,
+                event_type="recognition.release_rerun",
+                entity_type="release",
+                entity_id=release_id,
+                payload={
+                    "attempt_id": attempt_id,
+                    "parser_version": parsed.parser_version,
+                    "confidence": parsed.confidence.value,
+                    "reason_code": parsed.reason_code,
+                    "candidate_id": candidate_id,
+                    "previous_candidate_id": previous_candidate_id,
+                    "candidate_changed": candidate_changed,
+                    "candidate_adopted": candidate_adopted,
+                },
+            )
+
+        return RecognitionRerun(
+            attempt_id=attempt_id,
+            release_id=release_id,
+            parser_version=parsed.parser_version,
+            parsed_at=parsed_at,
+            confidence=parsed.confidence.value,
+            reason_code=parsed.reason_code,
+            candidate_id=candidate_id,
+            previous_candidate_id=previous_candidate_id,
+            candidate_changed=candidate_changed,
+            candidate_adopted=candidate_adopted,
+        )
+
+    def _supersede_candidate(
+        self,
+        session: Session,
+        *,
+        release_id: str,
+        attempt_id: str,
+        parsed: ParsedReleaseTitle,
+        source_automation_eligible: bool,
+        first_seen_at: datetime,
+        previous: CandidateRecord | None,
+        superseded_at: datetime,
+    ) -> str:
+        assert parsed.series_title is not None
+        assert parsed.series_key is not None
+        assert parsed.episode_start is not None
+        assert parsed.episode_key is not None
+        candidate_id = new_id()
+        if previous is not None:
+            previous.superseded_by_candidate_id = candidate_id
+            previous.superseded_at = superseded_at
+            session.flush()
+        recognition_eligible = (
+            source_automation_eligible and parsed.confidence == MatchConfidence.HIGH
+        )
+        session.add(
+            CandidateRecord(
+                id=candidate_id,
+                release_id=release_id,
+                attempt_id=attempt_id,
+                supersedes_candidate_id=previous.id if previous is not None else None,
+                source_title=parsed.source_title,
+                series_title=parsed.series_title,
+                series_key=parsed.series_key,
+                season=parsed.season,
+                episode_start=parsed.episode_start,
+                episode_end=parsed.episode_end,
+                episode_key=parsed.episode_key,
+                release_group=parsed.release_group,
+                resolution=parsed.resolution,
+                video_codec=parsed.video_codec,
+                subtitle_language=parsed.subtitle_language,
+                revision=parsed.revision,
+                content_kind=parsed.content_kind.value,
+                confidence=parsed.confidence.value,
+                recognition_eligible=recognition_eligible,
+                first_seen_at=first_seen_at,
+            )
+        )
+        if previous is not None:
+            append_event(
+                session,
+                name="CandidateSuperseded.v1",
+                payload={
+                    "release_id": release_id,
+                    "previous_candidate_id": previous.id,
+                    "candidate_id": candidate_id,
+                    "previous_series_key": previous.series_key,
+                    "previous_episode_key": previous.episode_key,
+                    "episode_key": parsed.episode_key,
+                    "trigger": "parser_rerun",
+                },
+            )
+        append_event(
+            session,
+            name="CandidateEvaluated.v1",
+            payload={
+                "candidate_id": candidate_id,
+                "release_id": release_id,
+                "episode_key": parsed.episode_key,
+                "trigger": "parser_rerun",
+            },
+        )
+        if not recognition_eligible:
+            append_event(
+                session,
+                name="ManualConfirmationRequired.v1",
+                payload={"candidate_id": candidate_id, "release_id": release_id},
             )
         return candidate_id
 
@@ -283,14 +499,25 @@ class RecognitionService:
 
     def list_unmatched(self, *, limit: int = 100) -> list[UnmatchedRelease]:
         with self._session_factory() as session:
-            candidate_exists = select(CandidateRecord.id).where(
-                CandidateRecord.attempt_id == MatchAttemptRecord.id
+            later_attempt = aliased(MatchAttemptRecord)
+            latest_attempt_id = (
+                select(later_attempt.id)
+                .where(later_attempt.release_id == MatchAttemptRecord.release_id)
+                .order_by(later_attempt.parsed_at.desc(), later_attempt.id.desc())
+                .limit(1)
+                .correlate(MatchAttemptRecord)
+                .scalar_subquery()
+            )
+            active_candidate_exists = select(CandidateRecord.id).where(
+                CandidateRecord.release_id == MatchAttemptRecord.release_id,
+                CandidateRecord.superseded_by_candidate_id.is_(None),
             )
             statement = (
                 select(MatchAttemptRecord)
                 .where(
                     MatchAttemptRecord.confidence == MatchConfidence.LOW.value,
-                    ~candidate_exists.exists(),
+                    MatchAttemptRecord.id == latest_attempt_id,
+                    ~active_candidate_exists.exists(),
                 )
                 .order_by(MatchAttemptRecord.parsed_at.desc())
                 .limit(min(max(limit, 1), 500))
@@ -306,6 +533,76 @@ class RecognitionService:
                 )
                 for record in session.scalars(statement)
             ]
+
+    @staticmethod
+    def _attempt_matches_parsed(attempt: MatchAttemptRecord, parsed: ParsedReleaseTitle) -> bool:
+        return (
+            attempt.source_title,
+            attempt.release_group,
+            attempt.series_title,
+            attempt.series_key,
+            attempt.season,
+            attempt.episode_start,
+            attempt.episode_end,
+            attempt.episode_key,
+            attempt.resolution,
+            attempt.video_codec,
+            attempt.subtitle_language,
+            attempt.revision,
+            attempt.content_kind,
+            attempt.confidence,
+            attempt.reason_code,
+        ) == (
+            parsed.source_title,
+            parsed.release_group,
+            parsed.series_title,
+            parsed.series_key,
+            parsed.season,
+            parsed.episode_start,
+            parsed.episode_end,
+            parsed.episode_key,
+            parsed.resolution,
+            parsed.video_codec,
+            parsed.subtitle_language,
+            parsed.revision,
+            parsed.content_kind.value,
+            parsed.confidence.value,
+            parsed.reason_code,
+        )
+
+    @staticmethod
+    def _candidate_matches_parsed(candidate: CandidateRecord, parsed: ParsedReleaseTitle) -> bool:
+        return (
+            candidate.source_title,
+            candidate.release_group,
+            candidate.series_title,
+            candidate.series_key,
+            candidate.season,
+            candidate.episode_start,
+            candidate.episode_end,
+            candidate.episode_key,
+            candidate.resolution,
+            candidate.video_codec,
+            candidate.subtitle_language,
+            candidate.revision,
+            candidate.content_kind,
+            candidate.confidence,
+        ) == (
+            parsed.source_title,
+            parsed.release_group,
+            parsed.series_title,
+            parsed.series_key,
+            parsed.season,
+            parsed.episode_start,
+            parsed.episode_end,
+            parsed.episode_key,
+            parsed.resolution,
+            parsed.video_codec,
+            parsed.subtitle_language,
+            parsed.revision,
+            parsed.content_kind.value,
+            parsed.confidence.value,
+        )
 
     def confirm_candidate(self, candidate_id: str) -> Candidate:
         now = self._clock()

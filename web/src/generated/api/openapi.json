@@ -767,6 +767,48 @@
         }
       }
     },
+    "/api/v1/recognition/releases/{release_id}/rerun": {
+      "post": {
+        "tags": [
+          "recognition"
+        ],
+        "summary": "Rerun Release",
+        "operationId": "rerun_release_api_v1_recognition_releases__release_id__rerun_post",
+        "parameters": [
+          {
+            "name": "release_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Release Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecognitionRerunResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/catalog/anime": {
       "get": {
         "tags": [
@@ -5519,6 +5561,79 @@
           "rejection_reasons"
         ],
         "title": "PreviewCandidateResponse"
+      },
+      "RecognitionRerunResponse": {
+        "properties": {
+          "attempt_id": {
+            "type": "string",
+            "title": "Attempt Id"
+          },
+          "release_id": {
+            "type": "string",
+            "title": "Release Id"
+          },
+          "parser_version": {
+            "type": "string",
+            "title": "Parser Version"
+          },
+          "parsed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Parsed At"
+          },
+          "confidence": {
+            "type": "string",
+            "title": "Confidence"
+          },
+          "reason_code": {
+            "type": "string",
+            "title": "Reason Code"
+          },
+          "candidate_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidate Id"
+          },
+          "previous_candidate_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Candidate Id"
+          },
+          "candidate_changed": {
+            "type": "boolean",
+            "title": "Candidate Changed"
+          },
+          "candidate_adopted": {
+            "type": "boolean",
+            "title": "Candidate Adopted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attempt_id",
+          "release_id",
+          "parser_version",
+          "parsed_at",
+          "confidence",
+          "reason_code",
+          "candidate_id",
+          "previous_candidate_id",
+          "candidate_changed",
+          "candidate_adopted"
+        ],
+        "title": "RecognitionRerunResponse"
       },
       "RefreshResponse": {
         "properties": {

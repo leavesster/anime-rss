@@ -295,6 +295,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/recognition/releases/{release_id}/rerun": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rerun Release */
+        post: operations["rerun_release_api_v1_recognition_releases__release_id__rerun_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/catalog/anime": {
         parameters: {
             query?: never;
@@ -1882,6 +1899,32 @@ export interface components {
             /** Rejection Reasons */
             rejection_reasons: string[];
         };
+        /** RecognitionRerunResponse */
+        RecognitionRerunResponse: {
+            /** Attempt Id */
+            attempt_id: string;
+            /** Release Id */
+            release_id: string;
+            /** Parser Version */
+            parser_version: string;
+            /**
+             * Parsed At
+             * Format: date-time
+             */
+            parsed_at: string;
+            /** Confidence */
+            confidence: string;
+            /** Reason Code */
+            reason_code: string;
+            /** Candidate Id */
+            candidate_id: string | null;
+            /** Previous Candidate Id */
+            previous_candidate_id: string | null;
+            /** Candidate Changed */
+            candidate_changed: boolean;
+            /** Candidate Adopted */
+            candidate_adopted: boolean;
+        };
         /** RefreshResponse */
         RefreshResponse: {
             /** Feed Id */
@@ -2667,6 +2710,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CandidateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rerun_release_api_v1_recognition_releases__release_id__rerun_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                release_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecognitionRerunResponse"];
                 };
             };
             /** @description Validation Error */

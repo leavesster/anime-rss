@@ -13,6 +13,10 @@ Recognition remaps append selection correction actions. Undecided slots using
 the old candidate reopen; decided slots retain their immutable decision snapshot
 while the replacement candidate is evaluated through the normal path.
 
+Parser-driven Candidate supersession follows the same reassignment boundary and
+is consumed before replacement evaluation, so an undecided slot cannot retain a
+superseded candidate.
+
 `SelectionService.retained_release_ids` exposes the releases referenced by
 evaluations, decisions, or manual actions so operations can apply retention
 without querying selection-owned tables.

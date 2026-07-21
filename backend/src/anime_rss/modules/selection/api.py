@@ -138,6 +138,14 @@ class SelectionService:
     def handle_candidate_remapped(self, event: IntegrationEvent) -> None:
         if event.name != "CandidateRemapped.v1" or event.version != 1:
             return
+        self._handle_candidate_reassigned(event)
+
+    def handle_candidate_superseded(self, event: IntegrationEvent) -> None:
+        if event.name != "CandidateSuperseded.v1" or event.version != 1:
+            return
+        self._handle_candidate_reassigned(event)
+
+    def _handle_candidate_reassigned(self, event: IntegrationEvent) -> None:
         previous_id = event.payload.get("previous_candidate_id")
         candidate_id = event.payload.get("candidate_id")
         release_id = event.payload.get("release_id")

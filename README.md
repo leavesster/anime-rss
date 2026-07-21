@@ -126,6 +126,7 @@ GET    /api/v1/recognition/episode-groups
 GET    /api/v1/recognition/unmatched
 POST   /api/v1/recognition/candidates/{candidate_id}/confirm
 POST   /api/v1/recognition/releases/{release_id}/remap
+POST   /api/v1/recognition/releases/{release_id}/rerun
 GET    /api/v1/catalog/anime
 POST   /api/v1/catalog/anime
 GET    /api/v1/catalog/bangumi/search

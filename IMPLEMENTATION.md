@@ -509,6 +509,23 @@ then evaluated normally.
 what parser v1 originally observed, destroying prior candidate evidence, or
 mutating an existing selection decision after external work may have occurred.
 
+### REC-010: Parser re-runs append evidence and adopt only safe changes
+
+**Choice:** `POST /api/v1/recognition/releases/{release_id}/rerun` resolves the
+source observation behind the active candidate and always appends a new immutable
+attempt marked `explicit_rerun`. Initial event-driven recognition remains
+concurrency-safe through a partial unique index for `trigger = 'initial'`, while
+same-version explicit runs are allowed. An unchanged result retains the active
+candidate. A changed, structurally complete medium/high-confidence result creates
+a new Candidate that supersedes the previous one and is evaluated normally. A
+low-confidence or incomplete result is recorded but cannot remove a valid active
+Candidate. Existing Decisions are never rewritten.
+
+**Reason:** Parser upgrades and operator diagnostics need replayable evidence,
+but re-running deterministic code must not duplicate candidates or let a parser
+regression destroy a known-good mapping. Keeping attempt, Candidate, and Decision
+lifecycles separate preserves both retry safety and historical explanation.
+
 ### SEC-001: Setup is a database compare-and-create operation
 
 **Choice:** A clean database exposes only setup, login, status, and health. The
@@ -779,8 +796,6 @@ attempts are not silently rewritten.
 
 - Provisional recognition grouping remains visible before a catalog identity is
   linked through a subscription alias snapshot.
-- Parser re-run is not implemented; mapping corrections are explicit manual
-  supersession records instead.
 - Only qBittorrent Web API v2 is implemented; there is no alternate downloader
   adapter or app-side pause/resume command.
 - qBittorrent save path, category, and tags are defaults captured when the task
@@ -808,12 +823,12 @@ The next coherent delivery unit is `real-feed release acceptance`:
 
 ## 7. Current Verification Evidence
 
-Verified on 2026-07-22 with `make verify` after migration `0012`:
+Verified on 2026-07-22 with `make verify` after migration `0013`:
 
 - Ruff formatting and lint: passed.
 - Pyright: passed with zero errors.
-- Backend: 69 tests passed, 88.09% statement coverage.
-- Frontend: ESLint and TypeScript passed; 6 Vitest tests passed.
+- Backend: 73 tests passed, 88.17% statement coverage.
+- Frontend: ESLint and TypeScript passed; 7 Vitest tests passed.
 - Production Vite build: passed.
 - Disposable Compose lifecycle: passed for clean setup, operator backup,
   in-place upgrade from the pre-`0012` baseline, clean-volume restore, and
@@ -830,6 +845,11 @@ Verified on 2026-07-22 with `make verify` after migration `0012`:
   rejection, distinct tokenized URLs, encrypted-at-rest URL handling, candidate
   supersession, immutable prior decisions, and normal evaluation of the corrected
   candidate.
+- Parser re-run evidence covers concurrent-safe initial recognition, append-only
+  same-version attempts, unchanged-candidate reuse, changed-candidate supersession,
+  immutable prior Decisions, and rejection of low-confidence replacements. The
+  `0013` migration passed an `0012 -> head -> 0012 -> head` round trip, and browser
+  checks covered real command feedback plus narrow-desktop and 390px layouts.
 - Guided-setup integration evidence covers clean administrator setup, ordered and
   idempotent progress, existing-install migration, default download-path capture,
   and a read-only final candidate preview.

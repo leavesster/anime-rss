@@ -11,6 +11,7 @@ consumes `ReleaseIdentified.v1` and reads release observations only through the
 - `RecognitionService.list_unmatched`
 - `RecognitionService.confirm_candidate`
 - `RecognitionService.remap_release`
+- `RecognitionService.rerun_release`
 - `RecognitionService.permanent_release_ids`
 - `parse_release_title`
 
@@ -21,7 +22,11 @@ consumes `ReleaseIdentified.v1` and reads release observations only through the
 - A release has one active candidate; remapping supersedes rather than rewrites
   the previous candidate.
 - Series grouping uses an exact normalized key; fuzzy matching is forbidden.
-- Every source observation produces an immutable parse attempt.
+- Every source observation produces one immutable initial parse attempt; explicit
+  parser re-runs append separately identified attempts, including same-version runs.
+- A re-run with unchanged output retains the active candidate. A changed,
+  structurally valid medium/high-confidence output supersedes it; low-confidence
+  output never removes a valid active candidate.
 - Manual confirmation and release mapping append action records; they never
   rewrite the parser attempt that required intervention.
 - Superseded candidates remain addressable for historical decisions but are
