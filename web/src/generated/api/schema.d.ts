@@ -1454,6 +1454,8 @@ export interface components {
             status: string;
             /** Version */
             version: string;
+            /** Web Api Version */
+            web_api_version: string;
         };
         /** DownloadCycleResponse */
         DownloadCycleResponse: {
@@ -1494,6 +1496,8 @@ export interface components {
             progress: number;
             /** Stale */
             stale: boolean;
+            /** Missing Observation Count */
+            missing_observation_count: number;
             /** Error Code */
             error_code: string | null;
             /** Attempt Count */

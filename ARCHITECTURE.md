@@ -299,8 +299,10 @@ a transaction with the local database.
 5. A unique database constraint prevents more than one request for the same
    decision or manual Release intent; the manual command also reuses any task
    already linked to that Release.
-6. External deletion moves the task to `externally_removed`; automatic retry is
-   disabled unless the administrator explicitly requests it.
+6. A previously observed task requires two consecutive successful empty lookups
+   before moving to `externally_removed`; a present task or lookup failure resets
+   confirmation. Automatic retry is disabled unless the administrator explicitly
+   requests it.
 
 The idempotency key is derived from immutable IDs, for example
 `download-request:{decision_id}:{release_id}:{operation_revision}` or

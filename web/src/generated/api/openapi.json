@@ -12940,12 +12940,17 @@
           "version": {
             "type": "string",
             "title": "Version"
+          },
+          "web_api_version": {
+            "type": "string",
+            "title": "Web Api Version"
           }
         },
         "type": "object",
         "required": [
           "status",
-          "version"
+          "version",
+          "web_api_version"
         ],
         "title": "DownloadConnectionResponse"
       },
@@ -13069,6 +13074,10 @@
             "type": "boolean",
             "title": "Stale"
           },
+          "missing_observation_count": {
+            "type": "integer",
+            "title": "Missing Observation Count"
+          },
           "error_code": {
             "anyOf": [
               {
@@ -13168,6 +13177,7 @@
           "tags",
           "progress",
           "stale",
+          "missing_observation_count",
           "error_code",
           "attempt_count",
           "next_retry_at",

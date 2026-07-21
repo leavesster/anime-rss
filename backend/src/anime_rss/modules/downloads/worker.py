@@ -259,6 +259,7 @@ class DownloadWorker:
                 current = session.get(DownloadTaskRecord, task_id)
                 if current is not None:
                     current.stale = True
+                    current.missing_observation_count = 0
                     current.error_code = error.code
                     current.updated_at = now
                     current.version += 1
@@ -273,11 +274,18 @@ class DownloadWorker:
                     return True
                 before = current.state
                 if observed_once:
-                    current.state = DownloadState.EXTERNALLY_REMOVED.value
-                    current.error_code = "externally_removed"
-                    current.next_retry_at = None
+                    current.missing_observation_count += 1
+                    if current.missing_observation_count >= 2:
+                        current.state = DownloadState.EXTERNALLY_REMOVED.value
+                        current.stale = False
+                        current.error_code = "externally_removed"
+                        current.next_retry_at = None
+                    else:
+                        current.stale = True
+                        current.error_code = "external_removal_unconfirmed"
                 else:
                     current.stale = True
+                    current.missing_observation_count = 0
                     current.error_code = "submission_not_observed"
                 current.updated_at = now
                 current.version += 1
@@ -337,6 +345,7 @@ class DownloadWorker:
         task.tags = list(observed.tags)
         task.stale = False
         task.observed_once = True
+        task.missing_observation_count = 0
         task.error_code = None
         task.last_observed_at = now
         task.updated_at = now
@@ -350,6 +359,7 @@ class DownloadWorker:
                 return
             task.state = DownloadState.SUBMITTED.value
             task.stale = True
+            task.missing_observation_count = 0
             task.error_code = "awaiting_observation"
             task.next_retry_at = None
             task.operation_started_at = None

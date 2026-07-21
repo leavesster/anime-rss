@@ -50,6 +50,7 @@ class DownloadConfigResponse(BaseModel):
 class DownloadConnectionResponse(BaseModel):
     status: str
     version: str
+    web_api_version: str
 
 
 class DownloadTaskResponse(BaseModel):
@@ -66,6 +67,7 @@ class DownloadTaskResponse(BaseModel):
     tags: list[str]
     progress: float
     stale: bool
+    missing_observation_count: int
     error_code: str | None
     attempt_count: int
     next_retry_at: datetime | None
@@ -124,12 +126,16 @@ def configure_downloads(
 @router.post("/config/test", response_model=DownloadConnectionResponse)
 def test_download_connection(request: Request) -> DownloadConnectionResponse:
     try:
-        version = _services(request).downloads.test_connection()
+        compatibility = _services(request).downloads.test_connection()
     except DownloadConfigNotFoundError as error:
         raise HTTPException(status_code=409, detail="qBittorrent is not configured") from error
     except DownloaderError as error:
         raise HTTPException(status_code=502, detail=error.code) from error
-    return DownloadConnectionResponse(status="connected", version=version)
+    return DownloadConnectionResponse(
+        status="connected",
+        version=compatibility.application_version,
+        web_api_version=compatibility.web_api_version,
+    )
 
 
 @router.get("/tasks", response_model=list[DownloadTaskResponse])

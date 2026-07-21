@@ -15,6 +15,7 @@ from anime_rss.modules.audit.api import record_event
 from anime_rss.modules.downloads.domain import (
     DownloadCycleResult,
     Downloader,
+    DownloaderCompatibility,
     DownloaderConnection,
     DownloaderError,
     DownloadOriginKind,
@@ -58,6 +59,7 @@ class DownloadTask:
     tags: list[str]
     progress: float
     stale: bool
+    missing_observation_count: int
     error_code: str | None
     attempt_count: int
     next_retry_at: datetime | None
@@ -195,7 +197,7 @@ class DownloadService:
             )
         return self._to_config(record)
 
-    def test_connection(self) -> str:
+    def test_connection(self) -> DownloaderCompatibility:
         connection = self._connection()
         now = self._clock()
         try:
@@ -287,6 +289,7 @@ class DownloadService:
                         progress=0.0,
                         stale=False,
                         observed_once=False,
+                        missing_observation_count=0,
                         cancellation_requested=False,
                         supersedes_decision_id=supersedes_decision_id,
                         attempt_count=0,
@@ -357,6 +360,7 @@ class DownloadService:
                             progress=0.0,
                             stale=False,
                             observed_once=False,
+                            missing_observation_count=0,
                             cancellation_requested=False,
                             attempt_count=0,
                             next_retry_at=now,
@@ -421,6 +425,7 @@ class DownloadService:
             task.state = DownloadState.RETRYING.value
             task.stale = False
             task.observed_once = False
+            task.missing_observation_count = 0
             task.error_code = None
             task.next_retry_at = now
             task.operation_started_at = None
@@ -513,6 +518,7 @@ class DownloadService:
             tags=list(record.tags),
             progress=record.progress,
             stale=record.stale,
+            missing_observation_count=record.missing_observation_count,
             error_code=record.error_code,
             attempt_count=record.attempt_count,
             next_retry_at=record.next_retry_at,

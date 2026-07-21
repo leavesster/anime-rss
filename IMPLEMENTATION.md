@@ -455,11 +455,19 @@ state and marks it stale rather than interpreting an empty observation.
 **Reason:** Selection history belongs to this application, while actual torrent
 execution belongs to qBittorrent and may be changed there deliberately.
 
+The supported application contract is qBittorrent `>=4.6.0,<6.0.0` with Web API
+major version 2. Connection tests return both versions and reject malformed,
+older, or unknown-major responses. The real adapter acceptance runs fixed 4.6.7
+and 5.0.4 containers through authenticate, add, hash lookup, and incomplete
+delete-without-files operations.
+
 ### DL-005: External deletion is terminal by default
 
-**Choice:** A previously observed torrent that disappears becomes
-`externally_removed` and leaves the automatic work queue. Only the explicit
-retry command clears that boundary.
+**Choice:** A previously observed torrent becomes `externally_removed` only after
+two consecutive successful hash lookups return empty. The first miss remains in
+its prior state with `external_removal_unconfirmed`; a lookup failure or present
+torrent resets the persisted counter. Confirmed removal leaves the automatic work
+queue, and only the explicit retry command clears that boundary.
 
 **Reason:** Re-adding a torrent deleted by the administrator would fight the
 source of truth and could create an endless add/delete loop.
@@ -479,7 +487,9 @@ without treating an uncertain response as proof of failure.
 **Choice:** An upgrade decision emits an explicit cancellation request for the
 previous decision. The new submission waits until that step resolves. An
 incomplete old torrent is removed with `deleteFiles=false`; a completed old
-torrent is only marked superseded.
+torrent is only marked superseded. The replacement readiness check requires the
+predecessor's persisted `superseded_at`; integration evidence asserts that the
+old hash delete call occurs before the replacement hash add call.
 
 **Reason:** Replacement is a visible, retryable saga, and downloaded media is
 never removed as a side effect of choosing V2 or V3.
@@ -1023,22 +1033,22 @@ truth; a row is complete only when code and proportionate evidence both exist.
 | Browser-origin security | Host/IP and proxy-origin policy, Fetch Metadata rejection, bounded per-client setup/login and connection-test limits, deployment documentation, and security integration tests | Complete |
 | Password KDF | Argon2id setup/reset, fixed parameters, successful-login legacy scrypt migration, timestamp preservation, audit event, malformed-hash rejection, and integration coverage | Complete |
 | Startup migration safety | OS-released lock spans restore/check/backup/upgrade; versioned pending schemas receive a validated online `pre-migration` archive; clean/current/failure/contention paths have integration coverage; Compose lifecycle passes | Complete |
-| qBittorrent contract | Adapter unit tests cover idempotent add/retry paths | Prove supported real versions, two-success external removal, and upgrade cancellation ordering |
+| qBittorrent contract | Explicit 4.6/5.x plus Web API 2 policy; fixed real 4.6.7 and 5.0.4 container acceptance; `0018` persisted two-success removal confirmation; failure reset; delete-before-replacement ordering; migration and integration coverage | Complete |
 | Stable engineering gates | lint, typecheck, unit/integration, OpenAPI generation, Compose acceptance | Add doctor, checked OpenAPI drift, security scan, clean-room, and release-evidence commands |
 | External acceptance | Durable seven-day evidence tooling exists | Configure two real feeds, two Bangumi subscriptions, qBittorrent, then complete seven natural days |
 
-The next implementation unit is the qBittorrent compatibility and reconciliation
-contract. Release gates then proceed as independent reviewable units; the
+The next implementation unit is the stable engineering gate set. Release gates
+then proceed as independent reviewable units; the
 seven-day clock starts only after its external preflight is genuinely satisfied.
 
 ## 7. Current Verification Evidence
 
-Verified on 2026-07-22 with `make verify` after migration `0017` and parser
+Verified on 2026-07-22 with `make verify` after migration `0018` and parser
 `title-rules.v2`:
 
 - Ruff formatting and lint: passed.
 - Pyright: passed with zero errors.
-- Backend: 103 tests passed, 89.06% statement coverage.
+- Backend: 109 tests passed, 89.23% statement coverage.
 - Frontend: ESLint and TypeScript passed; 14 Vitest tests passed.
 - Production Vite build: passed.
 - Authentication integration evidence covers Argon2id setup and reset, valid
@@ -1047,8 +1057,12 @@ Verified on 2026-07-22 with `make verify` after migration `0017` and parser
 - Startup migration evidence covers clean installation, Alembic head inspection,
   a snapshot that remains at the prior revision, one-time backup behavior,
   fail-before-migrate ordering, lock timeout, and post-failure recovery evidence.
+- qBittorrent evidence covers explicit version rejection, real 4.6.7/5.0.4
+  containers, add/lookup/delete-without-files, two-pass removal confirmation,
+  failed-query reset, delete-before-replacement ordering, and an
+  `0017 -> 0018 -> 0017 -> 0018` migration round trip.
 - Disposable Compose lifecycle: passed for clean setup, operator backup,
-  in-place upgrade through `0017`, clean-volume restore, and backup-based
+  in-place upgrade through `0018`, clean-volume restore, and backup-based
   rollback, including audit history, waiting work, Decision, and DownloadTask
   associations.
 - Container publishing workflow: statically validated for `linux/amd64` and

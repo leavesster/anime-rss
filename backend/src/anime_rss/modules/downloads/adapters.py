@@ -1,3 +1,4 @@
+import re
 from collections.abc import Generator
 from contextlib import contextmanager
 from typing import Any, cast
@@ -5,11 +6,16 @@ from typing import Any, cast
 import httpx
 
 from anime_rss.modules.downloads.domain import (
+    DownloaderCompatibility,
     DownloaderConnection,
     DownloaderError,
     DownloaderTask,
     Submission,
 )
+
+_VERSION_PATTERN = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)$")
+_MINIMUM_QBITTORRENT_VERSION = (4, 6, 0)
+_MAXIMUM_QBITTORRENT_VERSION = (6, 0, 0)
 
 
 class QbittorrentClient:
@@ -31,15 +37,29 @@ class QbittorrentClient:
     def close(self) -> None:
         return None
 
-    def test(self, connection: DownloaderConnection) -> str:
+    def test(self, connection: DownloaderConnection) -> DownloaderCompatibility:
         with self._session(connection) as client:
-            response = self._request(client, "GET", "api/v2/app/version")
-            if response.status_code != 200:
-                self._raise_response(response)
-            version = response.text.strip()
-            if not version:
+            app_response = self._request(client, "GET", "api/v2/app/version")
+            if app_response.status_code != 200:
+                self._raise_response(app_response)
+            web_api_response = self._request(client, "GET", "api/v2/app/webapiVersion")
+            if web_api_response.status_code != 200:
+                self._raise_response(web_api_response)
+            application_version = app_response.text.strip()
+            web_api_version = web_api_response.text.strip()
+            app_parts = self._parse_version(application_version)
+            api_parts = self._parse_version(web_api_version)
+            if app_parts is None or api_parts is None:
                 raise DownloaderError("invalid_version_response", transient=False)
-            return version[:80]
+            if not (
+                _MINIMUM_QBITTORRENT_VERSION <= app_parts < _MAXIMUM_QBITTORRENT_VERSION
+                and api_parts[0] == 2
+            ):
+                raise DownloaderError("unsupported_qbittorrent_version", transient=False)
+            return DownloaderCompatibility(
+                application_version=application_version[:80],
+                web_api_version=web_api_version[:80],
+            )
 
     def lookup(self, connection: DownloaderConnection, info_hash: str) -> DownloaderTask | None:
         with self._session(connection) as client:
@@ -152,6 +172,14 @@ class QbittorrentClient:
             category=item.get("category") if isinstance(item.get("category"), str) else None,
             tags=tags,
         )
+
+    @staticmethod
+    def _parse_version(value: str) -> tuple[int, int, int] | None:
+        matched = _VERSION_PATTERN.fullmatch(value)
+        if matched is None:
+            return None
+        major, minor, patch = matched.groups()
+        return int(major), int(minor), int(patch)
 
     @staticmethod
     def _request(client: httpx.Client, method: str, path: str, **kwargs: Any) -> httpx.Response:

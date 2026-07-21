@@ -36,6 +36,30 @@ def test_migrations_match_sqlalchemy_metadata(tmp_path: Path) -> None:
     engine.dispose()
 
 
+def test_download_reconciliation_migration_round_trip(tmp_path: Path) -> None:
+    database_url = f"sqlite:///{tmp_path / 'download-reconciliation.sqlite3'}"
+    repository_root = Path(__file__).resolve().parents[3]
+    config = Config(repository_root / "alembic.ini")
+    config.set_main_option("sqlalchemy.url", database_url)
+    command.upgrade(config, "0017_http_contracts")
+
+    engine = create_database_engine(database_url)
+    assert "missing_observation_count" not in {
+        column["name"] for column in sa.inspect(engine).get_columns("download_tasks")
+    }
+    engine.dispose()
+
+    command.upgrade(config, "head")
+    engine = create_database_engine(database_url)
+    assert "missing_observation_count" in {
+        column["name"] for column in sa.inspect(engine).get_columns("download_tasks")
+    }
+    engine.dispose()
+
+    command.downgrade(config, "0017_http_contracts")
+    command.upgrade(config, "head")
+
+
 def test_guided_setup_migration_completes_existing_administrator(tmp_path: Path) -> None:
     database_url = f"sqlite:///{tmp_path / 'upgrade.sqlite3'}"
     repository_root = Path(__file__).resolve().parents[3]

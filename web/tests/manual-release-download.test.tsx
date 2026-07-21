@@ -42,6 +42,7 @@ describe("manual release download", () => {
       tags: [],
       progress: 0,
       stale: false,
+      missing_observation_count: 0,
       error_code: null,
       attempt_count: 0,
       next_retry_at: "2026-07-22T00:00:00Z",

@@ -23,6 +23,7 @@ The feed-to-qBittorrent product path and self-hosted delivery layer are implemen
 - deterministic hard filters, ordered preferences, fallback waits, and backfill decisions
 - encrypted qBittorrent configuration and connectivity validation
 - idempotent magnet/torrent submission, task reconciliation, and explicit retry
+- qBittorrent 4.6/5.x Web API compatibility checks and two-pass deletion confirmation
 - V2/V3 cancellation without deleting completed files
 - dependency health, failed-work aggregation, and append-only audit history
 - manual candidate confirmation and unmatched-release mapping
@@ -123,6 +124,9 @@ Run `make acceptance-compose` before changing image packaging, migrations, or
 backup behavior. It builds a historical baseline and the current image, then
 verifies clean setup, backup, in-place upgrade, clean-volume restore, and
 backup-based rollback with disposable Compose projects.
+
+Run `make acceptance-qbittorrent` after changing the downloader adapter. It uses
+fixed qBittorrent 4.6.7 and 5.0.4 containers to exercise the real Web API contract.
 
 For real-feed release acceptance, run `make acceptance-soak-preflight`. After it
 reports two healthy feeds, two following Bangumi anime, a verified qBittorrent

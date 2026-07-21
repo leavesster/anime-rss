@@ -30,6 +30,12 @@ class DownloaderConnection:
 
 
 @dataclass(frozen=True, slots=True)
+class DownloaderCompatibility:
+    application_version: str
+    web_api_version: str
+
+
+@dataclass(frozen=True, slots=True)
 class Submission:
     info_hash: str
     source_kind: str
@@ -64,7 +70,7 @@ class DownloaderError(RuntimeError):
 
 
 class Downloader(Protocol):
-    def test(self, connection: DownloaderConnection) -> str: ...
+    def test(self, connection: DownloaderConnection) -> DownloaderCompatibility: ...
 
     def lookup(self, connection: DownloaderConnection, info_hash: str) -> DownloaderTask | None: ...
 

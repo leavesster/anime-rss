@@ -42,6 +42,7 @@ class FakeQbittorrent:
         self.fail_lookup_once = False
         self.timeout_after_add_once = False
         self.next_add_hash = INFO_HASH
+        self.calls: list[tuple[str, str | None]] = []
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -52,11 +53,14 @@ class FakeQbittorrent:
         assert request.headers.get("cookie") == "SID=test"
         if path == "/api/v2/app/version":
             return httpx.Response(200, text="v5.0.4")
+        if path == "/api/v2/app/webapiVersion":
+            return httpx.Response(200, text="2.11.2")
         if path == "/api/v2/torrents/info":
             if self.fail_lookup_once:
                 self.fail_lookup_once = False
                 return httpx.Response(503)
             info_hash = request.url.params["hashes"]
+            self.calls.append(("lookup", info_hash))
             task = self.tasks.get(info_hash)
             return httpx.Response(200, json=[task] if task else [])
         if path == "/api/v2/torrents/add":
@@ -65,6 +69,7 @@ class FakeQbittorrent:
             self.submitted_options.append(body)
             info_hash = self.next_add_hash
             self.add_hashes.append(info_hash)
+            self.calls.append(("add", info_hash))
             self.tasks[info_hash] = {
                 "hash": info_hash,
                 "state": "downloading",
@@ -81,6 +86,7 @@ class FakeQbittorrent:
             body = parse_qs(request.content.decode())
             info_hash = body["hashes"][0]
             self.deleted.append((info_hash, body["deleteFiles"][0]))
+            self.calls.append(("delete", info_hash))
             self.tasks.pop(info_hash, None)
             return httpx.Response(200, text="Ok.")
         raise AssertionError(f"unexpected qBittorrent request: {request.method} {path}")
@@ -144,6 +150,7 @@ def test_config_submit_reconcile_external_delete_and_explicit_retry(tmp_path: Pa
         assert client.post("/api/v1/downloads/config/test").json() == {
             "status": "connected",
             "version": "v5.0.4",
+            "web_api_version": "2.11.2",
         }
         _subscribe_and_refresh(client, feed_transport)
 
@@ -180,8 +187,25 @@ def test_config_submit_reconcile_external_delete_and_explicit_retry(tmp_path: Pa
 
         qb.tasks.pop(INFO_HASH)
         client.post("/api/v1/downloads/process")
+        unconfirmed = client.get("/api/v1/downloads/tasks").json()[0]
+        assert unconfirmed["state"] == "paused"
+        assert unconfirmed["stale"] is True
+        assert unconfirmed["error_code"] == "external_removal_unconfirmed"
+        assert unconfirmed["missing_observation_count"] == 1
+        qb.fail_lookup_once = True
+        client.post("/api/v1/downloads/process")
+        interrupted = client.get("/api/v1/downloads/tasks").json()[0]
+        assert interrupted["state"] == "paused"
+        assert interrupted["missing_observation_count"] == 0
+        assert interrupted["error_code"] == "upstream_unavailable"
+        client.post("/api/v1/downloads/process")
+        pending_again = client.get("/api/v1/downloads/tasks").json()[0]
+        assert pending_again["state"] == "paused"
+        assert pending_again["missing_observation_count"] == 1
+        client.post("/api/v1/downloads/process")
         removed = client.get("/api/v1/downloads/tasks").json()[0]
         assert removed["state"] == "externally_removed"
+        assert removed["missing_observation_count"] == 2
         client.post("/api/v1/downloads/process")
         assert qb.add_hashes == [INFO_HASH]
 
@@ -314,6 +338,9 @@ def test_upgrade_cancels_incomplete_task_without_deleting_files(tmp_path: Path) 
         assert qb.deleted == [(INFO_HASH, "false")]
         assert {task["state"] for task in tasks} == {"superseded", "downloading"}
         assert qb.add_hashes == [INFO_HASH, V2_HASH]
+        delete_index = qb.calls.index(("delete", INFO_HASH))
+        replacement_add_index = qb.calls.index(("add", V2_HASH))
+        assert delete_index < replacement_add_index
 
 
 def test_download_config_validation_and_api_errors(tmp_path: Path) -> None:

@@ -82,8 +82,63 @@ def test_reverse_proxy_base_path_is_preserved() -> None:
             return httpx.Response(200, text="Ok.")
         if request.url.path == "/qb/api/v2/app/version":
             return httpx.Response(200, text="v5.0.4")
+        if request.url.path == "/qb/api/v2/app/webapiVersion":
+            return httpx.Response(200, text="2.11.2")
         raise AssertionError(request.url.path)
 
     client = QbittorrentClient(transport=httpx.MockTransport(handler))
-    assert client.test(DownloaderConnection("http://qb.test/qb", "admin", "secret")) == "v5.0.4"
-    assert paths == ["/qb/api/v2/auth/login", "/qb/api/v2/app/version"]
+    compatibility = client.test(DownloaderConnection("http://qb.test/qb", "admin", "secret"))
+    assert compatibility.application_version == "v5.0.4"
+    assert compatibility.web_api_version == "2.11.2"
+    assert paths == [
+        "/qb/api/v2/auth/login",
+        "/qb/api/v2/app/version",
+        "/qb/api/v2/app/webapiVersion",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("application_version", "web_api_version"),
+    [("v4.6.7", "2.9.3"), ("v5.0.4", "2.11.2")],
+)
+def test_supported_qbittorrent_versions_are_explicit(
+    application_version: str, web_api_version: str
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/v2/auth/login":
+            return httpx.Response(200, text="Ok.")
+        if request.url.path == "/api/v2/app/version":
+            return httpx.Response(200, text=application_version)
+        if request.url.path == "/api/v2/app/webapiVersion":
+            return httpx.Response(200, text=web_api_version)
+        raise AssertionError(request.url.path)
+
+    compatibility = QbittorrentClient(transport=httpx.MockTransport(handler)).test(CONNECTION)
+    assert compatibility.application_version == application_version
+    assert compatibility.web_api_version == web_api_version
+
+
+@pytest.mark.parametrize(
+    ("application_version", "web_api_version"),
+    [("v4.5.5", "2.8.3"), ("v6.0.0", "3.0.0"), ("not-a-version", "2.11.4")],
+)
+def test_unsupported_or_malformed_qbittorrent_versions_are_rejected(
+    application_version: str, web_api_version: str
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/v2/auth/login":
+            return httpx.Response(200, text="Ok.")
+        if request.url.path == "/api/v2/app/version":
+            return httpx.Response(200, text=application_version)
+        if request.url.path == "/api/v2/app/webapiVersion":
+            return httpx.Response(200, text=web_api_version)
+        raise AssertionError(request.url.path)
+
+    client = QbittorrentClient(transport=httpx.MockTransport(handler))
+    expected = (
+        "invalid_version_response"
+        if application_version == "not-a-version"
+        else "unsupported_qbittorrent_version"
+    )
+    with pytest.raises(DownloaderError, match=expected):
+        client.test(CONNECTION)

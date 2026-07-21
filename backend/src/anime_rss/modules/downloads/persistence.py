@@ -7,6 +7,7 @@ from sqlalchemy import (
     CheckConstraint,
     Float,
     ForeignKey,
+    Integer,
     LargeBinary,
     String,
     UniqueConstraint,
@@ -80,6 +81,7 @@ class DownloadTaskRecord(Base):
     progress: Mapped[float] = mapped_column(Float, default=0.0)
     stale: Mapped[bool] = mapped_column(Boolean, default=False)
     observed_once: Mapped[bool] = mapped_column(Boolean, default=False)
+    missing_observation_count: Mapped[int] = mapped_column(Integer, default=0)
     cancellation_requested: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     supersedes_decision_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     superseded_by_decision_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
