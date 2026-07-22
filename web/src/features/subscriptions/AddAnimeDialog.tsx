@@ -1,40 +1,63 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Download, Search, X } from "lucide-react";
+import { Import, Search, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 import {
   createLocalAnime,
   importBangumi,
   searchBangumi,
+  type Anime,
 } from "../../generated/api/client";
 import { ErrorBanner } from "../../shared/components/Feedback";
 
 interface Props {
   onClose: () => void;
+  onSelected?: (anime: Anime) => Promise<void> | void;
+  initialTitle?: string;
+  initialMode?: "local" | "bangumi";
 }
 
 function splitAliases(value: string): string[] {
   return value.split(",").map((item) => item.trim()).filter(Boolean);
 }
 
-export function AddAnimeDialog({ onClose }: Props) {
+export function AddAnimeDialog({
+  onClose,
+  onSelected,
+  initialTitle = "",
+  initialMode = "local",
+}: Props) {
   const queryClient = useQueryClient();
-  const [mode, setMode] = useState<"local" | "bangumi">("local");
-  const [title, setTitle] = useState("");
+  const [mode, setMode] = useState<"local" | "bangumi">(initialMode);
+  const [title, setTitle] = useState(initialTitle);
   const [aliases, setAliases] = useState("");
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialTitle);
   const create = useMutation({
-    mutationFn: () => createLocalAnime(title, splitAliases(aliases)),
+    mutationFn: async () => {
+      const anime = await createLocalAnime(title, splitAliases(aliases));
+      await onSelected?.(anime);
+      return anime;
+    },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["anime"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["anime"] }),
+        queryClient.invalidateQueries({ queryKey: ["episode-groups"] }),
+      ]);
       onClose();
     },
   });
   const search = useMutation({ mutationFn: () => searchBangumi(query) });
   const imported = useMutation({
-    mutationFn: importBangumi,
+    mutationFn: async (bangumiId: number) => {
+      const anime = await importBangumi(bangumiId);
+      await onSelected?.(anime);
+      return anime;
+    },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["anime"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["anime"] }),
+        queryClient.invalidateQueries({ queryKey: ["episode-groups"] }),
+      ]);
       onClose();
     },
   });
@@ -74,7 +97,7 @@ export function AddAnimeDialog({ onClose }: Props) {
           {search.data?.stale && <p className="inline-note">Bangumi 当前不可用，正在显示本地缓存结果。</p>}
           <div className="catalog-results">{search.data?.items.map((item) => <article key={item.bangumi_id}>
             <div><strong>{item.name_cn ?? item.name}</strong><small>{item.name}{item.air_date ? ` · ${item.air_date}` : ""}</small></div>
-            <button className="button button--secondary button--small" type="button" onClick={() => imported.mutate(item.bangumi_id)} disabled={imported.isPending}><Download size={15} />导入</button>
+            <button className="button button--secondary button--small" type="button" onClick={() => imported.mutate(item.bangumi_id)} disabled={imported.isPending}><Import size={15} />导入</button>
           </article>)}</div>
         </div>}
       </section>

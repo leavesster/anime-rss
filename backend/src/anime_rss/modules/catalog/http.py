@@ -6,6 +6,7 @@ from fastapi import APIRouter, Header, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
 from anime_rss.infrastructure.api import PageCursor, PageLimit, page_response
+from anime_rss.infrastructure.events import EventDispatcher
 from anime_rss.modules.catalog.adapters import CatalogProviderError
 from anime_rss.modules.catalog.api import AnimeNotFoundError, CatalogService
 
@@ -51,6 +52,12 @@ class AliasCreateRequest(BaseModel):
     alias: str = Field(min_length=1, max_length=300)
 
 
+class TitleBindingCreateRequest(BaseModel):
+    titles: list[Annotated[str, Field(min_length=1, max_length=300)]] = Field(
+        min_length=1, max_length=20
+    )
+
+
 class AnimeScheduleUpdateRequest(BaseModel):
     air_date: str | None = Field(default=None, max_length=10)
     episode_count: int | None = Field(default=None, ge=1, le=1000)
@@ -77,6 +84,7 @@ class CatalogSearchResponse(BaseModel):
 
 class CatalogHttpServices(Protocol):
     catalog: CatalogService
+    events: EventDispatcher
 
 
 def _service(request: Request) -> CatalogService:
@@ -100,6 +108,7 @@ def create_local_anime(payload: LocalAnimeCreateRequest, request: Request) -> An
         anime = _service(request).create_local(title=payload.title, aliases=payload.aliases)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
+    cast(CatalogHttpServices, request.app.state.services).events.dispatch_until_idle()
     return AnimeResponse.model_validate(asdict(anime))
 
 
@@ -119,6 +128,23 @@ def add_alias(
     except ValueError as error:
         status_code = 409 if str(error) == "anime version conflict" else 422
         raise HTTPException(status_code=status_code, detail=str(error)) from error
+    cast(CatalogHttpServices, request.app.state.services).events.dispatch_until_idle()
+    return AnimeResponse.model_validate(asdict(anime))
+
+
+@router.post("/anime/{anime_id}/title-bindings", response_model=AnimeResponse)
+def bind_titles(
+    anime_id: str,
+    payload: TitleBindingCreateRequest,
+    request: Request,
+) -> AnimeResponse:
+    try:
+        anime = _service(request).bind_titles(anime_id, payload.titles)
+    except AnimeNotFoundError as error:
+        raise HTTPException(status_code=404, detail="anime not found") from error
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    cast(CatalogHttpServices, request.app.state.services).events.dispatch_until_idle()
     return AnimeResponse.model_validate(asdict(anime))
 
 
@@ -144,6 +170,7 @@ def update_schedule(
     except ValueError as error:
         status_code = 409 if str(error) == "anime version conflict" else 422
         raise HTTPException(status_code=status_code, detail=str(error)) from error
+    cast(CatalogHttpServices, request.app.state.services).events.dispatch_until_idle()
     return AnimeResponse.model_validate(asdict(anime))
 
 
@@ -167,4 +194,5 @@ def import_bangumi(bangumi_id: int, request: Request) -> AnimeResponse:
         anime = _service(request).import_bangumi(bangumi_id)
     except CatalogProviderError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
+    cast(CatalogHttpServices, request.app.state.services).events.dispatch_until_idle()
     return AnimeResponse.model_validate(asdict(anime))

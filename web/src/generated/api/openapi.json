@@ -3851,6 +3851,170 @@
         }
       }
     },
+    "/api/v1/catalog/anime/{anime_id}/title-bindings": {
+      "post": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Bind Titles",
+        "operationId": "bind_titles_api_v1_catalog_anime__anime_id__title_bindings_post",
+        "parameters": [
+          {
+            "name": "anime_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Anime Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Replays a successful mutation for 24 hours.",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 200,
+              "pattern": "^[A-Za-z0-9._:-]{8,200}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TitleBindingCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnimeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Precondition Failed"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Precondition Required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
     "/api/v1/catalog/anime/{anime_id}/schedule": {
       "put": {
         "tags": [
@@ -12543,9 +12707,53 @@
             "type": "string",
             "title": "Series Title"
           },
+          "title_variants": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Title Variants"
+          },
           "series_key": {
             "type": "string",
             "title": "Series Key"
+          },
+          "anime_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anime Id"
+          },
+          "catalog_match_status": {
+            "type": "string",
+            "title": "Catalog Match Status"
+          },
+          "catalog_match_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog Match Method"
+          },
+          "catalog_match_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog Match Key"
           },
           "season": {
             "anyOf": [
@@ -12683,7 +12891,12 @@
           "release_id",
           "source_title",
           "series_title",
+          "title_variants",
           "series_key",
+          "anime_id",
+          "catalog_match_status",
+          "catalog_match_method",
+          "catalog_match_key",
           "season",
           "episode_start",
           "episode_end",
@@ -13351,6 +13564,25 @@
             "type": "string",
             "title": "Series Key"
           },
+          "series_identity": {
+            "type": "string",
+            "title": "Series Identity"
+          },
+          "anime_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anime Id"
+          },
+          "catalog_match_status": {
+            "type": "string",
+            "title": "Catalog Match Status"
+          },
           "season": {
             "anyOf": [
               {
@@ -13388,6 +13620,9 @@
           "key",
           "series_title",
           "series_key",
+          "series_identity",
+          "anime_id",
+          "catalog_match_status",
           "season",
           "episode_key",
           "candidate_count",
@@ -15594,6 +15829,26 @@
           "archived"
         ],
         "title": "SubscriptionState"
+      },
+      "TitleBindingCreateRequest": {
+        "properties": {
+          "titles": {
+            "items": {
+              "type": "string",
+              "maxLength": 300,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Titles"
+          }
+        },
+        "type": "object",
+        "required": [
+          "titles"
+        ],
+        "title": "TitleBindingCreateRequest"
       },
       "UnmatchedReleaseResponse": {
         "properties": {

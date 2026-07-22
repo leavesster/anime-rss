@@ -37,11 +37,11 @@ from anime_rss.modules.subscriptions.api import SelectionSubscription
 class RecognitionQueries(Protocol):
     def get_candidate(self, candidate_id: str) -> Candidate | None: ...
 
-    def list_candidates_for_series_keys(self, series_keys: set[str]) -> list[Candidate]: ...
+    def list_candidates_for_anime_id(self, anime_id: str) -> list[Candidate]: ...
 
 
 class SubscriptionQueries(Protocol):
-    def list_matching_for_selection(self, series_key: str) -> list[SelectionSubscription]: ...
+    def list_matching_for_selection(self, anime_id: str) -> list[SelectionSubscription]: ...
 
     def get_for_selection(self, subscription_id: str) -> SelectionSubscription | None: ...
 
@@ -150,7 +150,9 @@ class SelectionService:
         candidate = self._recognition.get_candidate(candidate_id)
         if candidate is None:
             return
-        for subscription in self._subscriptions.list_matching_for_selection(candidate.series_key):
+        if candidate.anime_id is None:
+            return
+        for subscription in self._subscriptions.list_matching_for_selection(candidate.anime_id):
             self._evaluate_automatic(subscription, candidate)
 
     def handle_candidate_remapped(self, event: IntegrationEvent) -> None:
@@ -294,7 +296,7 @@ class SelectionService:
         subscription = self._subscriptions.get_for_selection(subscription_id)
         if subscription is None:
             raise LookupError("subscription not found")
-        candidates = self._recognition.list_candidates_for_series_keys(set(subscription.match_keys))
+        candidates = self._recognition.list_candidates_for_anime_id(subscription.anime_id)
         rejected = self._rejected_candidate_ids(subscription_id)
         grouped: dict[str, list[Candidate]] = defaultdict(list)
         for candidate in candidates:
@@ -539,7 +541,7 @@ class SelectionService:
         candidate = self._recognition.get_candidate(candidate_id)
         if candidate is None:
             raise LookupError("candidate not found")
-        if candidate.series_key not in subscription.match_keys:
+        if candidate.anime_id != subscription.anime_id:
             raise SelectionCommandError("candidate does not match this subscription")
         return subscription, candidate
 

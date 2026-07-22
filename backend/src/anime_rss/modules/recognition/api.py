@@ -11,12 +11,15 @@ from sqlalchemy.orm import Session, aliased, sessionmaker
 from anime_rss.infrastructure.events import IntegrationEvent, append_event
 from anime_rss.kernel.ids import new_id
 from anime_rss.kernel.time import Clock, utc_now
+from anime_rss.kernel.titles import title_variant_signature
 from anime_rss.modules.audit.api import record_event
+from anime_rss.modules.catalog.api import CatalogTitleMatch
 from anime_rss.modules.recognition.domain import (
     ContentKind,
     MatchConfidence,
     ParsedReleaseTitle,
     canonical_episode_number,
+    extract_series_titles,
     normalize_series_key,
     parse_release_title,
 )
@@ -35,13 +38,22 @@ class RecognitionSourceProvider(Protocol):
     ) -> ReleaseRecognitionSource | None: ...
 
 
+class CatalogTitleResolver(Protocol):
+    def resolve_titles(self, titles: list[str]) -> CatalogTitleMatch: ...
+
+
 @dataclass(frozen=True, slots=True)
 class Candidate:
     id: str
     release_id: str
     source_title: str
     series_title: str
+    title_variants: list[str]
     series_key: str
+    anime_id: str | None
+    catalog_match_status: str
+    catalog_match_method: str | None
+    catalog_match_key: str | None
     season: int | None
     episode_start: str
     episode_end: str | None
@@ -65,6 +77,9 @@ class EpisodeGroup:
     key: str
     series_title: str
     series_key: str
+    series_identity: str
+    anime_id: str | None
+    catalog_match_status: str
     season: int | None
     episode_key: str
     candidate_count: int
@@ -113,11 +128,13 @@ class RecognitionService:
         self,
         session_factory: sessionmaker[Session],
         sources: RecognitionSourceProvider,
+        catalog: CatalogTitleResolver,
         *,
         clock: Clock = utc_now,
     ) -> None:
         self._session_factory = session_factory
         self._sources = sources
+        self._catalog = catalog
         self._clock = clock
 
     def handle_release_identified(self, event: IntegrationEvent) -> None:
@@ -129,11 +146,101 @@ class RecognitionService:
             return
         self.recognize(release_id, feed_entry_id)
 
+    def handle_catalog_titles_changed(self, event: IntegrationEvent) -> None:
+        if event.name != "CatalogTitlesChanged.v1" or event.version != 1:
+            return
+        self.reconcile_catalog_matches()
+
+    def reconcile_catalog_matches(self) -> int:
+        with self._session_factory() as session:
+            candidates = list(
+                session.execute(
+                    select(
+                        CandidateRecord.id,
+                        CandidateRecord.source_title,
+                        CandidateRecord.series_title,
+                        CandidateRecord.title_variants,
+                    ).where(CandidateRecord.superseded_by_candidate_id.is_(None))
+                )
+            )
+        resolved = [
+            (
+                candidate_id,
+                list(title_variants or extract_series_titles(source_title) or (series_title,)),
+            )
+            for candidate_id, source_title, series_title, title_variants in candidates
+        ]
+        resolved = [
+            (candidate_id, title_variants, self._catalog.resolve_titles(title_variants))
+            for candidate_id, title_variants in resolved
+        ]
+        changed = 0
+        with self._session_factory.begin() as session:
+            for candidate_id, title_variants, catalog_match in resolved:
+                record = session.get(CandidateRecord, candidate_id)
+                if record is None or record.superseded_by_candidate_id is not None:
+                    continue
+                if record.title_variants is None:
+                    record.title_variants = title_variants
+                previous_anime_id = record.anime_id
+                previous_status = record.catalog_match_status
+                next_identity = (
+                    catalog_match.anime_id,
+                    catalog_match.status,
+                    catalog_match.method,
+                    catalog_match.matched_key,
+                )
+                current_identity = (
+                    record.anime_id,
+                    record.catalog_match_status,
+                    record.catalog_match_method,
+                    record.catalog_match_key,
+                )
+                if next_identity == current_identity:
+                    continue
+                record.anime_id = catalog_match.anime_id
+                record.catalog_match_status = catalog_match.status
+                record.catalog_match_method = catalog_match.method
+                record.catalog_match_key = catalog_match.matched_key
+                changed += 1
+                append_event(
+                    session,
+                    name="CandidateCatalogIdentityChanged.v1",
+                    payload={
+                        "candidate_id": record.id,
+                        "release_id": record.release_id,
+                        "episode_key": record.episode_key,
+                        "previous_anime_id": previous_anime_id,
+                        "anime_id": catalog_match.anime_id,
+                        "previous_status": previous_status,
+                        "status": catalog_match.status,
+                    },
+                )
+                if catalog_match.anime_id is not None:
+                    append_event(
+                        session,
+                        name="CandidateEvaluated.v1",
+                        payload={
+                            "candidate_id": record.id,
+                            "release_id": record.release_id,
+                            "episode_key": record.episode_key,
+                            "trigger": "catalog_match",
+                        },
+                    )
+        return changed
+
+    def _resolve_catalog_match(self, titles: tuple[str, ...]) -> CatalogTitleMatch:
+        if not titles:
+            return CatalogTitleMatch("unmatched", None, None, None)
+        return self._catalog.resolve_titles(list(titles))
+
     def recognize(self, release_id: str, feed_entry_id: str) -> str | None:
         source = self._sources.get_recognition_source(release_id, feed_entry_id)
         if source is None:
             return None
         parsed = parse_release_title(source.title)
+        title_variants = extract_series_titles(parsed.source_title)
+        catalog_match = self._resolve_catalog_match(title_variants)
         now = self._clock()
         attempt_id = new_id()
 
@@ -184,6 +291,8 @@ class RecognitionService:
                 release_id=release_id,
                 attempt_id=attempt_id,
                 parsed=parsed,
+                title_variants=title_variants,
+                catalog_match=catalog_match,
                 source_automation_eligible=source.automation_eligible,
                 first_seen_at=source.first_seen_at,
             )
@@ -235,6 +344,8 @@ class RecognitionService:
                 raise CandidateNotFoundError(release_id)
 
             parsed = parse_release_title(source.title)
+            title_variants = extract_series_titles(parsed.source_title)
+            catalog_match = self._resolve_catalog_match(title_variants)
             attempt_id = new_id()
             parsed_at = max(now, previous_attempt.parsed_at + timedelta(microseconds=1))
             session.add(
@@ -281,6 +392,8 @@ class RecognitionService:
                     release_id=release_id,
                     attempt_id=attempt_id,
                     parsed=parsed,
+                    title_variants=title_variants,
+                    catalog_match=catalog_match,
                     source_automation_eligible=source.automation_eligible,
                     first_seen_at=source.first_seen_at,
                     previous=active,
@@ -332,6 +445,8 @@ class RecognitionService:
         release_id: str,
         attempt_id: str,
         parsed: ParsedReleaseTitle,
+        title_variants: tuple[str, ...],
+        catalog_match: CatalogTitleMatch,
         source_automation_eligible: bool,
         first_seen_at: datetime,
         previous: CandidateRecord | None,
@@ -357,7 +472,12 @@ class RecognitionService:
                 supersedes_candidate_id=previous.id if previous is not None else None,
                 source_title=parsed.source_title,
                 series_title=parsed.series_title,
+                title_variants=list(title_variants),
                 series_key=parsed.series_key,
+                anime_id=catalog_match.anime_id,
+                catalog_match_status=catalog_match.status,
+                catalog_match_method=catalog_match.method,
+                catalog_match_key=catalog_match.matched_key,
                 season=parsed.season,
                 episode_start=parsed.episode_start,
                 episode_end=parsed.episode_end,
@@ -412,6 +532,8 @@ class RecognitionService:
         release_id: str,
         attempt_id: str,
         parsed: ParsedReleaseTitle,
+        title_variants: tuple[str, ...],
+        catalog_match: CatalogTitleMatch,
         source_automation_eligible: bool,
         first_seen_at: datetime,
     ) -> str | None:
@@ -438,7 +560,12 @@ class RecognitionService:
                     attempt_id=attempt_id,
                     source_title=parsed.source_title,
                     series_title=parsed.series_title,
+                    title_variants=list(title_variants),
                     series_key=parsed.series_key,
+                    anime_id=catalog_match.anime_id,
+                    catalog_match_status=catalog_match.status,
+                    catalog_match_method=catalog_match.method,
+                    catalog_match_key=catalog_match.matched_key,
                     season=parsed.season,
                     episode_start=parsed.episode_start,
                     episode_end=parsed.episode_end,
@@ -496,7 +623,13 @@ class RecognitionService:
 
         grouped: dict[tuple[str, str], list[CandidateRecord]] = defaultdict(list)
         for record in records:
-            grouped[(record.series_key, record.episode_key)].append(record)
+            identity = (
+                f"anime:{record.anime_id}"
+                if record.anime_id is not None
+                else "title:"
+                + title_variant_signature(record.title_variants or [record.series_title])
+            )
+            grouped[(identity, record.episode_key)].append(record)
 
         groups = [self._to_group(key, candidates) for key, candidates in grouped.items()]
         groups.sort(key=lambda group: (group.latest_seen_at, group.key), reverse=True)
@@ -711,6 +844,7 @@ class RecognitionService:
         if end is not None and start == end:
             end = None
         episode_key = f"{start}-{end}" if end else start
+        catalog_match = self._catalog.resolve_titles([title])
         now = self._clock()
         with self._session_factory.begin() as session:
             previous = session.scalar(
@@ -741,7 +875,12 @@ class RecognitionService:
                     supersedes_candidate_id=previous.id if previous is not None else None,
                     source_title=attempt.source_title,
                     series_title=title,
+                    title_variants=[title],
                     series_key=series_key,
+                    anime_id=catalog_match.anime_id,
+                    catalog_match_status=catalog_match.status,
+                    catalog_match_method=catalog_match.method,
+                    catalog_match_key=catalog_match.matched_key,
                     season=season,
                     episode_start=start,
                     episode_end=end,
@@ -823,15 +962,15 @@ class RecognitionService:
             record = session.get(CandidateRecord, candidate_id)
             return self._to_candidate(record) if record is not None else None
 
-    def list_candidates_for_series_keys(self, series_keys: set[str]) -> list[Candidate]:
-        if not series_keys:
+    def list_candidates_for_anime_id(self, anime_id: str) -> list[Candidate]:
+        if not anime_id:
             return []
         with self._session_factory() as session:
             records = list(
                 session.scalars(
                     select(CandidateRecord)
                     .where(
-                        CandidateRecord.series_key.in_(series_keys),
+                        CandidateRecord.anime_id == anime_id,
                         CandidateRecord.superseded_by_candidate_id.is_(None),
                     )
                     .order_by(CandidateRecord.first_seen_at, CandidateRecord.id)
@@ -853,7 +992,7 @@ class RecognitionService:
 
     @staticmethod
     def _to_group(key: tuple[str, str], records: list[CandidateRecord]) -> EpisodeGroup:
-        series_key, episode_key = key
+        series_identity, episode_key = key
         candidates = [RecognitionService._to_candidate(record) for record in records]
         latest_seen_at = max(candidate.first_seen_at for candidate in candidates)
         known_seasons = {
@@ -861,9 +1000,12 @@ class RecognitionService:
         }
         season = known_seasons.pop() if len(known_seasons) == 1 else None
         return EpisodeGroup(
-            key=f"{series_key}:{episode_key}",
+            key=f"{series_identity}:{episode_key}",
             series_title=records[0].series_title,
-            series_key=series_key,
+            series_key=records[0].series_key,
+            series_identity=series_identity,
+            anime_id=records[0].anime_id,
+            catalog_match_status=records[0].catalog_match_status,
             season=season,
             episode_key=episode_key,
             candidate_count=len(candidates),
@@ -878,7 +1020,12 @@ class RecognitionService:
             release_id=record.release_id,
             source_title=record.source_title,
             series_title=record.series_title,
+            title_variants=list(record.title_variants or [record.series_title]),
             series_key=record.series_key,
+            anime_id=record.anime_id,
+            catalog_match_status=record.catalog_match_status,
+            catalog_match_method=record.catalog_match_method,
+            catalog_match_key=record.catalog_match_key,
             season=record.season,
             episode_start=record.episode_start,
             episode_end=record.episode_end,

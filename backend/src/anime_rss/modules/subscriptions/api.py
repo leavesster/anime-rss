@@ -26,6 +26,8 @@ GLOBAL_PROFILE_ID = "default"
 class AnimeCatalog(Protocol):
     def get_anime(self, anime_id: str) -> Anime: ...
 
+    def add_aliases(self, anime_id: str, aliases: list[str]) -> Anime: ...
+
 
 @dataclass(frozen=True, slots=True)
 class Subscription:
@@ -92,7 +94,7 @@ class SubscriptionService:
         aliases: list[str] | None = None,
         save_path: str | None = None,
     ) -> Subscription:
-        anime = self._catalog.get_anime(anime_id)
+        anime = self._catalog.add_aliases(anime_id, aliases or [])
         now = self._clock()
         match_keys = self._match_keys(anime, aliases or [])
         subscription_id = new_id()
@@ -155,6 +157,10 @@ class SubscriptionService:
         expected_version: int | None = None,
     ) -> Subscription:
         now = self._clock()
+        alias_anime = None
+        if aliases is not None:
+            current_subscription = self.get_subscription(subscription_id)
+            alias_anime = self._catalog.add_aliases(current_subscription.anime_id, aliases)
         with self._session_factory.begin() as session:
             record = session.get(SubscriptionRecord, subscription_id)
             if record is None:
@@ -179,8 +185,8 @@ class SubscriptionService:
                     record.rules = self._global_rules(session).to_dict()
                 record.use_global_rules = use_global_rules
             if aliases is not None:
-                anime = self._catalog.get_anime(record.anime_id)
-                record.match_keys = self._match_keys(anime, aliases)
+                assert alias_anime is not None
+                record.match_keys = self._match_keys(alias_anime, aliases)
             if save_path is not None:
                 record.save_path = self._clean_path(save_path)
             record.version += 1
@@ -268,11 +274,11 @@ class SubscriptionService:
             return None
         return self._to_selection(subscription)
 
-    def list_matching_for_selection(self, series_key: str) -> list[SelectionSubscription]:
+    def list_matching_for_selection(self, anime_id: str) -> list[SelectionSubscription]:
         return [
             self._to_selection(subscription)
             for subscription in self.list_subscriptions()
-            if series_key in subscription.match_keys
+            if anime_id == subscription.anime_id
         ]
 
     @staticmethod

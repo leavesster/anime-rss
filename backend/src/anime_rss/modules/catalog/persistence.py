@@ -50,6 +50,23 @@ class AnimeTitleRecord(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
 
 
+class AnimeTitleBindingRecord(Base):
+    __tablename__ = "catalog_title_bindings"
+    __table_args__ = (
+        UniqueConstraint("key_kind", "match_key", name="uq_catalog_title_binding_key"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    key_kind: Mapped[str] = mapped_column(String(16))
+    match_key: Mapped[str] = mapped_column(String(300), index=True)
+    anime_id: Mapped[str] = mapped_column(
+        ForeignKey("catalog_anime.id", ondelete="CASCADE"), index=True
+    )
+    source_title: Mapped[str] = mapped_column(String(300))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
+
+
 class MetadataCacheRecord(Base):
     __tablename__ = "catalog_metadata_cache"
 

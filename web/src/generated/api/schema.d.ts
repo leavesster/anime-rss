@@ -364,6 +364,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/catalog/anime/{anime_id}/title-bindings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bind Titles */
+        post: operations["bind_titles_api_v1_catalog_anime__anime_id__title_bindings_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/catalog/anime/{anime_id}/schedule": {
         parameters: {
             query?: never;
@@ -1297,8 +1314,18 @@ export interface components {
             source_title: string;
             /** Series Title */
             series_title: string;
+            /** Title Variants */
+            title_variants: string[];
             /** Series Key */
             series_key: string;
+            /** Anime Id */
+            anime_id: string | null;
+            /** Catalog Match Status */
+            catalog_match_status: string;
+            /** Catalog Match Method */
+            catalog_match_method: string | null;
+            /** Catalog Match Key */
+            catalog_match_key: string | null;
             /** Season */
             season: number | null;
             /** Episode Start */
@@ -1548,6 +1575,12 @@ export interface components {
             series_title: string;
             /** Series Key */
             series_key: string;
+            /** Series Identity */
+            series_identity: string;
+            /** Anime Id */
+            anime_id: string | null;
+            /** Catalog Match Status */
+            catalog_match_status: string;
             /** Season */
             season: number | null;
             /** Episode Key */
@@ -2270,6 +2303,11 @@ export interface components {
          * @enum {string}
          */
         SubscriptionState: "following" | "paused" | "completed" | "archived";
+        /** TitleBindingCreateRequest */
+        TitleBindingCreateRequest: {
+            /** Titles */
+            titles: string[];
+        };
         /** UnmatchedReleaseResponse */
         UnmatchedReleaseResponse: {
             /** Id */
@@ -5175,6 +5213,134 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AliasCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnimeResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Precondition Failed */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Precondition Required */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    bind_titles_api_v1_catalog_anime__anime_id__title_bindings_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Replays a successful mutation for 24 hours. */
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                anime_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TitleBindingCreateRequest"];
             };
         };
         responses: {

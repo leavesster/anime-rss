@@ -6,6 +6,7 @@ from fastapi import APIRouter, Header, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
 from anime_rss.infrastructure.api import PageCursor, PageLimit, page_response
+from anime_rss.infrastructure.events import EventDispatcher
 from anime_rss.modules.catalog.api import AnimeNotFoundError
 from anime_rss.modules.subscriptions.api import (
     PreferenceProfile,
@@ -78,6 +79,7 @@ class SubscriptionResponse(BaseModel):
 
 class SubscriptionHttpServices(Protocol):
     subscriptions: SubscriptionService
+    events: EventDispatcher
 
 
 def _service(request: Request) -> SubscriptionService:
@@ -129,6 +131,7 @@ def create_subscription(
         raise HTTPException(status_code=409, detail=str(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
+    cast(SubscriptionHttpServices, request.app.state.services).events.dispatch_until_idle()
     return _response(value)
 
 
@@ -155,6 +158,7 @@ def update_subscription(
         raise HTTPException(status_code=409, detail=str(error)) from error
     except (AnimeNotFoundError, ValueError) as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
+    cast(SubscriptionHttpServices, request.app.state.services).events.dispatch_until_idle()
     return _response(value)
 
 

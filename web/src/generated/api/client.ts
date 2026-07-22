@@ -293,6 +293,15 @@ export async function importBangumi(bangumiId: number): Promise<Anime> {
   );
 }
 
+export async function bindCatalogTitles(animeId: string, titles: string[]): Promise<Anime> {
+  return unwrap(
+    await client.POST("/api/v1/catalog/anime/{anime_id}/title-bindings", {
+      params: { path: { anime_id: animeId } },
+      body: { titles },
+    }),
+  );
+}
+
 export async function updateAnimeSchedule(
   animeId: string,
   version: number,

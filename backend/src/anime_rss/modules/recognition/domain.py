@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 
+from anime_rss.kernel.titles import normalize_title_key
+
 PARSER_VERSION = "title-rules.v2"
 MAX_SERIES_KEY_LENGTH = 300
 
@@ -79,9 +81,7 @@ def canonical_episode_number(value: str | None) -> str | None:
 
 
 def normalize_series_key(value: str) -> str:
-    normalized = unicodedata.normalize("NFKC", value).casefold()
-    key = "".join(character for character in normalized if character.isalnum())
-    return key[:MAX_SERIES_KEY_LENGTH]
+    return normalize_title_key(value)[:MAX_SERIES_KEY_LENGTH]
 
 
 def _content_kind(title: str) -> ContentKind:
@@ -137,6 +137,28 @@ def _subtitle_language(title: str) -> str | None:
     return None
 
 
+def _series_titles(normalized_title: str) -> tuple[str, ...]:
+    group_match = _GROUP.match(normalized_title)
+    body = normalized_title[group_match.end() if group_match else 0 :].strip()
+    episode_match = (
+        _SEASON_EPISODE.search(body) or _DASH_EPISODE.search(body) or _BRACKET_EPISODE.search(body)
+    )
+    if episode_match is None:
+        return ()
+    series_part = body[: episode_match.start()].strip(" \t-\u2013\u2014_/|")
+    titles: list[str] = []
+    for part in re.split(r"\s*/\s*", series_part):
+        value = re.sub(r"\s*[\[(【][^\])】]*$", "", part).strip()[:300]
+        if value and value not in titles:
+            titles.append(value)
+    return tuple(titles)
+
+
+def extract_series_titles(source_title: str) -> tuple[str, ...]:
+    normalized = unicodedata.normalize("NFKC", source_title).strip()[:4096]
+    return _series_titles(normalized)
+
+
 def parse_release_title(title: str) -> ParsedReleaseTitle:
     normalized = unicodedata.normalize("NFKC", title).strip()[:4096]
     group_match = _GROUP.match(normalized)
@@ -160,14 +182,9 @@ def parse_release_title(title: str) -> ParsedReleaseTitle:
     series_title = None
     series_key = None
     if episode_match:
-        series_part = body[: episode_match.start()].strip(" \t-\u2013\u2014_/|")
-        localized_title = next(
-            (part.strip() for part in re.split(r"\s+/\s+", series_part) if part.strip()),
-            "",
-        )
-        localized_title = re.sub(r"\s*[\[(【][^\])】]*$", "", localized_title).strip()
-        if localized_title:
-            series_title = localized_title[:300]
+        titles = _series_titles(normalized)
+        if titles:
+            series_title = titles[0]
             series_key = normalize_series_key(series_title) or None
 
     content_kind = _content_kind(normalized)

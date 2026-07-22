@@ -6,6 +6,7 @@ import { useSearchParams } from "react-router-dom";
 import {
   confirmCandidate,
   dismissRelease,
+  listAnime,
   listEpisodeGroups,
   listUnmatchedReleases,
   remapRelease,
@@ -65,20 +66,21 @@ export function CandidatesPage() {
   const [dismissTarget, setDismissTarget] = useState<UnmatchedRelease | null>(null);
   const [rerunResult, setRerunResult] = useState<RecognitionRerun | null>(null);
   const groups = useQuery({ queryKey: ["episode-groups"], queryFn: listEpisodeGroups });
+  const anime = useQuery({ queryKey: ["anime"], queryFn: listAnime });
   const unmatched = useQuery({ queryKey: ["unmatched-releases"], queryFn: listUnmatchedReleases });
   const filteredGroups = useMemo(() => {
     const query = search.trim().toLowerCase();
     return (groups.data ?? []).filter((group) => {
-      if (seriesFilter && group.series_key !== seriesFilter) return false;
+      if (seriesFilter && group.series_identity !== seriesFilter) return false;
       return !query
         || group.series_title.toLowerCase().includes(query)
         || group.episode_key.toLowerCase().includes(query)
         || group.candidates.some((candidate) => candidate.release_group?.toLowerCase().includes(query));
     });
   }, [groups.data, search, seriesFilter]);
-  const filteredSeriesTitle = groups.data?.find(
-    (group) => group.series_key === seriesFilter,
-  )?.series_title;
+  const filteredSeries = groups.data?.find((group) => group.series_identity === seriesFilter);
+  const filteredSeriesTitle = anime.data?.find((item) => item.id === filteredSeries?.anime_id)?.primary_title ?? filteredSeries?.series_title;
+  const displaySeriesTitle = (group: NonNullable<typeof groups.data>[number]) => anime.data?.find((item) => item.id === group.anime_id)?.primary_title ?? group.series_title;
   const duplicateGroups = groups.data?.filter((group) => group.candidate_count > 1).length ?? 0;
   const refresh = async () => {
     await Promise.all([
@@ -131,14 +133,14 @@ export function CandidatesPage() {
           {tab === "grouped" && filteredGroups.length === 0 && <EmptyState icon={Layers3} title={groups.data.length ? "没有匹配结果" : "还没有剧集候选"} description={groups.data.length ? "清空搜索条件或尝试其他关键词。" : "刷新包含可识别动画标题的订阅源后，候选会按集数归组。"} />}
           {tab === "grouped" && filteredGroups.length > 0 && <div className="episode-group-list">{filteredGroups.map((group) => (
             <article className="episode-group" key={group.key}>
-              <header className="episode-group__header"><div><span className="episode-number">第 {group.episode_key} 集</span><h2>{group.series_title}</h2></div><span className="candidate-count">{group.candidate_count} 个候选</span></header>
+              <header className="episode-group__header"><div><span className="episode-number">第 {group.episode_key} 集</span><h2>{displaySeriesTitle(group)}</h2></div><span className="candidate-count">{group.candidate_count} 个候选</span></header>
               <div className="candidate-list">{group.candidates.map((candidate) => (
                 <div className="candidate-row" key={candidate.id}>
                   <div className="candidate-group"><strong>{candidate.release_group ?? "未知字幕组"}</strong><small title={candidate.source_title}>{candidate.source_title}</small></div>
                   <span className="candidate-media">{mediaSummary(candidate)}</span>
                   <span className="revision-label">V{candidate.revision}</span>
                   <StatusBadge status={candidate.confidence} />
-                  <span className={candidate.recognition_eligible ? "eligibility eligibility--yes" : "eligibility"}><CheckCircle2 size={16} />{candidate.recognition_eligible ? "可参与选择" : "需确认"}</span>
+                  <span className={candidate.anime_id && candidate.recognition_eligible ? "eligibility eligibility--yes" : "eligibility"}><CheckCircle2 size={16} />{candidate.anime_id ? `已关联目录 · ${candidate.recognition_eligible ? "可选择" : "需确认"}` : candidate.catalog_match_status === "ambiguous" ? "动画匹配有歧义" : "待绑定动画"}</span>
                   <div className="candidate-actions">
                     {!candidate.recognition_eligible && <Button aria-label="确认候选" title="确认候选" size="icon" variant="ghost" icon={<ShieldCheck size={16} />} disabled={confirm.isPending} onClick={() => confirm.mutate(candidate.id)} />}
                     <Button aria-label="重新解析" title="重新解析" size="icon" variant="ghost" icon={<RefreshCw className={rerun.isPending && rerun.variables === candidate.release_id ? "spin" : ""} size={16} />} disabled={rerun.isPending} onClick={() => rerun.mutate(candidate.release_id)} />

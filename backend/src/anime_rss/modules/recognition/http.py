@@ -27,7 +27,12 @@ class CandidateResponse(BaseModel):
     release_id: str
     source_title: str
     series_title: str
+    title_variants: list[str]
     series_key: str
+    anime_id: str | None
+    catalog_match_status: str
+    catalog_match_method: str | None
+    catalog_match_key: str | None
     season: int | None
     episode_start: str
     episode_end: str | None
@@ -50,6 +55,9 @@ class EpisodeGroupResponse(BaseModel):
     key: str
     series_title: str
     series_key: str
+    series_identity: str
+    anime_id: str | None
+    catalog_match_status: str
     season: int | None
     episode_key: str
     candidate_count: int

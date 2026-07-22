@@ -1,6 +1,6 @@
 # 识别模块
 
-负责确定性的解析尝试和分集候选项投影视图。它消费 `ReleaseIdentified.v1`，并且只能通过 `releases.api` 公共契约读取发布资源观测数据。
+负责确定性的解析尝试、目录身份关联和分集候选项投影视图。它消费 `ReleaseIdentified.v1`，通过 `releases.api` 读取发布资源观测数据，并通过 `catalog.api` 将解析标题唯一关联到稳定的本地动画 ID。
 
 ## 公共接口
 
@@ -10,6 +10,7 @@
 - `RecognitionService.confirm_candidate`
 - `RecognitionService.remap_release`
 - `RecognitionService.rerun_release`
+- `RecognitionService.reconcile_catalog_matches`
 - `RecognitionService.permanent_release_ids`
 - `parse_release_title`
 
@@ -20,7 +21,8 @@
 - 集数使用规范化十进制字符串，绝不使用浮点数。
 - 系列键经过大小写折叠后必须符合 300 字符的持久化上限，修订版号最多三位。
 - 一个发布资源只能有一个活跃候选项；重新映射会取代旧候选项，而不是改写旧记录。
-- 系列分组使用精确的标准化键；禁止模糊匹配。
+- 已匹配系列按 `(anime_id, episode_key)` 分组；未匹配系列使用繁简规范化临时标题键。目录命中多个动画时保持歧义状态，禁止模糊猜测。
+- RSS 原始标题和解析得到的 `series_key` 始终作为证据保留，不充当正式动画身份。
 - 每次来源观测都会生成一次不可变的初始解析尝试；显式重新运行解析器时，会追加具有独立标识的尝试，包括相同版本的重复运行。
 - 输出不变的重新运行会保留活跃候选项。若输出发生变化且结构有效、置信度为中或高，则取代原候选项；低置信度输出绝不会移除有效的活跃候选项。
 - 手动确认和发布资源映射会追加操作记录，绝不改写需要人工介入的解析尝试。
@@ -29,7 +31,7 @@
 
 ## 不负责
 
-- 动画元数据或别名
+- 动画元数据或别名的写入
 - 订阅规则
 - 候选项排序或下载决策
 - qBittorrent 状态

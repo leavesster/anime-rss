@@ -1,11 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
 import { CandidatesPage } from "../src/features/recognition/CandidatesPage";
 import {
   dismissRelease,
+  listAnime,
   listEpisodeGroups,
   listUnmatchedReleases,
   rerunRecognition,
@@ -14,6 +15,7 @@ import {
 vi.mock("../src/generated/api/client", () => ({
   confirmCandidate: vi.fn(),
   dismissRelease: vi.fn(),
+  listAnime: vi.fn(),
   listEpisodeGroups: vi.fn(),
   listUnmatchedReleases: vi.fn(),
   remapRelease: vi.fn(),
@@ -25,12 +27,19 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+beforeEach(() => {
+  vi.mocked(listAnime).mockResolvedValue([]);
+});
+
 describe("recognition parser rerun", () => {
   it("runs a release again and reports that unchanged evidence was appended", async () => {
     vi.mocked(listEpisodeGroups).mockResolvedValue([{
       key: "parseranime:1",
       series_title: "Parser Anime",
       series_key: "parseranime",
+      series_identity: "title:parseranime",
+      anime_id: null,
+      catalog_match_status: "unmatched",
       season: 1,
       episode_key: "1",
       candidate_count: 1,
@@ -40,7 +49,12 @@ describe("recognition parser rerun", () => {
         release_id: "release-1",
         source_title: "[Group] Parser Anime - 01 [1080p]",
         series_title: "Parser Anime",
+        title_variants: ["Parser Anime"],
         series_key: "parseranime",
+        anime_id: null,
+        catalog_match_status: "unmatched",
+        catalog_match_method: null,
+        catalog_match_key: "parseranime",
         season: 1,
         episode_start: "1",
         episode_end: null,
@@ -120,7 +134,12 @@ describe("recognition parser rerun", () => {
       release_id: "release-1",
       source_title: "[Group] New Anime - 01 [1080p]",
       series_title: "New Anime",
+      title_variants: ["New Anime"],
       series_key: "newanime",
+      anime_id: null,
+      catalog_match_status: "unmatched",
+      catalog_match_method: null,
+      catalog_match_key: "newanime",
       season: 1,
       episode_start: "1",
       episode_end: null,
@@ -139,14 +158,14 @@ describe("recognition parser rerun", () => {
       superseded_at: null,
     };
     vi.mocked(listEpisodeGroups).mockResolvedValue([
-      { key: "newanime:1", series_title: "New Anime", series_key: "newanime", season: 1, episode_key: "1", candidate_count: 1, candidates: [candidate], latest_seen_at: "2026-07-22T00:00:00Z" },
-      { key: "otheranime:1", series_title: "Other Anime", series_key: "otheranime", season: 1, episode_key: "1", candidate_count: 1, candidates: [{ ...candidate, id: "candidate-2", series_title: "Other Anime", series_key: "otheranime" }], latest_seen_at: "2026-07-22T00:00:00Z" },
+      { key: "title:newanime:1", series_title: "New Anime", series_key: "newanime", series_identity: "title:newanime", anime_id: null, catalog_match_status: "unmatched", season: 1, episode_key: "1", candidate_count: 1, candidates: [candidate], latest_seen_at: "2026-07-22T00:00:00Z" },
+      { key: "title:otheranime:1", series_title: "Other Anime", series_key: "otheranime", series_identity: "title:otheranime", anime_id: null, catalog_match_status: "unmatched", season: 1, episode_key: "1", candidate_count: 1, candidates: [{ ...candidate, id: "candidate-2", series_title: "Other Anime", title_variants: ["Other Anime"], series_key: "otheranime", catalog_match_key: "otheranime" }], latest_seen_at: "2026-07-22T00:00:00Z" },
     ]);
     vi.mocked(listUnmatchedReleases).mockResolvedValue([]);
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
-        <MemoryRouter initialEntries={["/candidates?series=newanime"]}><CandidatesPage /></MemoryRouter>
+        <MemoryRouter initialEntries={["/candidates?series=title%3Anewanime"]}><CandidatesPage /></MemoryRouter>
       </QueryClientProvider>,
     );
 

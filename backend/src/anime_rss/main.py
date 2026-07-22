@@ -173,8 +173,8 @@ def create_app(
         releases = ReleaseService(
             session_factory, feed_entries, cipher, torrent_client, clock=clock
         )
-        recognition = RecognitionService(session_factory, releases, clock=clock)
         catalog = CatalogService(session_factory, bangumi_client, clock=clock)
+        recognition = RecognitionService(session_factory, releases, catalog, clock=clock)
         subscriptions = SubscriptionService(session_factory, catalog, clock=clock)
         selection = SelectionService(session_factory, recognition, subscriptions, clock=clock)
         instance_settings = InstanceSettingsService(session_factory, clock=clock)
@@ -225,6 +225,12 @@ def create_app(
                     RegisteredHandler(
                         consumer="recognition.release-identifier.v1",
                         handler=recognition.handle_release_identified,
+                    )
+                ],
+                "CatalogTitlesChanged.v1": [
+                    RegisteredHandler(
+                        consumer="recognition.catalog-title-resolver.v1",
+                        handler=recognition.handle_catalog_titles_changed,
                     )
                 ],
                 "CandidateRemapped.v1": [
@@ -322,6 +328,7 @@ def create_app(
             events=events,
         )
         app.state.services = services
+        recognition.reconcile_catalog_matches()
         events.dispatch_until_idle(
             event_names={
                 "ReleaseIdentified.v1",

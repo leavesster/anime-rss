@@ -80,6 +80,78 @@ def test_release_events_create_episode_candidate_groups(tmp_path: Path) -> None:
         )
 
 
+def test_title_variant_sets_group_and_bind_season_without_guessing(tmp_path: Path) -> None:
+    titles = [
+        (
+            "variant-a",
+            "[ANi] Youjo Senki / 幼女戰記 2 - 03 [1080p AVC]",
+            "a" * 40,
+        ),
+        (
+            "variant-b",
+            "[Group] 幼女戰記 2 / Youjo Senki - 03 [1080p AVC]",
+            "b" * 40,
+        ),
+    ]
+    items = "".join(
+        f"<item><guid>{guid}</guid><title>{title}</title>"
+        f'<enclosure url="magnet:?xt=urn:btih:{info_hash}" '
+        'type="application/x-bittorrent" /></item>'
+        for guid, title, info_hash in titles
+    )
+    rss = f'<?xml version="1.0"?><rss version="2.0"><channel>{items}</channel></rss>'.encode()
+    settings = _settings(tmp_path)
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, content=rss))
+
+    with TestClient(create_app(settings, feed_transport=transport)) as client:
+        first = client.post("/api/v1/catalog/anime", json={"title": "Youjo Senki"}).json()
+        second = client.post(
+            "/api/v1/catalog/anime",
+            json={
+                "title": "幼女战记 第二季",
+                "aliases": ["Youjo Senki II", "幼女戦記Ⅱ"],
+            },
+        ).json()
+        feed = client.post(
+            "/api/v1/feeds", json={"name": "Variants", "url": "https://feed.test/rss"}
+        ).json()
+        client.post(f"/api/v1/feeds/{feed['id']}/refresh").raise_for_status()
+
+        groups = client.get("/api/v1/recognition/episode-groups").json()
+        assert len(groups) == 1
+        assert groups[0]["anime_id"] is None
+        assert groups[0]["catalog_match_status"] == "ambiguous"
+        assert groups[0]["candidate_count"] == 2
+        assert {tuple(candidate["title_variants"]) for candidate in groups[0]["candidates"]} == {
+            ("Youjo Senki", "幼女戰記 2"),
+            ("幼女戰記 2", "Youjo Senki"),
+        }
+        assert first["id"] != second["id"]
+
+        bound = client.post(
+            f"/api/v1/catalog/anime/{second['id']}/title-bindings",
+            json={"titles": ["Youjo Senki", "幼女戰記 2"]},
+        )
+        assert bound.status_code == 200
+        resolved = client.get("/api/v1/recognition/episode-groups").json()
+        assert len(resolved) == 1
+        assert resolved[0]["anime_id"] == second["id"]
+        assert {candidate["catalog_match_method"] for candidate in resolved[0]["candidates"]} == {
+            "manual_variant_set"
+        }
+
+    database = sqlite3.connect(tmp_path / "recognition.sqlite3")
+    try:
+        database.execute("UPDATE match_candidates SET title_variants = NULL")
+        database.commit()
+    finally:
+        database.close()
+
+    with TestClient(create_app(settings, feed_transport=transport)) as restarted:
+        candidates = restarted.get("/api/v1/recognition/episode-groups").json()[0]["candidates"]
+        assert all(candidate["title_variants"] for candidate in candidates)
+
+
 def test_existing_release_events_are_backfilled_on_startup(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     transport = httpx.MockTransport(lambda request: httpx.Response(200, content=_rss()))

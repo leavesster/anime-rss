@@ -6,13 +6,16 @@ from sqlalchemy import delete, select
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session, sessionmaker
 
+from anime_rss.infrastructure.events import append_event
 from anime_rss.kernel.ids import new_id
 from anime_rss.kernel.time import Clock, utc_now
+from anime_rss.kernel.titles import anime_title_key, title_variant_signature
 from anime_rss.modules.audit.api import record_event
 from anime_rss.modules.catalog.adapters import BangumiAnime, CatalogProviderError
 from anime_rss.modules.catalog.domain import normalize_title_key as _normalize_title_key
 from anime_rss.modules.catalog.persistence import (
     AnimeRecord,
+    AnimeTitleBindingRecord,
     AnimeTitleRecord,
     MetadataCacheRecord,
 )
@@ -60,6 +63,14 @@ class Anime:
 class CatalogSearchResult:
     items: list[BangumiAnime]
     stale: bool
+
+
+@dataclass(frozen=True, slots=True)
+class CatalogTitleMatch:
+    status: str
+    anime_id: str | None
+    matched_key: str | None
+    method: str | None
 
 
 class AnimeNotFoundError(LookupError):
@@ -112,6 +123,11 @@ class CatalogService:
                 entity_id=anime_id,
                 payload={"source": "local"},
             )
+            append_event(
+                session,
+                name="CatalogTitlesChanged.v1",
+                payload={"anime_id": anime_id},
+            )
         return self.get_anime(anime_id)
 
     def import_bangumi(self, bangumi_id: int) -> Anime:
@@ -157,6 +173,11 @@ class CatalogService:
                 entity_id=record.id,
                 payload={"provider": "bangumi", "bangumi_id": external.bangumi_id},
             )
+            append_event(
+                session,
+                name="CatalogTitlesChanged.v1",
+                payload={"anime_id": record.id},
+            )
             anime_id = record.id
         return self.get_anime(anime_id)
 
@@ -199,7 +220,244 @@ class CatalogService:
                 entity_id=anime_id,
                 payload={"alias": value[:300]},
             )
+            append_event(
+                session,
+                name="CatalogTitlesChanged.v1",
+                payload={"anime_id": anime_id},
+            )
         return self.get_anime(anime_id)
+
+    def add_aliases(self, anime_id: str, aliases: list[str]) -> Anime:
+        cleaned = [alias.strip()[:300] for alias in aliases if normalize_title_key(alias)]
+        if not cleaned:
+            return self.get_anime(anime_id)
+        changed = False
+        with self._session_factory.begin() as session:
+            record = session.get(AnimeRecord, anime_id)
+            if record is None:
+                raise AnimeNotFoundError(anime_id)
+            existing = set(
+                session.scalars(
+                    select(AnimeTitleRecord.normalized).where(AnimeTitleRecord.anime_id == anime_id)
+                )
+            )
+            for alias in cleaned:
+                normalized = normalize_title_key(alias)[:300]
+                if normalized in existing:
+                    continue
+                existing.add(normalized)
+                changed = True
+                session.add(
+                    AnimeTitleRecord(
+                        id=new_id(),
+                        anime_id=anime_id,
+                        title=alias,
+                        normalized=normalized,
+                        kind="alias",
+                        source="user",
+                        created_at=self._clock(),
+                    )
+                )
+            if changed:
+                record.version += 1
+                record.updated_at = self._clock()
+                append_event(
+                    session,
+                    name="CatalogTitlesChanged.v1",
+                    payload={"anime_id": anime_id},
+                )
+                record_event(
+                    session,
+                    event_type="catalog.aliases_added",
+                    entity_type="anime",
+                    entity_id=anime_id,
+                    payload={"alias_count": len(cleaned)},
+                )
+        return self.get_anime(anime_id)
+
+    def bind_title(self, anime_id: str, title: str) -> Anime:
+        return self.bind_titles(anime_id, [title])
+
+    def bind_titles(self, anime_id: str, titles: list[str]) -> Anime:
+        values = list(
+            dict.fromkeys(title.strip()[:300] for title in titles if normalize_title_key(title))
+        )
+        if not values:
+            raise ValueError("at least one title is required")
+        now = self._clock()
+        with self._session_factory.begin() as session:
+            record = session.get(AnimeRecord, anime_id)
+            if record is None:
+                raise AnimeNotFoundError(anime_id)
+
+            if len(values) == 1:
+                value = values[0]
+                normalized = normalize_title_key(value)[:300]
+                semantic = anime_title_key(value)[:300]
+                keys = [("exact", normalized)]
+                if semantic:
+                    keys.append(("semantic", semantic))
+            else:
+                keys = [("variant_set", title_variant_signature(values))]
+
+            source_title = " / ".join(values)[:300]
+            for key_kind, match_key in keys:
+                session.execute(
+                    insert(AnimeTitleBindingRecord)
+                    .values(
+                        id=new_id(),
+                        key_kind=key_kind,
+                        match_key=match_key,
+                        anime_id=anime_id,
+                        source_title=source_title,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                    .on_conflict_do_update(
+                        index_elements=["key_kind", "match_key"],
+                        set_={
+                            "anime_id": anime_id,
+                            "source_title": source_title,
+                            "updated_at": now,
+                        },
+                    )
+                )
+
+            existing_titles = list(
+                session.scalars(
+                    select(AnimeTitleRecord).where(AnimeTitleRecord.anime_id == anime_id)
+                )
+            )
+            existing_normalized = {item.normalized for item in existing_titles}
+            target_semantic_keys = {anime_title_key(item.title) for item in existing_titles}
+            aliases = (
+                values
+                if len(values) == 1
+                else [value for value in values if anime_title_key(value) in target_semantic_keys]
+            )
+            for value in aliases:
+                normalized = normalize_title_key(value)[:300]
+                if normalized in existing_normalized:
+                    continue
+                existing_normalized.add(normalized)
+                session.add(
+                    AnimeTitleRecord(
+                        id=new_id(),
+                        anime_id=anime_id,
+                        title=value,
+                        normalized=normalized,
+                        kind="alias",
+                        source="user",
+                        created_at=now,
+                    )
+                )
+            record.version += 1
+            record.updated_at = now
+            append_event(
+                session,
+                name="CatalogTitlesChanged.v1",
+                payload={"anime_id": anime_id},
+            )
+            record_event(
+                session,
+                event_type="catalog.titles_bound",
+                entity_type="anime",
+                entity_id=anime_id,
+                payload={
+                    "titles": values,
+                    "keys": [key_kind for key_kind, _ in keys],
+                },
+            )
+        return self.get_anime(anime_id)
+
+    def resolve_title(self, title: str) -> CatalogTitleMatch:
+        return self.resolve_titles([title])
+
+    def resolve_titles(self, titles: list[str]) -> CatalogTitleMatch:
+        values = list(dict.fromkeys(title.strip() for title in titles if anime_title_key(title)))
+        if not values:
+            return CatalogTitleMatch("unmatched", None, None, None)
+        signature = title_variant_signature(values)
+        if len(values) > 1:
+            with self._session_factory() as session:
+                binding = session.scalar(
+                    select(AnimeTitleBindingRecord).where(
+                        AnimeTitleBindingRecord.key_kind == "variant_set",
+                        AnimeTitleBindingRecord.match_key == signature,
+                    )
+                )
+            if binding is not None:
+                return CatalogTitleMatch(
+                    "matched", binding.anime_id, signature, "manual_variant_set"
+                )
+
+        matches = [self._resolve_single_title(title) for title in values]
+        if any(match.status == "ambiguous" for match in matches):
+            return CatalogTitleMatch("ambiguous", None, signature, "variant_set")
+        matched = [match for match in matches if match.anime_id is not None]
+        anime_ids = {match.anime_id for match in matched}
+        if len(anime_ids) > 1:
+            return CatalogTitleMatch("ambiguous", None, signature, "variant_set")
+        if len(anime_ids) == 1:
+            first = matched[0]
+            return CatalogTitleMatch("matched", first.anime_id, first.matched_key, first.method)
+        return CatalogTitleMatch("unmatched", None, signature, None)
+
+    def _resolve_single_title(self, title: str) -> CatalogTitleMatch:
+        normalized = normalize_title_key(title)[:300]
+        if not normalized:
+            return CatalogTitleMatch("unmatched", None, None, None)
+        with self._session_factory() as session:
+            semantic = anime_title_key(title)[:300]
+            exact_binding = session.scalar(
+                select(AnimeTitleBindingRecord).where(
+                    AnimeTitleBindingRecord.key_kind == "exact",
+                    AnimeTitleBindingRecord.match_key == normalized,
+                )
+            )
+            if exact_binding is not None:
+                return CatalogTitleMatch(
+                    "matched", exact_binding.anime_id, normalized, "manual_exact"
+                )
+            semantic_binding = session.scalar(
+                select(AnimeTitleBindingRecord).where(
+                    AnimeTitleBindingRecord.key_kind.in_(["semantic", "chinese_canonical"]),
+                    AnimeTitleBindingRecord.match_key == semantic,
+                )
+            )
+            if semantic_binding is not None:
+                return CatalogTitleMatch(
+                    "matched",
+                    semantic_binding.anime_id,
+                    semantic,
+                    "manual_semantic",
+                )
+            exact_ids = set(
+                session.scalars(
+                    select(AnimeTitleRecord.anime_id).where(
+                        AnimeTitleRecord.normalized == normalized
+                    )
+                )
+            )
+            if len(exact_ids) == 1:
+                return CatalogTitleMatch("matched", exact_ids.pop(), normalized, "exact")
+            if len(exact_ids) > 1:
+                return CatalogTitleMatch("ambiguous", None, normalized, "exact")
+
+            if not semantic:
+                return CatalogTitleMatch("unmatched", None, normalized, None)
+            semantic_ids = {
+                anime_id
+                for anime_id, candidate_title in session.execute(
+                    select(AnimeTitleRecord.anime_id, AnimeTitleRecord.title)
+                )
+                if anime_title_key(candidate_title)[:300] == semantic
+            }
+        if len(semantic_ids) == 1:
+            return CatalogTitleMatch("matched", semantic_ids.pop(), semantic, "semantic")
+        if len(semantic_ids) > 1:
+            return CatalogTitleMatch("ambiguous", None, semantic, "semantic")
+        return CatalogTitleMatch("unmatched", None, semantic, None)
 
     def update_schedule(
         self,

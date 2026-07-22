@@ -52,10 +52,23 @@ def test_catalog_search_is_cached_and_bangumi_anime_can_be_imported(tmp_path: Pa
         create_app(
             _settings(tmp_path, "catalog.sqlite3"),
             bangumi_transport=httpx.MockTransport(bangumi),
+            feed_transport=httpx.MockTransport(
+                lambda request: httpx.Response(
+                    200,
+                    content=_rss(
+                        "[Nix-Raws] 無自覺聖女今天也無意識地釋放力量 - 01 [1080p AVC][繁體]"
+                    ),
+                )
+            ),
         )
     ) as client:
         first = client.get("/api/v1/catalog/bangumi/search", params={"query": "圣女"})
         second = client.get("/api/v1/catalog/bangumi/search", params={"query": "圣女"})
+        feed = client.post(
+            "/api/v1/feeds", json={"name": "Traditional", "url": "https://feed.test/rss"}
+        ).json()
+        client.post(f"/api/v1/feeds/{feed['id']}/refresh")
+        assert client.get("/api/v1/recognition/episode-groups").json()[0]["anime_id"] is None
         imported = client.post("/api/v1/catalog/bangumi/123/import")
 
         assert first.status_code == 200
@@ -70,6 +83,51 @@ def test_catalog_search_is_cached_and_bangumi_anime_can_be_imported(tmp_path: Pa
             "无自觉圣女今天也无意识地释放力量",
             "mujikakuseijo",
         }
+        group = client.get("/api/v1/recognition/episode-groups").json()[0]
+        assert group["anime_id"] == imported.json()["id"]
+        assert group["series_identity"] == f"anime:{imported.json()['id']}"
+        assert group["candidates"][0]["catalog_match_method"] == "semantic"
+
+
+def test_ambiguous_catalog_title_requires_binding_and_reuses_it_for_later_entries(
+    tmp_path: Path,
+) -> None:
+    current_rss = [_rss("[Group] 胆大党 - 01 [1080p AVC][简体]", "c" * 40)]
+    feed_transport = httpx.MockTransport(
+        lambda request: httpx.Response(200, content=current_rss[0])
+    )
+    with TestClient(
+        create_app(_settings(tmp_path, "title-binding.sqlite3"), feed_transport=feed_transport)
+    ) as client:
+        client.post("/api/v1/catalog/anime", json={"title": "胆大党"}).raise_for_status()
+        selected = client.post("/api/v1/catalog/anime", json={"title": "胆大党"}).json()
+        feed = client.post(
+            "/api/v1/feeds", json={"name": "Ambiguous", "url": "https://feed.test/rss"}
+        ).json()
+        client.post(f"/api/v1/feeds/{feed['id']}/refresh").raise_for_status()
+
+        ambiguous = client.get("/api/v1/recognition/episode-groups").json()[0]
+        assert ambiguous["anime_id"] is None
+        assert ambiguous["catalog_match_status"] == "ambiguous"
+
+        bound = client.post(
+            f"/api/v1/catalog/anime/{selected['id']}/title-bindings",
+            json={"titles": ["胆大党"]},
+        )
+        assert bound.status_code == 200
+        resolved = client.get("/api/v1/recognition/episode-groups").json()[0]
+        assert resolved["anime_id"] == selected["id"]
+        assert resolved["candidates"][0]["catalog_match_method"] == "manual_exact"
+
+        client.post("/api/v1/catalog/anime", json={"title": "膽大黨"}).raise_for_status()
+        current_rss[0] = _rss("[Group] 膽大黨 - 02 [1080p AVC][繁體]", "d" * 40)
+        client.post(f"/api/v1/feeds/{feed['id']}/refresh").raise_for_status()
+
+        groups = client.get("/api/v1/recognition/episode-groups").json()
+        assert {group["episode_key"] for group in groups} == {"1", "2"}
+        assert {group["anime_id"] for group in groups} == {selected["id"]}
+        second = next(group for group in groups if group["episode_key"] == "2")
+        assert second["candidates"][0]["catalog_match_method"] == "manual_semantic"
 
 
 def test_historical_candidates_require_backfill_preview_and_explicit_commit(
@@ -160,9 +218,10 @@ def test_manual_alias_correction_matches_later_entries(tmp_path: Path) -> None:
         client.post(f"/api/v1/feeds/{feed['id']}/refresh")
 
         episodes = client.get("/api/v1/selection/episodes").json()
-        assert [(episode["episode_key"], episode["state"]) for episode in episodes] == [
-            ("2", "decided")
-        ]
+        assert {(episode["episode_key"], episode["state"]) for episode in episodes} == {
+            ("1", "decided"),
+            ("2", "decided"),
+        }
 
 
 def test_fallback_deadline_survives_and_commits_when_due(tmp_path: Path) -> None:

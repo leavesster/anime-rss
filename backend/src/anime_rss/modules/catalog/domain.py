@@ -1,6 +1,3 @@
-import unicodedata
+from anime_rss.kernel.titles import normalize_title_key
 
-
-def normalize_title_key(value: str) -> str:
-    normalized = unicodedata.normalize("NFKC", value).casefold()
-    return "".join(character for character in normalized if character.isalnum())
+__all__ = ["normalize_title_key"]

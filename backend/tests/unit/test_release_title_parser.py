@@ -1,7 +1,13 @@
 import pytest
+from anime_rss.kernel.titles import (
+    anime_title_key,
+    canonical_chinese_title_key,
+    title_variant_signature,
+)
 from anime_rss.modules.recognition.domain import (
     ContentKind,
     MatchConfidence,
+    extract_series_titles,
     parse_release_title,
 )
 
@@ -69,3 +75,31 @@ def test_unsupported_and_unparsed_titles_remain_explainable() -> None:
     assert batch.confidence == MatchConfidence.LOW
     assert batch.reason_code == "episode_not_found"
     assert batch.episode_key is None
+
+
+def test_traditional_and_simplified_titles_share_a_chinese_canonical_key() -> None:
+    assert canonical_chinese_title_key("膽大黨") == canonical_chinese_title_key("胆大党")
+
+
+def test_series_title_variants_are_preserved_without_changing_primary_parser_title() -> None:
+    source = "[ANi] Youjo Senki / 幼女戰記 2 - 03 [1080p]"
+
+    assert extract_series_titles(source) == ("Youjo Senki", "幼女戰記 2")
+    assert parse_release_title(source).series_title == "Youjo Senki"
+
+
+@pytest.mark.parametrize(
+    "titles",
+    [
+        ("幼女戦記Ⅱ", "幼女戰記 2", "幼女战记 第二季", "幼女战记 第2季"),
+        ("Youjo Senki II", "Youjo Senki 2", "Youjo Senki Season 2"),
+    ],
+)
+def test_anime_title_key_normalizes_season_markers(titles: tuple[str, ...]) -> None:
+    assert len({anime_title_key(title) for title in titles}) == 1
+
+
+def test_title_variant_signature_is_order_independent() -> None:
+    assert title_variant_signature(["Youjo Senki", "幼女戰記 2"]) == title_variant_signature(
+        ["幼女戰記 2", "Youjo Senki"]
+    )
