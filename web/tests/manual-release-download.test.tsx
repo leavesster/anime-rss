@@ -62,6 +62,12 @@ describe("manual release download", () => {
     );
 
     expect(await screen.findByText("[Group] Anime - 01.mkv")).toBeInTheDocument();
+    expect(screen.getByText("去重后列表")).toBeInTheDocument();
+    expect(screen.getByText("种子名称 / 种子哈希")).toBeInTheDocument();
+    expect(screen.getByText("BT 标识")).toBeInTheDocument();
+    expect(screen.getByText("是否可靠")).toBeInTheDocument();
+    expect(screen.getByText("BTIH")).toBeInTheDocument();
+    expect(screen.getByText("可靠")).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "提交下载" }));
 
     await waitFor(() => expect(submitReleaseDownload).toHaveBeenCalled());

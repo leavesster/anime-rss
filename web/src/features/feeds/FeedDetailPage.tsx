@@ -71,10 +71,10 @@ export function FeedDetailPage() {
       </div>
 
       {tab === "entries" && <section className="data-section">
-        <div className="section-heading"><div><h2>最近条目</h2><p>已规范化并进入发布识别流程的源条目。</p></div></div>
+        <div className="section-heading"><div><h2>最近条目</h2><p>订阅源中的条目经过处理后会显示在这里。</p></div></div>
         {entries.isLoading && <LoadingState />}
         {entries.data?.length === 0 && <EmptyState icon={FileText} title="暂时没有条目" description="执行一次刷新后，新条目会显示在这里。" />}
-        {entries.data && entries.data.length > 0 && <div className="data-table"><div className="data-table__head entry-grid"><span>标题</span><span>标识强度</span><span>解析状态</span><span>首次发现</span></div>{entries.data.map((entry) => <div className="data-table__row entry-grid" key={entry.id}><div><strong>{entry.title}</strong>{entry.link_redacted && <small>{entry.link_redacted}</small>}</div><StatusBadge status={entry.identity_strength} /><StatusBadge status={entry.release_status} /><span>{formatDate(entry.first_seen_at)}</span></div>)}</div>}
+        {entries.data && entries.data.length > 0 && <div className="data-table"><div className="data-table__head entry-grid"><span>标题</span><span>条目标识方式</span><span>处理状态</span><span>首次发现</span></div>{entries.data.map((entry) => <div className="data-table__row entry-grid" key={entry.id}><div><strong>{entry.title}</strong>{entry.link_redacted && <small>{entry.link_redacted}</small>}</div><StatusBadge status={entry.identity_strength} /><StatusBadge status={entry.release_status} /><span>{formatDate(entry.first_seen_at)}</span></div>)}</div>}
       </section>}
 
       {tab === "history" && <section className="data-section">
