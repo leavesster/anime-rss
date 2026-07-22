@@ -1,6 +1,8 @@
 import base64
 import binascii
 import hashlib
+import re
+import unicodedata
 from dataclasses import dataclass
 from enum import StrEnum
 from urllib.parse import parse_qs, urlsplit
@@ -18,6 +20,7 @@ class TorrentIdentity:
     btih: str | None
     btmh: str | None
     automation_eligible: bool
+    torrent_name: str | None
 
 
 class InvalidTorrent(ValueError):
@@ -28,7 +31,10 @@ def parse_magnet_identity(value: str) -> TorrentIdentity:
     parts = urlsplit(value)
     if parts.scheme.lower() != "magnet":
         raise InvalidTorrent("not_a_magnet")
-    exact_topics = parse_qs(parts.query).get("xt", [])
+    query = parse_qs(parts.query)
+    exact_topics = query.get("xt", [])
+    names = query.get("dn", [])
+    torrent_name = _normalize_torrent_name(names[0]) if names else None
     btih = None
     btmh = None
     for topic in exact_topics:
@@ -44,6 +50,7 @@ def parse_magnet_identity(value: str) -> TorrentIdentity:
             btih=btih,
             btmh=btmh,
             automation_eligible=True,
+            torrent_name=torrent_name,
         )
     if btmh is not None:
         return TorrentIdentity(
@@ -52,6 +59,7 @@ def parse_magnet_identity(value: str) -> TorrentIdentity:
             btih=None,
             btmh=btmh,
             automation_eligible=False,
+            torrent_name=torrent_name,
         )
     raise InvalidTorrent("missing_supported_exact_topic")
 
@@ -83,6 +91,31 @@ def _normalize_btmh(value: str) -> str:
     except ValueError as error:
         raise InvalidTorrent("invalid_btmh") from error
     return lowered
+
+
+def _normalize_torrent_name(value: str) -> str | None:
+    without_controls = "".join(
+        character if not unicodedata.category(character).startswith("C") else " "
+        for character in value
+    )
+    normalized = re.sub(r"\s+", " ", without_controls).strip()
+    return normalized[:4096] or None
+
+
+def _torrent_name(fields: dict[bytes, tuple[int, int]], scanner: "_BencodeScanner") -> str | None:
+    for key in (b"name.utf-8", b"name"):
+        bounds = fields.get(key)
+        if bounds is None:
+            continue
+        start, expected_end = bounds
+        try:
+            actual_end, raw_name = scanner.scan_bytes(start)
+        except InvalidTorrent:
+            continue
+        if actual_end != expected_end:
+            continue
+        return _normalize_torrent_name(raw_name.decode("utf-8", errors="replace"))
+    return None
 
 
 class _BencodeScanner:
@@ -201,6 +234,7 @@ def parse_torrent_identity(payload: bytes, *, max_bytes: int = 2 * 1024 * 1024) 
         raise InvalidTorrent("invalid_info_dictionary")
     if b"name" not in info_fields or b"piece length" not in info_fields:
         raise InvalidTorrent("incomplete_info_dictionary")
+    torrent_name = _torrent_name(info_fields, info_scanner)
 
     meta_version = info_fields.get(b"meta version")
     is_v2 = meta_version is not None and raw_info[meta_version[0] : meta_version[1]] == b"i2e"
@@ -221,6 +255,7 @@ def parse_torrent_identity(payload: bytes, *, max_bytes: int = 2 * 1024 * 1024) 
             btih=btih,
             btmh=btmh,
             automation_eligible=True,
+            torrent_name=torrent_name,
         )
     if btmh is not None:
         return TorrentIdentity(
@@ -229,5 +264,6 @@ def parse_torrent_identity(payload: bytes, *, max_bytes: int = 2 * 1024 * 1024) 
             btih=None,
             btmh=btmh,
             automation_eligible=False,
+            torrent_name=torrent_name,
         )
     raise InvalidTorrent("unsupported_torrent_identity")

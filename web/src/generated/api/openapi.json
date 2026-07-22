@@ -14922,6 +14922,17 @@
             "type": "string",
             "title": "Id"
           },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
           "identity_kind": {
             "type": "string",
             "title": "Identity Kind"
@@ -14969,6 +14980,7 @@
         "type": "object",
         "required": [
           "id",
+          "display_name",
           "identity_kind",
           "identity_value",
           "btih",

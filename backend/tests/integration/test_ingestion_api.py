@@ -58,6 +58,7 @@ def test_same_release_from_two_feeds_is_stored_once(tmp_path: Path) -> None:
         releases = client.get("/api/v1/releases").json()
         assert len(releases) == 1
         assert releases[0]["identity_value"] == INFO_HASH
+        assert releases[0]["display_name"] == "[Group] Anime - 01"
         assert releases[0]["source_count"] == 2
 
         services: ServiceContainer = client.app.state.services
@@ -138,6 +139,7 @@ def test_torrent_payload_is_fetched_hashed_and_encrypted(tmp_path: Path) -> None
 
         assert response.status_code == 200
         assert releases[0]["identity_value"] == expected_hash
+        assert releases[0]["display_name"] == "Test"
         assert torrent_requests[0].headers["x-api-key"] == "torrent-secret"
 
     database_bytes = (tmp_path / "test.sqlite3").read_bytes()

@@ -2083,6 +2083,8 @@ export interface components {
         ReleaseResponse: {
             /** Id */
             id: string;
+            /** Display Name */
+            display_name: string | null;
             /** Identity Kind */
             identity_kind: string;
             /** Identity Value */

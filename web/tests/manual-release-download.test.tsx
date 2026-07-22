@@ -19,6 +19,7 @@ describe("manual release download", () => {
   it("queues a BTIH release and reports the durable background action", async () => {
     vi.mocked(listReleases).mockResolvedValue([{
       id: "release-1",
+      display_name: "[Group] Anime - 01.mkv",
       identity_kind: "btih",
       identity_value: "0123456789abcdef0123456789abcdef01234567",
       btih: "0123456789abcdef0123456789abcdef01234567",
@@ -60,6 +61,7 @@ describe("manual release download", () => {
       </QueryClientProvider>,
     );
 
+    expect(await screen.findByText("[Group] Anime - 01.mkv")).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "提交下载" }));
 
     await waitFor(() => expect(submitReleaseDownload).toHaveBeenCalled());

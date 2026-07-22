@@ -17,6 +17,7 @@ class ReleaseRecord(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     identity_kind: Mapped[str] = mapped_column(String(16))
     identity_value: Mapped[str] = mapped_column(String(80))
+    display_name: Mapped[str | None] = mapped_column(String(4096), nullable=True)
     btih: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
     btmh: Mapped[str | None] = mapped_column(String(68), nullable=True, index=True)
     automation_eligible: Mapped[bool] = mapped_column(Boolean, default=True)

@@ -32,6 +32,7 @@ from anime_rss.modules.system.api import SecretCipher
 @dataclass(frozen=True, slots=True)
 class Release:
     id: str
+    display_name: str | None
     identity_kind: str
     identity_value: str
     btih: str | None
@@ -113,6 +114,7 @@ class ReleaseService:
         release_id = self._store_observation(
             entry_id=entry_id,
             identity=identity,
+            display_name=identity.torrent_name or entry.title,
             payload=payload,
             payload_kind=payload_kind,
         )
@@ -138,6 +140,7 @@ class ReleaseService:
             return [
                 Release(
                     id=record.id,
+                    display_name=record.display_name,
                     identity_kind=record.identity_kind,
                     identity_value=record.identity_value,
                     btih=record.btih,
@@ -266,6 +269,7 @@ class ReleaseService:
         *,
         entry_id: str,
         identity: TorrentIdentity,
+        display_name: str,
         payload: bytes,
         payload_kind: str,
     ) -> str:
@@ -281,6 +285,7 @@ class ReleaseService:
                         id=proposed_release_id,
                         identity_kind=identity.identity_kind.value,
                         identity_value=identity.identity_value,
+                        display_name=display_name,
                         btih=identity.btih,
                         btmh=identity.btmh,
                         automation_eligible=identity.automation_eligible,
@@ -300,6 +305,10 @@ class ReleaseService:
                 )
                 if release_id is None:
                     raise RuntimeError("release identity conflict could not be resolved")
+                if identity.torrent_name is not None:
+                    record = session.get(ReleaseRecord, release_id)
+                    if record is not None:
+                        record.display_name = identity.torrent_name
 
             source_result = cast(
                 CursorResult[Any],

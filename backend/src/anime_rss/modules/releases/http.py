@@ -18,6 +18,7 @@ router = APIRouter(prefix="/releases", tags=["releases"])
 
 class ReleaseResponse(BaseModel):
     id: str
+    display_name: str | None
     identity_kind: str
     identity_value: str
     btih: str | None

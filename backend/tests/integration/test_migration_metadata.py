@@ -60,6 +60,77 @@ def test_download_reconciliation_migration_round_trip(tmp_path: Path) -> None:
     command.upgrade(config, "head")
 
 
+def test_release_display_name_migration_backfills_existing_release(tmp_path: Path) -> None:
+    database_url = f"sqlite:///{tmp_path / 'release-display-name.sqlite3'}"
+    repository_root = Path(__file__).resolve().parents[3]
+    config = Config(repository_root / "alembic.ini")
+    config.set_main_option("sqlalchemy.url", database_url)
+    command.upgrade(config, "0018_download_reconciliation")
+    engine = create_database_engine(database_url)
+    timestamp = "2026-07-22T00:00:00Z"
+    with engine.begin() as connection:
+        connection.execute(
+            sa.text(
+                """
+                INSERT INTO feed_feeds (
+                    id, name, url_redacted, url_fingerprint, endpoint_ciphertext,
+                    interval_seconds, health, consecutive_failures, version, created_at, updated_at
+                ) VALUES (
+                    'feed', 'Feed', 'https://feed.test/rss', 'fingerprint', X'00',
+                    600, 'healthy', 0, 1, :timestamp, :timestamp
+                )
+                """
+            ),
+            {"timestamp": timestamp},
+        )
+        connection.execute(
+            sa.text(
+                """
+                INSERT INTO feed_entries (
+                    id, feed_id, guid_hash, identity_strength, title_raw, title_normalized,
+                    release_status, first_seen_at
+                ) VALUES (
+                    'entry', 'feed', 'guid-hash', 'strong', '[Group] Anime - 01.mkv',
+                    '[Group] Anime - 01.mkv', 'identified', :timestamp
+                )
+                """
+            ),
+            {"timestamp": timestamp},
+        )
+        connection.execute(
+            sa.text(
+                """
+                INSERT INTO release_releases (
+                    id, identity_kind, identity_value, btih, automation_eligible, first_seen_at
+                ) VALUES (
+                    'release', 'btih', '0123456789abcdef0123456789abcdef01234567',
+                    '0123456789abcdef0123456789abcdef01234567', 1, :timestamp
+                )
+                """
+            ),
+            {"timestamp": timestamp},
+        )
+        connection.execute(
+            sa.text(
+                """
+                INSERT INTO release_sources (id, release_id, feed_entry_id, observed_at)
+                VALUES ('source', 'release', 'entry', :timestamp)
+                """
+            ),
+            {"timestamp": timestamp},
+        )
+    engine.dispose()
+
+    command.upgrade(config, "head")
+    engine = create_database_engine(database_url)
+    with engine.connect() as connection:
+        display_name = connection.scalar(
+            sa.text("SELECT display_name FROM release_releases WHERE id = 'release'")
+        )
+    assert display_name == "[Group] Anime - 01.mkv"
+    engine.dispose()
+
+
 def test_guided_setup_migration_completes_existing_administrator(tmp_path: Path) -> None:
     database_url = f"sqlite:///{tmp_path / 'upgrade.sqlite3'}"
     repository_root = Path(__file__).resolve().parents[3]
