@@ -652,12 +652,19 @@ stage order in `DESIGN.md`:
 6. **Schedule slice:** advisory airing metadata, expected episodes, calendar,
    missing warnings, and timezone rendering.
 7. **Operations slice:** notifications, backups, retention, diagnostics,
-   container images, Compose, and soak testing.
+   container images, per-architecture smoke/security gates, Compose, and soak
+   testing.
 
 Each slice includes its migrations, module README contracts, domain tests,
 adapter tests, OpenAPI changes, generated frontend client, and the smallest UI
 needed to exercise it. A stage is not complete if it only introduces database
 tables or framework scaffolding without a working path through the system.
+
+Release tooling remains outside capability modules under `scripts/`. It may call
+public CLI and Makefile interfaces, create detached worktrees, and collect
+evidence, but it must not import module persistence models or become an alternate
+business workflow. Runtime diagnostics belong to `system` and remain read-only;
+acceptance projections remain read-only consumers of durable public evidence.
 
 ## 20. Architecture Decisions
 

@@ -13,3 +13,5 @@ node_modules/
 dist/
 build/
 *.egg-info/
+release-evidence/
+release-review.md

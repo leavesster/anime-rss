@@ -5,8 +5,8 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 CONTAINERS=()
 TEMP_DIR=$(mktemp -d)
 IMAGES=(
-  "lscr.io/linuxserver/qbittorrent:version-4.6.7-r0|v4.6.7"
-  "lscr.io/linuxserver/qbittorrent:version-5.0.4-r0|v5.0.4"
+  "lscr.io/linuxserver/qbittorrent:version-4.6.7-r0@sha256:55f15d44396315551f87294a176efae733b16e283f38980308e46073950257c6|v4.6.7"
+  "lscr.io/linuxserver/qbittorrent:version-5.0.4-r0@sha256:46f4e80af074fa2ffc0214fe0b7d59384748cfb34685892a53b7a3c87407a333|v5.0.4"
 )
 
 cleanup() {

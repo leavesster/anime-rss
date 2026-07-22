@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "typecheck": "tsc -b --pretty false",
-    "verify": "npm run generate:api && npm run lint && npm run typecheck && npm run test && npm run build"
+    "verify": "npm run lint && npm run typecheck && npm run test && npm run build"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.83.0",

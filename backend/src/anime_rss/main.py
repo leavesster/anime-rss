@@ -3,7 +3,6 @@ import hmac
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager, suppress
-from pathlib import Path
 from time import perf_counter
 from typing import Any
 
@@ -705,8 +704,7 @@ def create_app(
 
     app.openapi = openapi_with_http_contract
 
-    repository_root = Path(__file__).resolve().parents[3]
-    web_dist_dir = runtime_settings.web_dist_dir or repository_root / "web" / "dist"
+    web_dist_dir = runtime_settings.resolved_web_dist_dir
     if (web_dist_dir / "index.html").is_file():
         app.mount("/", SpaStaticFiles(directory=web_dist_dir, html=True), name="web")
     return app

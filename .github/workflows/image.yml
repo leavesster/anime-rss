@@ -17,7 +17,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - arch: amd64
+            value: linux/amd64
+          - arch: arm64
+            value: linux/arm64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform.value }}
+          load: true
+          tags: anime-rss-smoke:${{ matrix.platform.arch }}
+          cache-from: type=gha,scope=smoke-${{ matrix.platform.arch }}
+          cache-to: type=gha,mode=max,scope=smoke-${{ matrix.platform.arch }}
+
+      - run: make image-smoke IMAGE=anime-rss-smoke:${{ matrix.platform.arch }}
+
+      - uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: anime-rss-smoke:${{ matrix.platform.arch }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+
   publish:
+    needs: smoke
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -60,3 +98,11 @@ jobs:
           subject-name: ghcr.io/${{ github.repository }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
+
+      - uses: sigstore/cosign-installer@v3
+
+      - env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          image_name="ghcr.io/${GITHUB_REPOSITORY,,}"
+          cosign sign --yes "$image_name@$DIGEST"

@@ -147,6 +147,7 @@ class BackupService:
                     shutil.copyfileobj(source, target)
                 with archive.open(_KEY_MEMBER) as source, key_target.open("wb") as target:
                     shutil.copyfileobj(source, target)
+                key_target.chmod(0o600)
             self._validate_database(database_target)
             key_bytes = key_target.read_bytes()
             if len(key_bytes) != 32:
@@ -191,6 +192,7 @@ class BackupService:
         self._master_key_file.parent.mkdir(parents=True, exist_ok=True)
         os.replace(database_source, self._database_path)
         os.replace(key_source, self._master_key_file)
+        self._master_key_file.chmod(0o600)
         shutil.rmtree(pending)
         return True
 

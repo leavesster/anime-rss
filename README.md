@@ -120,13 +120,60 @@ the interface and API at `http://127.0.0.1:8080`; OpenAPI remains available at
 and open `http://127.0.0.1:5173`; Vite proxies API calls to the backend. Runtime
 data defaults to `./data` and is ignored by Git.
 
+The stable engineering gates are exposed through the Makefile rather than hidden
+inside CI:
+
+```bash
+make doctor
+make openapi-check
+make security-scan
+make clean-room-acceptance
+```
+
+`doctor` is a read-only installation check for data-directory access, SQLite
+integrity and migration head, the 32-byte `0600` master key, staged restore state,
+and built web assets. `openapi-check` regenerates into a temporary directory and
+fails if either checked generated artifact is stale. `security-scan` audits locked
+Python and npm dependencies and rejects medium-or-higher Bandit findings; it needs
+network access to the vulnerability databases. `clean-room-acceptance` requires a
+clean commit, creates a detached worktree with fresh Python and npm installs, then
+runs verification, security, Compose lifecycle, and both supported qBittorrent
+contracts.
+
+Release candidates use immutable evidence directories:
+
+```bash
+cp scripts/release-review-template.md release-review.md
+# Complete the three review items after the seven-day soak.
+make release-evidence VERSION=0.1.0
+make release-evidence-check VERSION=0.1.0
+```
+
+The first command records the exact commit and automated clean-room log, captures
+the completed redacted real-feed soak report, and seals the completed manual
+review under `release-evidence/<version>/`. It refuses to create partial evidence.
+The checker rejects checksum drift, a different
+commit, an incomplete seven-day soak, pending preconditions, unchecked review
+items, or a dirty worktree. Evidence directories are intentionally ignored by Git
+and should be archived with the release instead of edited in place.
+
 Run `make acceptance-compose` before changing image packaging, migrations, or
 backup behavior. It builds a historical baseline and the current image, then
 verifies clean setup, backup, in-place upgrade, clean-volume restore, and
 backup-based rollback with disposable Compose projects.
 
 Run `make acceptance-qbittorrent` after changing the downloader adapter. It uses
-fixed qBittorrent 4.6.7 and 5.0.4 containers to exercise the real Web API contract.
+digest-pinned qBittorrent 4.6.7 and 5.0.4 containers to exercise the real Web API
+contract.
+
+Container publication is gated by separate amd64 and arm64 image builds. Each
+architecture must start from an empty volume, serve the SPA and readiness endpoint,
+pass the in-container doctor as a non-root user, reach Docker health `healthy`, and
+pass a high/critical Trivy scan before the multi-architecture manifest is pushed.
+The published digest receives an SBOM, provenance attestation, and keyless Cosign
+signature. Dependabot proposes weekly Python, npm, Docker, and Actions lock updates.
+The Dockerfile and qBittorrent contract matrix retain readable version labels while
+pinning their multi-architecture image indexes by digest.
 
 For real-feed release acceptance, run `make acceptance-soak-preflight`. After it
 reports two healthy feeds, two following Bangumi anime, a verified qBittorrent

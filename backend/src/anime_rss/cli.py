@@ -14,6 +14,7 @@ from anime_rss.config import Settings
 from anime_rss.infrastructure.database import create_database_engine, create_session_factory
 from anime_rss.modules.system.auth import AuthService
 from anime_rss.modules.system.backup import BackupService
+from anime_rss.modules.system.doctor import DoctorService, render_doctor
 from anime_rss.modules.system.startup import StartupService
 
 app = typer.Typer(no_args_is_help=True)
@@ -71,6 +72,14 @@ def migrate(data_dir: Annotated[Path, typer.Option()] = Path("data")) -> None:
     settings = Settings(data_dir=data_dir)
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     _prepare_database(settings)
+
+
+@app.command()
+def doctor(data_dir: Annotated[Path, typer.Option()] = Path("data")) -> None:
+    checks = DoctorService(Settings(data_dir=data_dir)).run()
+    typer.echo(render_doctor(checks))
+    if any(check.status == "fail" for check in checks):
+        raise typer.Exit(1)
 
 
 @app.command()

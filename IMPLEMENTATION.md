@@ -794,6 +794,14 @@ known, and a marker file without an OS lock can become permanently stale after a
 crash. Check, snapshot, and upgrade must be one critical section so overlapping
 container generations cannot both migrate or replace the same SQLite file.
 
+### BACKUP-005: Restored master keys are always private files
+
+**Choice:** New and restored master-key files are explicitly set to mode `0600`.
+The read-only doctor treats a key with group or world permissions as a failure.
+
+**Reason:** Archive extraction is affected by process umask and must not silently
+turn the credential that decrypts every stored secret into a group-readable file.
+
 ### OPS-004: Correlation context is persisted across every execution boundary
 
 **Choice:** HTTP requests accept only canonical UUID correlation IDs and generate
@@ -816,6 +824,28 @@ values and sensitive fields, including messages emitted by dependencies.
 **Tradeoff:** Container-runtime stdout retention remains an operator concern. The
 application-owned file provides a predictable local diagnostic window without
 trying to configure Docker or NAS logging policy.
+
+### OPS-006: Local and CI release gates share stable commands
+
+**Choice:** The Makefile exposes `doctor`, `openapi-check`, `security-scan`,
+`clean-room-acceptance`, `release-evidence`, and `release-evidence-check`.
+`doctor` is read-only. OpenAPI drift generation uses temporary files. Security
+scanning audits the locked runtime dependency graph, the complete npm lockfile,
+and medium-or-higher Bandit findings. Clean-room acceptance operates on the exact
+committed revision in a detached Git worktree with fresh dependency installs and
+runs ordinary verification, Compose upgrade/restore, and the qBittorrent version
+matrix. GitHub Actions calls the same quality and external-contract entry points.
+
+Release evidence is created only after the seven-day report and a separate manual
+review file are complete. The immutable per-version directory checksum-binds the
+commit, automated log, acceptance criteria, redacted report, and review. The
+checker refuses a different HEAD, pending soak state, unchecked review, modified
+evidence, or a dirty source tree.
+
+**Reason:** A release claim must be reproducible from the source commit and must
+not depend on generated files left in a developer worktree or on an undocumented
+sequence of commands. Automated counts cannot replace manual mapping review, so
+both forms of evidence remain explicit.
 
 ### RET-001: Each module applies retention to its owned records
 
@@ -875,6 +905,23 @@ image entrypoint, volume ownership, static asset, or Compose wiring regressions.
 **Tradeoff:** The local acceptance harness validates one native architecture.
 Cross-architecture builds, registry publication, SBOM attachment, and attestation
 are verified only when the GitHub Actions workflow runs.
+
+### PKG-003: Publication requires per-architecture runtime and vulnerability proof
+
+**Choice:** Before publishing the manifest, GitHub Actions builds loadable amd64
+and arm64 images under QEMU. Each image starts on a clean volume, serves readiness
+and the SPA, reports the current migration head through the in-container doctor,
+runs as non-root, and reaches Docker health `healthy`. Trivy blocks high or
+critical fixed vulnerabilities. Only after both jobs pass is the multi-architecture
+image pushed, attested, and signed keylessly with Cosign. Multi-architecture Node
+and Python base-image indexes and qBittorrent contract images are digest-pinned.
+Dependabot opens weekly grouped updates for Python, npm, Docker, and GitHub Actions
+dependencies.
+
+**Reason:** Build success proves neither that a foreign-architecture image starts
+nor that its final filesystem is releasable. Digest pins keep the downloader
+contract reproducible, while scheduled update PRs make those pins maintainable
+instead of silently stale.
 
 ### ACC-001: Live acceptance is an immutable, redacted evidence window
 
@@ -1034,23 +1081,31 @@ truth; a row is complete only when code and proportionate evidence both exist.
 | Password KDF | Argon2id setup/reset, fixed parameters, successful-login legacy scrypt migration, timestamp preservation, audit event, malformed-hash rejection, and integration coverage | Complete |
 | Startup migration safety | OS-released lock spans restore/check/backup/upgrade; versioned pending schemas receive a validated online `pre-migration` archive; clean/current/failure/contention paths have integration coverage; Compose lifecycle passes | Complete |
 | qBittorrent contract | Explicit 4.6/5.x plus Web API 2 policy; fixed real 4.6.7 and 5.0.4 container acceptance; `0018` persisted two-success removal confirmation; failure reset; delete-before-replacement ordering; migration and integration coverage | Complete |
-| Stable engineering gates | lint, typecheck, unit/integration, OpenAPI generation, Compose acceptance | Add doctor, checked OpenAPI drift, security scan, clean-room, and release-evidence commands |
+| Stable engineering gates | Read-only doctor, temporary OpenAPI drift check, hash-verified Python/npm/Bandit scanning, detached-worktree acceptance, per-architecture image gates, CI parity, checksum-bound release evidence, and `cryptography` 48.0.1 | Complete |
 | External acceptance | Durable seven-day evidence tooling exists | Configure two real feeds, two Bangumi subscriptions, qBittorrent, then complete seven natural days |
 
-The next implementation unit is the stable engineering gate set. Release gates
-then proceed as independent reviewable units; the
-seven-day clock starts only after its external preflight is genuinely satisfied.
+After the engineering gates are verified, the remaining implementation-independent
+work is external acceptance. The seven-day clock starts only after its external
+preflight is genuinely satisfied; release-evidence checking remains fail-closed
+until that duration and manual semantic review are complete.
 
 ## 7. Current Verification Evidence
 
-Verified on 2026-07-22 with `make verify` after migration `0018` and parser
+Verified on 2026-07-22 with `cryptography` 48.0.1, migration `0018`, and parser
 `title-rules.v2`:
 
 - Ruff formatting and lint: passed.
 - Pyright: passed with zero errors.
-- Backend: 109 tests passed, 89.23% statement coverage.
+- Backend: 116 tests passed, 89.15% statement coverage.
 - Frontend: ESLint and TypeScript passed; 14 Vitest tests passed.
 - Production Vite build: passed.
+- OpenAPI regeneration in a temporary directory matched both checked artifacts.
+- Security scanning passed with hashes required for the locked Python runtime
+  graph, no known Python or npm vulnerabilities, and no medium-or-higher Bandit
+  findings.
+- The native-architecture release image started from an empty volume, served its
+  health and SPA endpoints, passed the in-container doctor as the non-root runtime
+  user, and reached Docker health `healthy`.
 - Authentication integration evidence covers Argon2id setup and reset, valid
   legacy scrypt login migration, timestamp preservation, one-time audit output,
   session revocation, and malformed or unknown hash rejection.
@@ -1065,9 +1120,14 @@ Verified on 2026-07-22 with `make verify` after migration `0018` and parser
   in-place upgrade through `0018`, clean-volume restore, and backup-based
   rollback, including audit history, waiting work, Decision, and DownloadTask
   associations.
+- Detached-worktree clean-room acceptance passed from the committed revision with
+  fresh Python and npm installs, full verification and security scanning, Compose
+  lifecycle acceptance, and both supported qBittorrent contracts.
 - Container publishing workflow: statically validated for `linux/amd64` and
-  `linux/arm64`, GHCR tags, BuildKit provenance, SBOM, and GitHub attestation;
-  registry publication still requires an actual GitHub Actions run.
+  `linux/arm64`, per-architecture runtime smoke and Trivy gates, GHCR tags,
+  BuildKit provenance, SBOM, GitHub attestation, and keyless Cosign signing;
+  cross-architecture execution and registry publication still require an actual
+  GitHub Actions run.
 - Observability and retention integration evidence covers caller-supplied and
   generated correlation IDs, audit/event propagation, private URL redaction,
   scheduled cleanup of unmatched history, and preservation of subscription and

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from pydantic import Field
@@ -49,6 +50,15 @@ class Settings(BaseSettings):
     @property
     def resolved_master_key_file(self) -> Path:
         return self.master_key_file or self.data_dir / "keys" / "master.key"
+
+    @property
+    def resolved_web_dist_dir(self) -> Path:
+        if self.web_dist_dir is not None:
+            return self.web_dist_dir
+        repository_root = Path(
+            os.environ.get("ANIME_RSS_RUNTIME_ROOT", Path(__file__).resolve().parents[3])
+        )
+        return repository_root / "web" / "dist"
 
     @property
     def resolved_browser_trusted_hosts(self) -> tuple[str, ...]:

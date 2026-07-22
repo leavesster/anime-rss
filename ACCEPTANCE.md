@@ -53,3 +53,19 @@ make acceptance-soak-report
 `duration_met` means only that seven natural days elapsed. Final approval still
 requires reviewing anime and episode mappings, manual corrections, and the actual
 qBittorrent task list. Aggregate counts cannot prove semantic matching quality.
+
+## Release Evidence Gate
+
+After criterion 12 reaches the seven-day boundary, copy
+`scripts/release-review-template.md` to the ignored `release-review.md`, complete
+all three checks, and run:
+
+```bash
+make release-evidence VERSION=<semver>
+make release-evidence-check VERSION=<semver>
+```
+
+Evidence creation refuses a pending soak or incomplete manual review before it
+runs the isolated automated suite. The final directory records the exact Git
+revision and checksums the clean-room log, this criteria document, the redacted
+soak report, and the completed review. It is immutable for that version.

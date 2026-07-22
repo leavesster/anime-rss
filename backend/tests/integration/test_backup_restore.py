@@ -1,3 +1,4 @@
+import stat
 from pathlib import Path
 
 from anime_rss.infrastructure.database import create_database_engine, create_session_factory
@@ -46,6 +47,7 @@ def test_backup_archive_restores_database_and_master_key(tmp_path: Path) -> None
     assert service.apply_pending_restore() is True
     assert service.apply_pending_restore() is False
     assert key_path.read_bytes() == original_key
+    assert stat.S_IMODE(key_path.stat().st_mode) == 0o600
     engine = create_database_engine(database_url)
     with engine.connect() as connection:
         assert connection.scalar(text("SELECT count(*) FROM audit_events")) == 1
