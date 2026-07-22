@@ -6,7 +6,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from anime_rss.infrastructure.database import Base, UTCDateTime
 from anime_rss.kernel.ids import new_id
 from anime_rss.kernel.time import utc_now
-from anime_rss.modules.feeds.domain import FeedHealth
+from anime_rss.modules.feeds.domain import FeedHealth, FeedSourceType
 
 
 class FeedRecord(Base):
@@ -16,11 +16,18 @@ class FeedRecord(Base):
             "interval_seconds >= 300 AND interval_seconds <= 3600",
             name="ck_feed_interval",
         ),
+        CheckConstraint(
+            "source_type IN ('aggregate', 'single_anime')",
+            name="ck_feed_source_type",
+        ),
         Index("uq_feed_url_fingerprint", "url_fingerprint", unique=True),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     name: Mapped[str] = mapped_column(String(120))
+    source_type: Mapped[str] = mapped_column(
+        String(24), default=FeedSourceType.AGGREGATE.value, index=True
+    )
     url_redacted: Mapped[str] = mapped_column(String(2048))
     url_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
     endpoint_ciphertext: Mapped[bytes] = mapped_column(LargeBinary)

@@ -1736,6 +1736,8 @@ export interface components {
              * Format: uri
              */
             url: string;
+            /** @default aggregate */
+            source_type: components["schemas"]["FeedSourceType"];
             /**
              * Interval Seconds
              * @default 600
@@ -1816,6 +1818,7 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+            source_type: components["schemas"]["FeedSourceType"];
             /** Url Redacted */
             url_redacted: string;
             /** Interval Seconds */
@@ -1835,6 +1838,11 @@ export interface components {
             /** Version */
             version: number;
         };
+        /**
+         * FeedSourceType
+         * @enum {string}
+         */
+        FeedSourceType: "aggregate" | "single_anime";
         /** FeedTestRequest */
         FeedTestRequest: {
             /**

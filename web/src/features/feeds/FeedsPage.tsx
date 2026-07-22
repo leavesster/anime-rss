@@ -47,7 +47,7 @@ export function FeedsPage() {
                 <div className="feed-icon"><Rss size={20} /></div>
                 <div className="feed-copy"><div className="feed-title-line"><h2>{feed.name}</h2><StatusBadge status={feed.health} /></div><p>{feed.url_redacted}</p></div>
               </div>
-              <div className="feed-meta"><span><small>刷新频率</small>{formatInterval(feed.interval_seconds)}</span><span><small>上次成功</small>{formatRelative(feed.last_success_at)}</span><span><small>下次计划</small>{formatRelative(feed.next_fetch_at)}</span></div>
+              <div className="feed-meta"><span><small>类型</small>{feed.source_type === "single_anime" ? "单一动画" : "聚合 RSS"}</span><span><small>刷新频率</small>{formatInterval(feed.interval_seconds)}</span><span><small>上次成功</small>{formatRelative(feed.last_success_at)}</span><span><small>下次计划</small>{formatRelative(feed.next_fetch_at)}</span></div>
               <div className="feed-actions">
                 <Button aria-label={`刷新 ${feed.name}`} title="立即刷新" size="icon" variant="ghost" disabled={refreshingId === feed.id} icon={<RefreshCw className={refreshingId === feed.id ? "spin" : ""} size={17} />} onClick={() => refresh.mutate(feed.id)} />
                 <Link className="button button--secondary button--small" to={`/feeds/${feed.id}`}>查看详情<ArrowRight size={16} /></Link>

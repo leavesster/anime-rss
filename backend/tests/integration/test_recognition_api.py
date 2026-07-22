@@ -56,6 +56,70 @@ def _settings(tmp_path: Path) -> Settings:
     )
 
 
+def test_single_anime_feed_uses_declared_name_for_every_release(tmp_path: Path) -> None:
+    rss = b"""<?xml version="1.0"?><rss version="2.0"><channel>
+      <item><guid>single-one</guid><title>Completely Different Name - 01 [1080p AVC]</title>
+      <enclosure url="magnet:?xt=urn:btih:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      type="application/x-bittorrent" /></item>
+      <item><guid>single-two</guid><title>Another Unrelated Name - 01 [1080p HEVC]</title>
+      <enclosure url="magnet:?xt=urn:btih:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      type="application/x-bittorrent" /></item>
+    </channel></rss>"""
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, content=rss))
+
+    with TestClient(create_app(_settings(tmp_path), feed_transport=transport)) as client:
+        anime = client.post("/api/v1/catalog/anime", json={"title": "Declared Anime"}).json()
+        aggregate = client.post(
+            "/api/v1/feeds",
+            json={"name": "Aggregate", "url": "https://aggregate.test/rss"},
+        ).json()
+        assert client.post(f"/api/v1/feeds/{aggregate['id']}/refresh").status_code == 200
+        feed_response = client.post(
+            "/api/v1/feeds",
+            json={
+                "name": "Declared Anime",
+                "url": "https://single.test/rss",
+                "source_type": "single_anime",
+            },
+        )
+
+        assert feed_response.status_code == 201
+        assert feed_response.json()["source_type"] == "single_anime"
+        refreshed = client.post(f"/api/v1/feeds/{feed_response.json()['id']}/refresh")
+        assert refreshed.status_code == 200
+
+        groups = client.get("/api/v1/recognition/episode-groups").json()
+        assert len(groups) == 1
+        assert groups[0]["anime_id"] == anime["id"]
+        assert groups[0]["series_title"] == "Declared Anime"
+        assert groups[0]["episode_key"] == "1"
+        assert groups[0]["candidate_count"] == 2
+        assert {candidate["series_title"] for candidate in groups[0]["candidates"]} == {
+            "Declared Anime"
+        }
+        assert all(candidate["confidence"] == "high" for candidate in groups[0]["candidates"])
+        assert all(candidate["recognition_eligible"] for candidate in groups[0]["candidates"])
+
+        alias_response = client.post(
+            f"/api/v1/catalog/anime/{anime['id']}/aliases",
+            headers={"If-Match": str(anime["version"])},
+            json={"alias": "Renamed Anime"},
+        )
+        assert alias_response.status_code == 200
+        renamed = client.patch(
+            f"/api/v1/feeds/{feed_response.json()['id']}",
+            headers={"If-Match": str(feed_response.json()["version"])},
+            json={"name": "Renamed Anime"},
+        )
+        assert renamed.status_code == 200
+        renamed_group = client.get("/api/v1/recognition/episode-groups").json()[0]
+        assert renamed_group["anime_id"] == anime["id"]
+        assert renamed_group["series_title"] == "Renamed Anime"
+        assert {candidate["series_title"] for candidate in renamed_group["candidates"]} == {
+            "Renamed Anime"
+        }
+
+
 def test_release_events_create_episode_candidate_groups(tmp_path: Path) -> None:
     transport = httpx.MockTransport(lambda request: httpx.Response(200, content=_rss()))
 

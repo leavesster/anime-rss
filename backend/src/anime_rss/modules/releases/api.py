@@ -47,6 +47,8 @@ class ReleaseRecognitionSource:
     release_id: str
     feed_entry_id: str
     title: str
+    feed_name: str
+    feed_source_type: str
     published_at: datetime | None
     first_seen_at: datetime
     automation_eligible: bool
@@ -180,6 +182,8 @@ class ReleaseService:
                 release_id=release.id,
                 feed_entry_id=feed_entry_id,
                 title=entry.title,
+                feed_name=entry.feed_name,
+                feed_source_type=entry.feed_source_type,
                 published_at=entry.published_at,
                 first_seen_at=release.first_seen_at,
                 automation_eligible=release.automation_eligible,
@@ -188,6 +192,24 @@ class ReleaseService:
     def has_release(self, release_id: str) -> bool:
         with self._session_factory() as session:
             return session.get(ReleaseRecord, release_id) is not None
+
+    def list_recognition_sources_for_feed(self, feed_id: str) -> list[tuple[str, str]]:
+        entry_ids = self._feed_entries.list_ids(feed_id)
+        if not entry_ids:
+            return []
+        with self._session_factory() as session:
+            return [
+                (release_id, feed_entry_id)
+                for release_id, feed_entry_id in session.execute(
+                    select(
+                        ReleaseSourceRecord.release_id,
+                        func.min(ReleaseSourceRecord.feed_entry_id),
+                    )
+                    .where(ReleaseSourceRecord.feed_entry_id.in_(entry_ids))
+                    .group_by(ReleaseSourceRecord.release_id)
+                    .order_by(ReleaseSourceRecord.release_id)
+                )
+            ]
 
     def get_download_source(self, release_id: str) -> ReleaseDownloadSource | None:
         with self._session_factory() as session:

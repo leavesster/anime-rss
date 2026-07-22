@@ -233,6 +233,12 @@ def create_app(
                         handler=recognition.handle_catalog_titles_changed,
                     )
                 ],
+                "FeedRecognitionContextChanged.v1": [
+                    RegisteredHandler(
+                        consumer="recognition.feed-context-updater.v1",
+                        handler=recognition.handle_feed_recognition_context_changed,
+                    )
+                ],
                 "CandidateRemapped.v1": [
                     RegisteredHandler(
                         consumer="selection.candidate-remapped.v1",

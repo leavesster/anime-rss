@@ -14,6 +14,7 @@ from anime_rss.infrastructure.api import (
 from anime_rss.infrastructure.events import EventDispatcher
 from anime_rss.infrastructure.http import HttpFetchError
 from anime_rss.modules.feeds.api import FeedConflictError, FeedNotFoundError, FeedService
+from anime_rss.modules.feeds.domain import FeedSourceType
 
 router = APIRouter(prefix="/feeds", tags=["feeds"])
 
@@ -21,6 +22,7 @@ router = APIRouter(prefix="/feeds", tags=["feeds"])
 class FeedCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     url: HttpUrl
+    source_type: FeedSourceType = FeedSourceType.AGGREGATE
     interval_seconds: int = Field(default=600, ge=300, le=3600)
     headers: dict[str, str] = Field(default_factory=dict)
 
@@ -42,6 +44,7 @@ class FeedResponse(BaseModel):
 
     id: str
     name: str
+    source_type: FeedSourceType
     url_redacted: str
     interval_seconds: int
     health: str
@@ -109,6 +112,7 @@ def create_feed(payload: FeedCreateRequest, request: Request) -> FeedResponse:
         feed = _services(request).feeds.create_feed(
             name=payload.name,
             url=str(payload.url),
+            source_type=payload.source_type,
             interval_seconds=payload.interval_seconds,
             headers=payload.headers,
         )
@@ -153,6 +157,7 @@ def update_feed(
     except ValueError as error:
         code = 409 if str(error) == "feed version conflict" else 422
         raise HTTPException(status_code=code, detail=str(error)) from error
+    _services(request).events.dispatch_until_idle()
     return FeedResponse.model_validate(feed)
 
 

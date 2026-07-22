@@ -14024,6 +14024,10 @@
             "format": "uri",
             "title": "Url"
           },
+          "source_type": {
+            "$ref": "#/components/schemas/FeedSourceType",
+            "default": "aggregate"
+          },
           "interval_seconds": {
             "type": "integer",
             "maximum": 3600.0,
@@ -14261,6 +14265,9 @@
             "type": "string",
             "title": "Name"
           },
+          "source_type": {
+            "$ref": "#/components/schemas/FeedSourceType"
+          },
           "url_redacted": {
             "type": "string",
             "title": "Url Redacted"
@@ -14333,6 +14340,7 @@
         "required": [
           "id",
           "name",
+          "source_type",
           "url_redacted",
           "interval_seconds",
           "health",
@@ -14344,6 +14352,14 @@
           "version"
         ],
         "title": "FeedResponse"
+      },
+      "FeedSourceType": {
+        "type": "string",
+        "enum": [
+          "aggregate",
+          "single_anime"
+        ],
+        "title": "FeedSourceType"
       },
       "FeedTestRequest": {
         "properties": {

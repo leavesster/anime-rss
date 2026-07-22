@@ -59,6 +59,7 @@ export function FeedDetailPage() {
       {refresh.data && <div className="success-banner">刷新完成：发现 {refresh.data.entry_count} 个条目，其中 {refresh.data.new_entry_count} 个为新条目。</div>}
 
       <section className="stat-band" aria-label="订阅源状态">
+        <div><small>类型</small><strong>{feed.source_type === "single_anime" ? "单一动画" : "聚合 RSS"}</strong></div>
         <div><small>刷新频率</small><strong>{formatInterval(feed.interval_seconds)}</strong></div>
         <div><small>上次尝试</small><strong>{formatRelative(feed.last_attempt_at)}</strong></div>
         <div><small>上次成功</small><strong>{formatRelative(feed.last_success_at)}</strong></div>

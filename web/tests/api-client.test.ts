@@ -45,6 +45,7 @@ describe("API client HTTP contracts", () => {
     await createFeed({
       name: "Contract Feed",
       url: "https://feed.test/rss",
+      source_type: "aggregate",
       interval_seconds: 600,
     });
 

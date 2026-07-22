@@ -36,7 +36,8 @@ export function EditFeedDialog({ feed, open, onClose }: { feed: Feed; open: bool
     <Dialog open={open} onClose={onClose} title="编辑订阅源" description="留空新地址会继续使用当前加密地址。">
       <form className="form-stack" onSubmit={(event) => { event.preventDefault(); mutation.mutate(); }}>
         {mutation.error && <ErrorBanner message={mutation.error instanceof ApiError ? mutation.error.message : "保存失败"} />}
-        <label className="field"><span>名称</span><input autoFocus required maxLength={120} value={name} onChange={(event) => setName(event.target.value)} /></label>
+        <label className="field"><span>订阅源类型</span><input disabled value={feed.source_type === "single_anime" ? "单一动画" : "聚合 RSS"} /></label>
+        <label className="field"><span>{feed.source_type === "single_anime" ? "动画名称" : "订阅源名称"}</span><input autoFocus required maxLength={120} value={name} onChange={(event) => setName(event.target.value)} /></label>
         <label className="field"><span>当前地址</span><input disabled value={feed.url_redacted} /></label>
         <label className="field"><span>替换地址 <small>可选</small></span><input type="url" placeholder="输入后会替换当前地址" value={replacementUrl} onChange={(event) => setReplacementUrl(event.target.value)} /></label>
         <label className="field"><span>刷新频率</span><select value={interval} onChange={(event) => setInterval(Number(event.target.value))}>

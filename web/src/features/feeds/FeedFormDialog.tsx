@@ -17,12 +17,14 @@ export function FeedFormDialog({ open, onClose }: { open: boolean; onClose: () =
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
+  const [sourceType, setSourceType] = useState<"aggregate" | "single_anime">("aggregate");
   const [interval, setInterval] = useState(600);
   const [headers, setHeaders] = useState<HeaderRow[]>([]);
 
   const payload = (): FeedCreate => ({
     name: name.trim(),
     url: url.trim(),
+    source_type: sourceType,
     interval_seconds: interval,
     headers: Object.fromEntries(headers.filter((header) => header.name.trim()).map((header) => [header.name.trim(), header.value])),
   });
@@ -34,6 +36,7 @@ export function FeedFormDialog({ open, onClose }: { open: boolean; onClose: () =
       await queryClient.invalidateQueries({ queryKey: ["feeds"] });
       setName("");
       setUrl("");
+      setSourceType("aggregate");
       setHeaders([]);
       testMutation.reset();
       onClose();
@@ -46,7 +49,11 @@ export function FeedFormDialog({ open, onClose }: { open: boolean; onClose: () =
     <Dialog open={open} onClose={onClose} title="添加订阅源" description="连接 RSS 或 Atom 地址，敏感 URL 与请求头会加密保存。">
       <form className="form-stack" onSubmit={(event) => { event.preventDefault(); createMutation.mutate(); }}>
         {error && <ErrorBanner message={error instanceof ApiError ? error.message : "无法连接订阅源"} />}
-        <label className="field"><span>名称</span><input autoFocus required maxLength={120} placeholder="例如：Mikan 动画" value={name} onChange={(event) => setName(event.target.value)} /></label>
+        <div className="segmented" role="tablist" aria-label="订阅源类型">
+          <button type="button" role="tab" aria-selected={sourceType === "single_anime"} className={sourceType === "single_anime" ? "segmented__active" : ""} onClick={() => setSourceType("single_anime")}>单一动画</button>
+          <button type="button" role="tab" aria-selected={sourceType === "aggregate"} className={sourceType === "aggregate" ? "segmented__active" : ""} onClick={() => setSourceType("aggregate")}>聚合 RSS</button>
+        </div>
+        <label className="field"><span>{sourceType === "single_anime" ? "动画名称" : "订阅源名称"}</span><input autoFocus required maxLength={120} placeholder={sourceType === "single_anime" ? "例如：胆大党 第二季" : "例如：Mikan 动画"} value={name} onChange={(event) => setName(event.target.value)} /></label>
         <label className="field"><span>订阅地址</span><input required type="url" placeholder="https://example.com/rss.xml" value={url} onChange={(event) => setUrl(event.target.value)} /></label>
         <label className="field"><span>刷新频率</span><select value={interval} onChange={(event) => setInterval(Number(event.target.value))}>
           <option value={300}>每 5 分钟</option><option value={600}>每 10 分钟</option><option value={900}>每 15 分钟</option><option value={1800}>每 30 分钟</option><option value={3600}>每 60 分钟</option>

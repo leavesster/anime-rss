@@ -20,6 +20,11 @@ class FeedHealth(StrEnum):
     AUTH_FAILED = "auth_failed"
 
 
+class FeedSourceType(StrEnum):
+    AGGREGATE = "aggregate"
+    SINGLE_ANIME = "single_anime"
+
+
 class FeedIdentityStrength(StrEnum):
     STRONG = "strong"
     WEAK = "weak"

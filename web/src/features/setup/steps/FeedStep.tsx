@@ -32,12 +32,13 @@ export function FeedStep({ onComplete }: { onComplete: () => Promise<void> }) {
   });
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
+  const [sourceType, setSourceType] = useState<"aggregate" | "single_anime">("aggregate");
   const [interval, setInterval] = useState(600);
   const [headers, setHeaders] = useState("");
   const [preview, setPreview] = useState<FeedEntry[]>([]);
   const add = useMutation({
     mutationFn: async () => {
-      const payload = { name: name.trim(), url: url.trim(), interval_seconds: interval, headers: parseHeaders(headers) };
+      const payload = { name: name.trim(), url: url.trim(), source_type: sourceType, interval_seconds: interval, headers: parseHeaders(headers) };
       const tested = await testFeed(payload);
       if (tested.status !== "success") throw new Error(tested.error_code ?? "订阅源解析失败");
       const feed = await createFeed(payload);
@@ -61,8 +62,12 @@ export function FeedStep({ onComplete }: { onComplete: () => Promise<void> }) {
       {(feeds.isError || entries.isError || add.isError || finish.isError) && <ErrorBanner message={(add.error ?? finish.error)?.message ?? "订阅源读取失败"} />}
       {feeds.isLoading && <LoadingState label="正在读取订阅源" />}
       {!feeds.isLoading && !hasFeed && <form className="setup-form" onSubmit={submit}>
+        <div className="segmented" role="tablist" aria-label="订阅源类型">
+          <button type="button" role="tab" aria-selected={sourceType === "single_anime"} className={sourceType === "single_anime" ? "segmented__active" : ""} onClick={() => setSourceType("single_anime")}>单一动画</button>
+          <button type="button" role="tab" aria-selected={sourceType === "aggregate"} className={sourceType === "aggregate" ? "segmented__active" : ""} onClick={() => setSourceType("aggregate")}>聚合 RSS</button>
+        </div>
         <div className="setup-form__columns">
-          <label className="field"><span>名称</span><input required maxLength={120} value={name} onChange={(event) => setName(event.target.value)} placeholder="动画订阅源" /></label>
+          <label className="field"><span>{sourceType === "single_anime" ? "动画名称" : "订阅源名称"}</span><input required maxLength={120} value={name} onChange={(event) => setName(event.target.value)} placeholder={sourceType === "single_anime" ? "动画名称" : "动画订阅源"} /></label>
           <label className="field"><span>刷新频率</span><select value={interval} onChange={(event) => setInterval(Number(event.target.value))}><option value={300}>5 分钟</option><option value={600}>10 分钟</option><option value={1800}>30 分钟</option><option value={3600}>60 分钟</option></select></label>
         </div>
         <label className="field"><span>订阅地址</span><input required type="url" value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://example.com/rss.xml" /></label>

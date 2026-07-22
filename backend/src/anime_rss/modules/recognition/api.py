@@ -1,5 +1,5 @@
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from typing import Protocol, cast
 
@@ -38,6 +38,8 @@ class RecognitionSourceProvider(Protocol):
     ) -> ReleaseRecognitionSource | None: ...
 
     def get_references(self, release_ids: set[str]) -> dict[str, ReleaseReference]: ...
+
+    def list_recognition_sources_for_feed(self, feed_id: str) -> list[tuple[str, str]]: ...
 
 
 class CatalogTitleResolver(Protocol):
@@ -155,6 +157,15 @@ class RecognitionService:
             return
         self.reconcile_catalog_matches()
 
+    def handle_feed_recognition_context_changed(self, event: IntegrationEvent) -> None:
+        if event.name != "FeedRecognitionContextChanged.v1" or event.version != 1:
+            return
+        feed_id = event.payload.get("feed_id")
+        if not isinstance(feed_id, str):
+            return
+        for release_id, feed_entry_id in self._sources.list_recognition_sources_for_feed(feed_id):
+            self.rerun_release(release_id, feed_entry_id=feed_entry_id)
+
     def reconcile_catalog_matches(self) -> int:
         with self._session_factory() as session:
             candidates = list(
@@ -238,12 +249,36 @@ class RecognitionService:
             return CatalogTitleMatch("unmatched", None, None, None)
         return self._catalog.resolve_titles(list(titles))
 
+    @staticmethod
+    def _parse_source(
+        source: ReleaseRecognitionSource,
+    ) -> tuple[ParsedReleaseTitle, tuple[str, ...]]:
+        parsed = parse_release_title(source.title)
+        if source.feed_source_type != "single_anime":
+            return parsed, extract_series_titles(parsed.source_title)
+
+        declared_title = source.feed_name.strip()[:300]
+        declared_key = normalize_series_key(declared_title)
+        if not declared_key:
+            return parsed, extract_series_titles(parsed.source_title)
+        confidence = MatchConfidence.HIGH if parsed.episode_key else MatchConfidence.LOW
+        reason_code = "feed_declared_anime_episode" if parsed.episode_key else parsed.reason_code
+        return (
+            replace(
+                parsed,
+                series_title=declared_title,
+                series_key=declared_key,
+                confidence=confidence,
+                reason_code=reason_code,
+            ),
+            (declared_title,),
+        )
+
     def recognize(self, release_id: str, feed_entry_id: str) -> str | None:
         source = self._sources.get_recognition_source(release_id, feed_entry_id)
         if source is None:
             return None
-        parsed = parse_release_title(source.title)
-        title_variants = extract_series_titles(parsed.source_title)
+        parsed, title_variants = self._parse_source(source)
         catalog_match = self._resolve_catalog_match(title_variants)
         now = self._clock()
         attempt_id = new_id()
@@ -290,16 +325,86 @@ class RecognitionService:
                     )
                 )
 
-            candidate_id = self._create_candidate(
-                session,
-                release_id=release_id,
-                attempt_id=attempt_id,
-                parsed=parsed,
-                title_variants=title_variants,
-                catalog_match=catalog_match,
-                source_automation_eligible=source.automation_eligible,
-                first_seen_at=source.first_seen_at,
+            active = session.scalar(
+                select(CandidateRecord).where(
+                    CandidateRecord.release_id == release_id,
+                    CandidateRecord.superseded_by_candidate_id.is_(None),
+                )
             )
+            active_source = None
+            if active is not None:
+                active_attempt = session.get(MatchAttemptRecord, active.attempt_id)
+                if active_attempt is not None:
+                    active_source = self._sources.get_recognition_source(
+                        release_id, active_attempt.feed_entry_id
+                    )
+            active_was_manually_reviewed = (
+                active is not None
+                and session.scalar(
+                    select(ManualActionRecord.id)
+                    .where(ManualActionRecord.candidate_id == active.id)
+                    .limit(1)
+                )
+                is not None
+            )
+            single_source_adoptable = (
+                source.feed_source_type == "single_anime"
+                and active is not None
+                and not active_was_manually_reviewed
+                and (active_source is None or active_source.feed_source_type != "single_anime")
+                and parsed.confidence != MatchConfidence.LOW
+                and all(
+                    (
+                        parsed.series_title,
+                        parsed.series_key,
+                        parsed.episode_start,
+                        parsed.episode_key,
+                    )
+                )
+            )
+            if single_source_adoptable:
+                assert active is not None
+                candidate_id = self._supersede_candidate(
+                    session,
+                    release_id=release_id,
+                    attempt_id=attempt_id,
+                    parsed=parsed,
+                    title_variants=title_variants,
+                    catalog_match=catalog_match,
+                    source_automation_eligible=source.automation_eligible,
+                    first_seen_at=source.first_seen_at,
+                    previous=active,
+                    superseded_at=now,
+                )
+            else:
+                candidate_id = self._create_candidate(
+                    session,
+                    release_id=release_id,
+                    attempt_id=attempt_id,
+                    parsed=parsed,
+                    title_variants=title_variants,
+                    catalog_match=catalog_match,
+                    source_automation_eligible=source.automation_eligible,
+                    first_seen_at=source.first_seen_at,
+                )
+                conflicting_single_sources = (
+                    source.feed_source_type == "single_anime"
+                    and active is not None
+                    and active_source is not None
+                    and active_source.feed_source_type == "single_anime"
+                    and active.series_key != parsed.series_key
+                )
+                if conflicting_single_sources:
+                    assert active is not None
+                    append_event(
+                        session,
+                        name="ManualConfirmationRequired.v1",
+                        payload={
+                            "candidate_id": active.id,
+                            "release_id": release_id,
+                            "reason_code": "conflicting_single_anime_feeds",
+                        },
+                    )
             if candidate_id is None:
                 append_event(
                     session,
@@ -320,7 +425,9 @@ class RecognitionService:
             )
         return candidate_id
 
-    def rerun_release(self, release_id: str) -> RecognitionRerun:
+    def rerun_release(
+        self, release_id: str, *, feed_entry_id: str | None = None
+    ) -> RecognitionRerun:
         now = self._clock()
         with self._session_factory.begin() as session:
             active = session.scalar(
@@ -341,14 +448,12 @@ class RecognitionService:
             )
             if previous_attempt is None:
                 raise CandidateNotFoundError(release_id)
-            source = self._sources.get_recognition_source(
-                release_id, previous_attempt.feed_entry_id
-            )
+            source_feed_entry_id = feed_entry_id or previous_attempt.feed_entry_id
+            source = self._sources.get_recognition_source(release_id, source_feed_entry_id)
             if source is None:
                 raise CandidateNotFoundError(release_id)
 
-            parsed = parse_release_title(source.title)
-            title_variants = extract_series_titles(parsed.source_title)
+            parsed, title_variants = self._parse_source(source)
             catalog_match = self._resolve_catalog_match(title_variants)
             attempt_id = new_id()
             parsed_at = max(now, previous_attempt.parsed_at + timedelta(microseconds=1))
@@ -356,7 +461,7 @@ class RecognitionService:
                 MatchAttemptRecord(
                     id=attempt_id,
                     release_id=release_id,
-                    feed_entry_id=previous_attempt.feed_entry_id,
+                    feed_entry_id=source_feed_entry_id,
                     trigger="explicit_rerun",
                     parser_version=parsed.parser_version,
                     source_title=parsed.source_title,

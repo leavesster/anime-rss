@@ -16,6 +16,7 @@ from anime_rss.infrastructure.events import append_event
 from anime_rss.infrastructure.http import HttpFetchError, HttpResult, SafeHttpClient
 from anime_rss.kernel.ids import new_id
 from anime_rss.kernel.time import Clock, utc_now
+from anime_rss.kernel.titles import normalize_title_key
 from anime_rss.modules.audit.api import record_event
 from anime_rss.modules.feeds.adapters import (
     FeedDocumentParser,
@@ -23,6 +24,7 @@ from anime_rss.modules.feeds.adapters import (
 )
 from anime_rss.modules.feeds.domain import (
     FeedHealth,
+    FeedSourceType,
     NormalizedFeedEntry,
     plan_transient_retry,
     public_entry_url,
@@ -51,6 +53,7 @@ class FeedRetentionResult:
 class Feed:
     id: str
     name: str
+    source_type: str
     url_redacted: str
     interval_seconds: int
     health: str
@@ -79,6 +82,8 @@ class FeedEntry:
 class FeedEntrySecret:
     id: str
     title: str
+    feed_name: str
+    feed_source_type: str
     published_at: datetime | None
     feed_url: str
     headers: dict[str, str]
@@ -157,16 +162,23 @@ class FeedService:
         *,
         name: str,
         url: str,
+        source_type: FeedSourceType = FeedSourceType.AGGREGATE,
         interval_seconds: int = 600,
         headers: dict[str, str] | None = None,
     ) -> Feed:
-        self._validate_configuration(name=name, url=url, interval_seconds=interval_seconds)
+        self._validate_configuration(
+            name=name,
+            url=url,
+            source_type=source_type,
+            interval_seconds=interval_seconds,
+        )
         fingerprint = self._url_fingerprint(url)
         feed_id = new_id()
         now = self._clock()
         record = FeedRecord(
             id=feed_id,
             name=name.strip(),
+            source_type=source_type.value,
             url_redacted=redact_url(url),
             url_fingerprint=fingerprint,
             endpoint_ciphertext=self._cipher.encrypt(
@@ -190,7 +202,11 @@ class FeedService:
                     event_type="feed.created",
                     entity_type="feed",
                     entity_id=feed_id,
-                    payload={"url": record.url_redacted, "interval_seconds": interval_seconds},
+                    payload={
+                        "url": record.url_redacted,
+                        "source_type": record.source_type,
+                        "interval_seconds": interval_seconds,
+                    },
                 )
         except IntegrityError as error:
             raise FeedConflictError("feed URL is already configured") from error
@@ -235,10 +251,16 @@ class FeedService:
             if expected_version is not None and record.version != expected_version:
                 raise ValueError("feed version conflict")
             next_name = name.strip() if name is not None else record.name
+            recognition_context_changed = (
+                record.source_type == FeedSourceType.SINGLE_ANIME.value and next_name != record.name
+            )
             next_url = url or self._decrypt_endpoint(record)
             next_interval = interval_seconds or record.interval_seconds
             self._validate_configuration(
-                name=next_name, url=next_url, interval_seconds=next_interval
+                name=next_name,
+                url=next_url,
+                source_type=FeedSourceType(record.source_type),
+                interval_seconds=next_interval,
             )
             next_fingerprint = self._url_fingerprint(next_url)
             duplicate = session.scalar(
@@ -272,6 +294,12 @@ class FeedService:
                 entity_id=feed_id,
                 payload={"url": record.url_redacted, "version": record.version},
             )
+            if recognition_context_changed:
+                append_event(
+                    session,
+                    name="FeedRecognitionContextChanged.v1",
+                    payload={"feed_id": feed_id},
+                )
         return self._to_feed(record)
 
     def _backfill_url_fingerprints(self) -> None:
@@ -389,7 +417,12 @@ class FeedService:
         )
 
     def test_feed(self, *, url: str, headers: dict[str, str] | None = None) -> FeedTestResult:
-        self._validate_configuration(name="test", url=url, interval_seconds=600)
+        self._validate_configuration(
+            name="test",
+            url=url,
+            source_type=FeedSourceType.AGGREGATE,
+            interval_seconds=600,
+        )
         try:
             response = self._http_client.fetch(url, headers=headers)
             self._raise_for_status(response)
@@ -684,9 +717,13 @@ class FeedService:
         return record
 
     @staticmethod
-    def _validate_configuration(*, name: str, url: str, interval_seconds: int) -> None:
+    def _validate_configuration(
+        *, name: str, url: str, source_type: FeedSourceType, interval_seconds: int
+    ) -> None:
         if not name.strip() or len(name.strip()) > 120:
             raise ValueError("feed name must contain between 1 and 120 characters")
+        if source_type == FeedSourceType.SINGLE_ANIME and not normalize_title_key(name):
+            raise ValueError("single-anime feed name must contain an anime title")
         parts = urlsplit(url)
         if parts.scheme not in {"http", "https"} or not parts.hostname:
             raise ValueError("feed URL must use HTTP or HTTPS")
@@ -697,6 +734,7 @@ class FeedService:
         return Feed(
             id=record.id,
             name=record.name,
+            source_type=record.source_type,
             url_redacted=record.url_redacted,
             interval_seconds=record.interval_seconds,
             health=record.health,
@@ -757,6 +795,8 @@ class FeedEntryQueries:
             return FeedEntrySecret(
                 id=entry.id,
                 title=entry.title_normalized,
+                feed_name=feed.name,
+                feed_source_type=feed.source_type,
                 published_at=entry.published_at,
                 feed_url=endpoint,
                 headers=headers,
@@ -773,6 +813,14 @@ class FeedEntryQueries:
                 )
             )
             return {entry_id: link for entry_id, link in rows if link is not None}
+
+    def list_ids(self, feed_id: str) -> set[str]:
+        with self._session_factory() as session:
+            return set(
+                session.scalars(
+                    select(FeedEntryRecord.id).where(FeedEntryRecord.feed_id == feed_id)
+                )
+            )
 
     def record_release_resolution(
         self, entry_id: str, *, status: str, error_code: str | None = None
