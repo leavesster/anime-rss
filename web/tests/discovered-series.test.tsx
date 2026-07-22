@@ -150,7 +150,9 @@ describe("RSS discovered series", () => {
     expect(screen.getByRole("textbox", { name: "搜索 Bangumi 动画" })).toHaveValue("New Anime");
     fireEvent.click(screen.getByRole("button", { name: "搜索" }));
     const dialog = screen.getByRole("dialog");
-    fireEvent.click(await within(dialog).findByRole("button", { name: "匹配" }));
+    const matchButton = await within(dialog).findByRole("button", { name: "匹配" });
+    expect(matchButton.querySelector(".lucide-check")).toBeInTheDocument();
+    fireEvent.click(matchButton);
 
     await waitFor(() => expect(bindCatalogTitles).toHaveBeenCalledWith(
       "anime-123",

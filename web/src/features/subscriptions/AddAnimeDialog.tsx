@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Import, Search, X } from "lucide-react";
+import { Import, Search, X, type LucideIcon } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 import {
@@ -19,6 +19,7 @@ interface Props {
   dialogTitle?: string;
   dialogDescription?: string;
   bangumiActionLabel?: string;
+  bangumiActionIcon?: LucideIcon;
 }
 
 function splitAliases(value: string): string[] {
@@ -34,6 +35,7 @@ export function AddAnimeDialog({
   dialogTitle = "添加动画",
   dialogDescription = "从 Bangumi 导入动画资料，或直接添加一部本地动画。",
   bangumiActionLabel = "导入",
+  bangumiActionIcon: BangumiActionIcon = Import,
 }: Props) {
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<"local" | "bangumi">(allowLocal ? initialMode : "bangumi");
@@ -105,7 +107,7 @@ export function AddAnimeDialog({
           {search.data?.stale && <p className="inline-note">Bangumi 当前不可用，正在显示本地缓存结果。</p>}
           <div className="catalog-results">{search.data?.items.map((item) => <article key={item.bangumi_id}>
             <div><strong>{item.name_cn ?? item.name}</strong><small>{item.name}{item.air_date ? ` · ${item.air_date}` : ""}</small></div>
-            <button className="button button--secondary button--small" type="button" onClick={() => imported.mutate(item.bangumi_id)} disabled={imported.isPending}><Import size={15} />{bangumiActionLabel}</button>
+            <button className="button button--secondary button--small" type="button" onClick={() => imported.mutate(item.bangumi_id)} disabled={imported.isPending}><BangumiActionIcon size={15} />{bangumiActionLabel}</button>
           </article>)}</div>
         </div>}
       </section>

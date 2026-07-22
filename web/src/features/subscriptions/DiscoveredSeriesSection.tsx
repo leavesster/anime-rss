@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { BookOpenCheck, ChevronDown, ChevronRight, ChevronUp, Link2, RadioTower } from "lucide-react";
+import { BookOpenCheck, Check, ChevronDown, ChevronRight, ChevronUp, Link2, RadioTower } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -191,7 +191,7 @@ export function DiscoveredSeriesSection({
           </article>
         ))}</div>
       </div>}
-      {matchTargets && <AddAnimeDialog allowLocal={false} bangumiActionLabel="匹配" dialogTitle="匹配 Bangumi 动画" dialogDescription={`将 ${matchTargets.map((series) => `“${series.title}”`).join("、")} 固定到同一部 Bangumi 动画；匹配后不会自动开始追番。`} initialMode="bangumi" initialTitle={matchTargets[0]?.title ?? ""} onClose={() => setMatchTargets(null)} onSelected={async (animeRecord) => { await match.mutateAsync({ animeRecord, targets: matchTargets }); }} />}
+      {matchTargets && <AddAnimeDialog allowLocal={false} bangumiActionLabel="匹配" bangumiActionIcon={Check} dialogTitle="匹配 Bangumi 动画" dialogDescription={`将 ${matchTargets.map((series) => `“${series.title}”`).join("、")} 固定到同一部 Bangumi 动画；匹配后不会自动开始追番。`} initialMode="bangumi" initialTitle={matchTargets[0]?.title ?? ""} onClose={() => setMatchTargets(null)} onSelected={async (animeRecord) => { await match.mutateAsync({ animeRecord, targets: matchTargets }); }} />}
     </section>
   );
 }
