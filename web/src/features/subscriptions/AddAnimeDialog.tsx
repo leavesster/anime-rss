@@ -15,6 +15,10 @@ interface Props {
   onSelected?: (anime: Anime) => Promise<void> | void;
   initialTitle?: string;
   initialMode?: "local" | "bangumi";
+  allowLocal?: boolean;
+  dialogTitle?: string;
+  dialogDescription?: string;
+  bangumiActionLabel?: string;
 }
 
 function splitAliases(value: string): string[] {
@@ -26,9 +30,13 @@ export function AddAnimeDialog({
   onSelected,
   initialTitle = "",
   initialMode = "local",
+  allowLocal = true,
+  dialogTitle = "添加动画",
+  dialogDescription = "从 Bangumi 导入动画资料，或直接添加一部本地动画。",
+  bangumiActionLabel = "导入",
 }: Props) {
   const queryClient = useQueryClient();
-  const [mode, setMode] = useState<"local" | "bangumi">(initialMode);
+  const [mode, setMode] = useState<"local" | "bangumi">(allowLocal ? initialMode : "bangumi");
   const [title, setTitle] = useState(initialTitle);
   const [aliases, setAliases] = useState("");
   const [query, setQuery] = useState(initialTitle);
@@ -76,13 +84,13 @@ export function AddAnimeDialog({
     <div className="dialog-backdrop" role="presentation">
       <section className="dialog" role="dialog" aria-modal="true" aria-labelledby="anime-dialog-title">
         <header className="dialog__header">
-          <div><h2 id="anime-dialog-title">添加动画</h2><p>从 Bangumi 导入动画资料，或直接添加一部本地动画。</p></div>
+          <div><h2 id="anime-dialog-title">{dialogTitle}</h2><p>{dialogDescription}</p></div>
           <button className="icon-button" type="button" onClick={onClose} aria-label="关闭"><X size={18} /></button>
         </header>
-        <div className="segmented" role="tablist" aria-label="动画来源">
+        {allowLocal && <div className="segmented" role="tablist" aria-label="动画来源">
           <button type="button" role="tab" aria-selected={mode === "local"} className={mode === "local" ? "segmented__active" : ""} onClick={() => setMode("local")}>本地创建</button>
           <button type="button" role="tab" aria-selected={mode === "bangumi"} className={mode === "bangumi" ? "segmented__active" : ""} onClick={() => setMode("bangumi")}>Bangumi</button>
-        </div>
+        </div>}
 
         {mode === "local" && <form className="form-stack" onSubmit={submitLocal}>
           {create.isError && <ErrorBanner message={create.error.message} />}
@@ -97,7 +105,7 @@ export function AddAnimeDialog({
           {search.data?.stale && <p className="inline-note">Bangumi 当前不可用，正在显示本地缓存结果。</p>}
           <div className="catalog-results">{search.data?.items.map((item) => <article key={item.bangumi_id}>
             <div><strong>{item.name_cn ?? item.name}</strong><small>{item.name}{item.air_date ? ` · ${item.air_date}` : ""}</small></div>
-            <button className="button button--secondary button--small" type="button" onClick={() => imported.mutate(item.bangumi_id)} disabled={imported.isPending}><Import size={15} />导入</button>
+            <button className="button button--secondary button--small" type="button" onClick={() => imported.mutate(item.bangumi_id)} disabled={imported.isPending}><Import size={15} />{bangumiActionLabel}</button>
           </article>)}</div>
         </div>}
       </section>
