@@ -1,5 +1,5 @@
-# Manual Release Review
+# 手动发布审核
 
-- [ ] Recognized anime and episode mappings were reviewed for semantic correctness.
-- [ ] Manual mapping and selection actions were reviewed with their later outcomes.
-- [ ] qBittorrent was checked for duplicate torrents outside recorded task identities.
+- [ ] 已审核动画和集数映射的语义正确性。
+- [ ] 已结合后续结果审核手动映射和筛选操作。
+- [ ] 已检查 qBittorrent 中是否存在记录任务标识之外的重复种子。

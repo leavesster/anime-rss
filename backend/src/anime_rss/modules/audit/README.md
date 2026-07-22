@@ -1,5 +1,3 @@
-# Audit module
+# 审计模块
 
-Owns append-only, redacted facts that explain automatic and administrator
-actions. Audit rows are a presentation and diagnostic history; business modules
-must not query them to decide what to do next.
+负责记录仅追加且已脱敏的事实，用于解释自动操作和管理员操作。审计记录用于展示和诊断；业务模块不得通过查询审计记录来决定下一步操作。

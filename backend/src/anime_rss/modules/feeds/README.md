@@ -1,29 +1,25 @@
-# Feeds module
+# 订阅源模块
 
-Owns configured feed endpoints, fetch history, normalized feed entries, retry
-state, and feed health. It emits `FeedEntryObserved.v1` after a new entry is
-stored.
+负责已配置的订阅源端点、抓取历史、标准化订阅源条目、重试状态和订阅源健康状态。存储新条目后会发出 `FeedEntryObserved.v1`。
 
-## Public surface
+## 公共接口
 
-- `FeedService`: create, update, delete, list, test, refresh, and prune feed history
-- `FeedEntryQueries`: read a normalized entry and decrypt its torrent reference
-- `FeedEntryObserved.v1`: payload contains only `feed_entry_id`
+- `FeedService`：创建、更新、删除、列出、测试、刷新订阅源，以及清理订阅源历史
+- `FeedEntryQueries`：读取标准化条目并解密其种子引用
+- `FeedEntryObserved.v1`：载荷仅包含 `feed_entry_id`
 
-## Invariants
+## 不变量
 
-- Endpoint URLs, custom headers, and torrent references are encrypted at rest.
-- A key-derived blind index prevents duplicate endpoint URLs without storing a
-  plaintext or directly guessable URL digest.
-- API responses and audit events contain only redacted URLs.
-- `(feed_id, guid_hash)` is unique even if concurrent refreshes overlap.
-- HTTP 401/403 enters `auth_failed` without automatic retry.
-- Successful 304 responses reset transient failures.
-- Failed fetch diagnostics expire after seven days; other fetch history and
-  unresolved entries expire after 90 days by default.
+- 端点 URL、自定义请求头和种子引用均加密存储。
+- 由密钥派生的盲索引可以阻止重复端点 URL，同时不存储明文 URL 或可被直接猜测的 URL 摘要。
+- API 响应和审计事件仅包含脱敏后的 URL。
+- 即使并发刷新重叠，`(feed_id, guid_hash)` 仍保持唯一。
+- HTTP 401/403 会进入 `auth_failed` 状态，且不会自动重试。
+- 成功的 304 响应会重置瞬时失败状态。
+- 抓取失败诊断信息在 7 天后过期；其他抓取历史和未解决条目默认在 90 天后过期。
 
-## Does not own
+## 不负责
 
-- BitTorrent identity or cross-feed deduplication
-- Anime title parsing or matching
-- Download selection
+- BitTorrent 标识或跨订阅源去重
+- 动画标题解析或匹配
+- 下载筛选决策

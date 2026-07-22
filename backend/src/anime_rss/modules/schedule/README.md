@@ -1,35 +1,21 @@
-# Schedule module
+# 播出计划模块
 
-Owns durable expected-episode rows, versioned episode-level schedule overrides,
-calendar projections, and one-time missing-episode notification markers.
+负责持久化的预期集数记录、带版本的单集播出计划覆盖项、日历投影视图，以及一次性的缺集通知标记。
 
-The module reads anime metadata, subscriptions, selection slots, and instance
-settings only through their public `api.py` DTOs. Schedule metadata is advisory:
-this module may emit `EpisodeMissing.v1`, but it must never emit a candidate,
-selection, or download event.
+本模块只能通过各模块的公共 `api.py` DTO 读取动画元数据、订阅、筛选决策时段和实例设置。播出计划元数据仅供参考：本模块可以发出 `EpisodeMissing.v1`，但绝不能发出候选项、筛选决策或下载事件。
 
-## Projection rules
+## 投影规则
 
-Synchronization first generates the anime's numeric seven-day baseline from
-catalog metadata, then merges overrides by `(anime_id, episode_key)`:
+同步首先根据目录元数据生成动画的数字集数七天基线，然后按 `(anime_id, episode_key)` 合并覆盖项：
 
-- a replacement timestamp moves an existing episode;
-- multiple keys may share one timestamp for double-episode broadcasts;
-- a key such as `SP1` or `OVA1` adds an episode outside the numeric baseline;
-- `cancelled=true` removes the key from the active projection;
-- a timestamp outside the subscription activation-to-sync horizon removes the
-  key from the active projection until it enters that horizon.
+- 替换时间戳会移动现有集数；
+- 多个键可以共享同一时间戳，以表示连续播出两集；
+- `SP1` 或 `OVA1` 等键可在数字集数基线之外新增一集；
+- `cancelled=true` 会从活跃投影视图中移除该键；
+- 如果时间戳位于订阅激活到本次同步的时间范围之外，该键会暂时移出活跃投影视图，直到进入该范围。
 
-Rows that leave the active projection become `inactive`; they are not deleted.
-Deleting an override lets the next synchronization restore the baseline row.
-Changing or reactivating a schedule clears its prior missing-notification claim,
-so the corrected broadcast time receives its own one-time evaluation.
+离开活跃投影视图的记录会变为 `inactive`，而不会被删除。删除覆盖项后，下一次同步会恢复基线记录。修改或重新激活播出计划会清除先前对缺集通知的占用状态，使修正后的播出时间获得自己的一次性评估。
 
-## Mutation contract
+## 修改契约
 
-`PUT` is idempotent for an unchanged payload. Existing rows accept `If-Match`
-for optimistic version checks, and create, update, and delete operations are
-audited. Non-cancelled overrides require a timezone-aware timestamp. Episode
-keys are limited to 52 ASCII letters, numbers, dots, underscores, and hyphens;
-`source` records `manual` or a future provider identifier without giving the
-provider ownership of expected-episode or selection state.
+对于未变化的载荷，`PUT` 保持幂等。现有记录支持用 `If-Match` 执行乐观版本检查，创建、更新和删除操作都会被审计。未取消的覆盖项必须提供带时区的时间戳。集数键最多包含 52 个 ASCII 字母、数字、点、下划线和连字符；`source` 用于记录 `manual` 或未来的服务方标识，但不会因此让服务方取得预期集数或筛选决策状态的所有权。

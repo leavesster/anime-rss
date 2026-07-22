@@ -1,1203 +1,671 @@
-# Anime RSS Service Implementation Record
+# Anime RSS Service 实现记录
 
-Status: Living implementation and decision record
+状态：持续更新的实现与决策记录
 
-Updated: 2026-07-22
+更新日期：2026-07-22
 
-This document records what the repository actually implements and the choices
-made while turning `DESIGN.md` and `ARCHITECTURE.md` into code. It is intended
-to make implementation review possible without reconstructing decisions from
-commits or conversations.
+本文档记录仓库实际实现的内容，以及将 `DESIGN.md` 和 `ARCHITECTURE.md` 转化为代码时作出的选择。其目的在于让实现审核无需从提交或对话中重新拼凑决策过程。
 
-## 1. Implemented Pipeline
+## 1. 已实现流程
 
 ```text
-Configured RSS / Atom feed
-  -> bounded conditional HTTP fetch
-  -> normalized feed entries
-  -> feed-local GUID deduplication
-  -> magnet / torrent identity resolution
-  -> global info-hash release deduplication
-  -> deterministic title recognition
-  -> exact series + episode candidate grouping
-  -> catalog alias + subscription activation matching
-  -> hard-filter and ordered-preference evaluation
-  -> preferred decision or durable fallback wait
-  -> immutable decision + DownloadRequested intent
-  -> durable download task + immutable idempotency key
-  -> query qBittorrent by info hash
-  -> submit magnet / torrent payload
-  -> reconcile external task state
+已配置的 RSS / Atom 订阅源
+  -> 有界条件式 HTTP 抓取
+  -> 标准化订阅源条目
+  -> 订阅源内 GUID 去重
+  -> 解析 magnet / torrent 标识
+  -> 全局按 info hash 去重发布资源
+  -> 确定性标题识别
+  -> 精确的系列 + 集数候选项分组
+  -> 目录别名 + 订阅激活匹配
+  -> 硬性过滤和有序偏好评估
+  -> 首选决策或持久化备选等待
+  -> 不可变决策 + DownloadRequested 意图
+  -> 持久化下载任务 + 不可变幂等键
+  -> 按 info hash 查询 qBittorrent
+  -> 提交 magnet / torrent 载荷
+  -> 对账同步外部任务状态
 ```
 
-The application now completes the selected-release path through qBittorrent and
-keeps the local task projection synchronized with external runtime state. It is
-packaged as a first-run authenticated, recoverable Compose service.
-
-## 2. Delivered Capabilities
-
-### Runtime and ingestion
-
-- FastAPI, SQLAlchemy, Alembic, and SQLite WAL runtime.
-- Encrypted feed URLs, headers, magnet links, and torrent payloads.
-- RSS/Atom normalization, ETag/Last-Modified, bounded responses, and safe
-  redirect behavior.
-- Feed health, persisted retry state, fetch history, and audit events.
-- Feed-local entry deduplication by `(feed_id, guid_hash)`.
-- Exact BitTorrent v1/v2 identity and cross-feed release deduplication.
-- Durable integration events with per-consumer delivery records.
-- One durable scheduler loop for feed refresh, event dispatch, selection
-  deadlines, and download reconciliation.
-- Persisted scheduler heartbeats, leases, attempts, execution history, and
-  expired-run recovery.
-- Hourly `schedule.sync` projection refresh with durable expected-episode rows.
-
-### Recognition
-
-- Pure deterministic parser identified by `title-rules.v2`.
-- Release group, localized series title, season marker, decimal/range episode,
-  revision, resolution, video codec, subtitle language, and content kind.
-- Immutable parse attempts for every release source observation.
-- One canonical recognition candidate per Release.
-- Episode groups exposed as a read projection and a separate unmatched queue.
-- Startup replay for undelivered `ReleaseIdentified.v1` events, allowing an
-  existing installation to gain recognition data after upgrade.
-- Explicit confirmation for medium-confidence candidates and structured mapping
-  for previously unmatched releases, both with append-only action history.
-
-### Catalog and subscriptions
-
-- Local anime identities and user aliases that remain usable without an
-  external metadata provider.
-- Bangumi anime search/import with a six-hour SQLite cache and stale-cache
-  fallback during provider outages.
-- One subscription per anime with following, paused, completed, and archived
-  lifecycle states.
-- Activation epochs, title-key snapshots, save-path intent, and versioned
-  optimistic updates.
-- Explicit hard filters, ordered preferences, and a configurable fallback wait.
-- One versioned global preference profile with explicit per-subscription overrides.
-- Imported or manually editable weekly airing date, time, timezone, and episode
-  count metadata.
-
-### Schedule and missing episodes
-
-- One independently readable `schedule` module that consumes catalog,
-  subscription, selection, and instance-setting public query DTOs only.
-- Durable expected episodes generated from the first air date at seven-day
-  intervals, bounded by the known episode count and current subscription epoch.
-- Versioned per-episode overrides for postponements, double episodes, specials,
-  cancellations, split-cour dates, and future provider episode data.
-- UTC schedule storage with calendar rendering in the administrator-selected
-  IANA timezone.
-- Today plus seven-day calendar and per-anime expected-episode history.
-- `scheduled`, `acquired`, and `missing` states derived from selection facts;
-  an acceptable fallback prevents a missing classification.
-- One-time `EpisodeMissing.v1` emission after the configurable grace period.
-- Schedule synchronization cannot emit `DownloadRequested.v1` or create a
-  synthetic candidate.
-
-### Selection
-
-- Pure deterministic hard-filter and lexicographic ranking policy.
-- Candidate evaluations containing filter results, stable rank tuples, and the
-  exact effective rule snapshot.
-- Serialized episode slots for preferred, waiting, confirmation, and decided
-  states.
-- Preferred candidates commit immediately; fallback deadlines never extend when
-  later candidates arrive.
-- Durable scheduled deadline processing plus startup recovery of expired waits.
-- Historical backfill preview and explicit multi-episode confirmation.
-- Scaled integer episode spans with at most three decimal places, append-only
-  per-decision coverage, full-coverage suppression, and a partial-overlap manual gate.
-- Same-group, same-episode higher revisions create append-only upgrade
-  decisions.
-- Per-episode manual selection, replacement, rejection, reset, and acquired-elsewhere
-  actions with append-only action history.
-- Every committed decision emits `DecisionCommitted.v1` and
-  `DownloadRequested.v1`.
-
-### Downloads
-
-- Encrypted qBittorrent Web API endpoint, username, and password configuration.
-- Connectivity validation and version reporting without exposing credentials.
-- DB-first task planning, submission attempts, and immutable idempotency keys.
-- Query-by-info-hash before every add or retry, including timeout-after-success
-  recovery without duplicate submission.
-- Magnet and uploaded `.torrent` submission with subscription save path plus
-  configured category and tags.
-- Durable periodic reconciliation and an explicit manual sync command.
-- qBittorrent-derived progress, pause, completion, path, category, and tag
-  state; connection failures preserve the last observation and mark it stale.
-- Confirmed external deletion becomes terminal until an administrator
-  explicitly retries the task.
-- Interrupted submissions recover at startup and query by hash before another
-  add.
-- Revision replacement cancels only incomplete old tasks with
-  `deleteFiles=false`; completed old files remain untouched.
-
-### Product hardening and delivery
-
-- First-run administrator setup, Argon2id password storage with login-time legacy
-  scrypt migration, opaque sessions,
-  password-reset CLI, and explicit logout.
-- HTTP-only session cookie plus readable CSRF cookie; every authenticated mutation
-  must echo the CSRF value in `X-CSRF-Token`.
-- Trusted Host, same-origin browser-write, Fetch Metadata, and bounded sensitive
-  endpoint rate-limit enforcement.
-- One structured API error envelope with machine code, message, details, and the
-  request correlation ID.
-- Durable 24-hour mutation idempotency, mandatory optimistic preconditions for
-  versioned resources, and opaque cursor pagination for growing list endpoints.
-- In-app notifications derived from durable integration events without changing
-  any selection, feed, or download outcome.
-- Optional encrypted generic JSON Webhook configuration, idempotency key, delivery
-  attempts, bounded retry, and stale-attempt recovery.
-- Portable `.backup` archives containing a consistent SQLite snapshot, manifest,
-  and the matching encryption master key.
-- Manual and daily scheduled backup creation, count-based retention, restore
-  validation, restart-safe staging, and automatic pre-restore backup.
-- React setup/login gate plus system view for notifications, Webhook settings,
-  backup download, restore upload, and logout.
-- Versioned instance settings for timezone, interface language, missing-episode
-  grace, and guided-setup progress.
-- Multi-stage Docker build, non-root Python runtime, one Uvicorn worker, readiness
-  health check, and a named Compose data volume.
-
-### Interface
-
-- Responsive dashboard and feed management.
-- Feed test, refresh, history, and normalized entry views.
-- Raw Release identity library with explicit manual BTIH download submission and
-  existing-task status.
-- Episode candidate groups showing every subtitle-group version and its parsed
-  attributes.
-- Anime creation/import, subscription creation and lifecycle controls, backfill
-  preview, waiting-state summary, and immutable decision history.
-- Legal completed/archive lifecycle menus plus separate current and archived views.
-- In-page selection flow showing hard filters, comparison order, wait behavior,
-  revision upgrades, and the explicit boundary of current manual operations.
-- qBittorrent configuration, connectivity status, download progress, external
-  state, manual reconciliation, and explicit retry controls.
-- Generated TypeScript API types from the checked OpenAPI contract.
-- Operations view for dependency state, durable jobs, execution runs, failed
-  work, and audit history.
-- Dashboard failed-work summary plus candidate confirmation and release-mapping
-  controls.
-- Eight-day airing calendar, missing-episode warning list, editable airing
-  metadata and episode overrides, per-anime episode history, and instance locale
-  settings.
-
-## 3. Decision Log
-
-### ING-001: Feed URL uniqueness uses a key-derived blind index
-
-**Choice:** Exact configured endpoint bytes are indexed with purpose-bound HMAC
-under the instance master key. The index is unique and API create/update map a
-collision to HTTP 409. During upgrade, the first copy of an existing URL claims
-the index; already duplicated rows remain intact but cannot be multiplied.
-
-**Reason:** Private token URLs need deterministic duplicate prevention without
-storing plaintext endpoints or an unkeyed digest that can be guessed offline.
+应用现在已经贯通选中发布资源到 qBittorrent 的完整路径，并保持本地任务投影与外部运行时状态同步。它被打包为首次运行需认证且可恢复的 Compose 服务。
+
+## 2. 已交付能力
+
+### 运行时与获取
+
+- FastAPI、SQLAlchemy、Alembic 和 SQLite WAL 运行时。
+- 加密的订阅源 URL、请求头、magnet 链接和 torrent 载荷。
+- RSS/Atom 标准化、ETag/Last-Modified、有界响应和安全重定向行为。
+- 订阅源健康状态、持久化重试状态、抓取历史和审计事件。
+- 按 `(feed_id, guid_hash)` 在订阅源内去重条目。
+- 精确的 BitTorrent v1/v2 标识和跨订阅源发布资源去重。
+- 带单消费者投递记录的持久化集成事件。
+- 一个持久化调度循环，负责订阅源刷新、事件分发、筛选截止时间和下载对账同步。
+- 持久化调度器心跳、租约、尝试、执行历史和过期运行恢复。
+- 每小时刷新 `schedule.sync` 投影，并使用持久化预期集数记录。
+
+### 识别
+
+- 由 `title-rules.v2` 标识的纯确定性解析器。
+- 提取发布组、本地化系列标题、季度标记、小数/范围集数、修订版、分辨率、视频编码、字幕语言和内容类型。
+- 为每次发布资源来源观测记录不可变解析尝试。
+- 每个 Release 只有一个规范识别候选项。
+- 分集组作为读投影提供，未匹配项使用独立队列。
+- 启动时重放未投递的 `ReleaseIdentified.v1` 事件，使已有安装升级后也能获得识别数据。
+- 中置信度候选项需要显式确认；之前未匹配的发布资源支持结构化映射；两者都有仅追加的操作历史。
+
+### 目录与订阅
+
+- 本地动画标识和用户别名，即使没有外部元数据服务方仍可使用。
+- Bangumi 动画搜索/导入，使用六小时 SQLite 缓存；服务方中断时回退到过期缓存。
+- 每部动画一个订阅，具有追踪中、已暂停、已完结和已归档生命周期状态。
+- 激活周期、标题键快照、保存路径意图和带版本的乐观更新。
+- 明确的硬性过滤、有序偏好和可配置的备选等待时间。
+- 一份带版本的全局偏好配置，以及明确的单订阅覆盖项。
+- 可导入或手动编辑的每周播出日期、时间、时区和集数元数据。
 
-### REC-001: Release deduplication and episode grouping are separate
+### 播出计划与缺集
 
-**Choice:** Preserve every distinct info hash as a Release. Group Releases only
-in the recognition read model when they resolve to the same series and episode.
+- 可独立阅读的 `schedule` 模块，只消费目录、订阅、筛选和实例设置的公共查询 DTO。
+- 从首播日期起按七天间隔生成持久化预期集数，并受已知集数和当前订阅周期限制。
+- 带版本的单集覆盖项，支持延期、连续两集、特别篇、取消、分割放送日期和未来服务方的分集数据。
+- 播出计划以 UTC 存储，日历按管理员选择的 IANA 时区展示。
+- 提供今天加未来七天的日历，以及单动画预期集数历史。
+- 根据筛选事实派生 `scheduled`、`acquired` 和 `missing` 状态；存在可接受备选项时不会判定缺集。
+- 超过可配置宽限时间后只发出一次 `EpisodeMissing.v1`。
+- 播出计划同步不能发出 `DownloadRequested.v1`，也不能创建虚假候选项。
 
-**Reason:** Different subtitle groups, sources, codecs, and revisions are real
-alternatives. Physically merging them would destroy the evidence needed for
-later selection and explanations.
+### 筛选决策
 
-### REC-002: Exact normalized series keys before metadata matching
+- 纯确定性的硬性过滤和字典序排序策略。
+- 候选项评估包含过滤结果、稳定排序元组和精确的有效规则快照。
+- 串行化分集时段，覆盖首选、等待、确认和已决状态。
+- 首选候选项立即提交；后续候选项到达时绝不延长备选截止时间。
+- 持久化的定时截止时间处理，以及启动时恢复已过期等待。
+- 历史补全预览和显式多集确认。
+- 使用最多三位小数的缩放整数表示集数范围；按决策仅追加覆盖记录；完全覆盖时抑制重复选择；部分重叠时进入手动门禁。
+- 同发布组、同集数的更高修订版会创建仅追加的升级决策。
+- 单集手动选择、替换、拒绝、重置和“已通过其他方式获取”操作，均保留仅追加操作历史。
+- 每个已提交决策都会发出 `DecisionCommitted.v1` 和 `DownloadRequested.v1`。
 
-**Choice:** The provisional series key is the first localized title segment
-before the episode marker, normalized with Unicode NFKC, case folding, and
-removal of punctuation and whitespace. No fuzzy string matching is performed.
+### 下载
 
-**Reason:** False grouping is more damaging than leaving a release unmatched.
-Bangumi aliases and user corrections will later replace this provisional key
-with a stable catalog identity.
+- 加密配置 qBittorrent Web API 端点、用户名和密码。
+- 验证连通性并报告版本，且不暴露凭据。
+- 数据库优先的任务规划、提交尝试和不可变幂等键。
+- 每次添加或重试前按 info hash 查询，包括成功后超时的恢复，且不会重复提交。
+- 提交 magnet 和上传的 `.torrent`，使用订阅保存路径及已配置分类和标签。
+- 持久化周期性对账同步和显式手动同步命令。
+- 从 qBittorrent 派生进度、暂停、完成、路径、分类和标签状态；连接失败时保留上次观测并标记为过期。
+- 已确认的外部删除会进入终态，直到管理员显式重试任务。
+- 中断的提交在启动时恢复，再次添加前先按哈希查询。
+- 修订版替换只使用 `deleteFiles=false` 取消未完成的旧任务；已完成的旧文件不受影响。
 
-### REC-003: Season is parsed but not part of the provisional group key
+### 产品强化与交付
 
-**Choice:** Candidate groups use `(series_key, episode_key)`. A season marker is
-stored and returned, but a missing `S01` and an explicit `S01` do not split the
-same episode into two groups.
+- 首次运行管理员设置；使用 Argon2id 存储密码，并在登录时迁移旧版 scrypt；不透明 Session；密码重置 CLI；显式退出。
+- 仅 HTTP 可读的 Session Cookie 加可读 CSRF Cookie；每次已认证修改都必须在 `X-CSRF-Token` 中回传 CSRF 值。
+- 强制执行 Trusted Host、浏览器同源写入、Fetch Metadata 和敏感端点有界限流。
+- 统一的结构化 API 错误 envelope，包含机器代码、消息、详情和请求关联 ID。
+- 持久化 24 小时修改幂等性；带版本资源强制乐观前置条件；增长型列表端点使用不透明游标分页。
+- 应用内通知派生自持久化集成事件，且不改变任何筛选、订阅源或下载结果。
+- 可选的加密通用 JSON Webhook 配置、幂等键、投递尝试、有界重试和过期尝试恢复。
+- 可移植 `.backup` 归档，包含一致性 SQLite 快照、manifest 和匹配的加密主密钥。
+- 手动及每日定时创建备份、按数量保留、恢复验证、重启安全暂存和自动恢复前备份。
+- React 设置/登录门禁，以及用于通知、Webhook 设置、下载备份、上传恢复和退出的系统视图。
+- 带版本的实例设置，涵盖时区、界面语言、缺集宽限时间和引导式设置进度。
+- 多阶段 Docker 构建、非 root Python 运行时、一个 Uvicorn 工作器、就绪健康检查和命名 Compose 数据卷。
 
-**Tradeoff:** Two releases with the exact same displayed series title and
-episode but conflicting seasons could temporarily group together. Catalog
-matching must make season identity explicit before automatic selection.
+### 界面
 
-### REC-004: Episode numbers are canonical decimal strings
+- 响应式仪表盘和订阅源管理。
+- 订阅源测试、刷新、历史和标准化条目视图。
+- 原始 Release 标识库，支持显式手动提交 BTIH 下载并显示现有任务状态。
+- 分集候选组展示每个字幕组版本及其解析属性。
+- 动画创建/导入、订阅创建和生命周期控制、历史补全预览、等待状态汇总和不可变决策历史。
+- 只提供合法操作的完结/归档生命周期菜单，以及独立的当前与已归档视图。
+- 页面内筛选流程展示硬性过滤、比较顺序、等待行为、修订版升级和当前手动操作的明确边界。
+- qBittorrent 配置、连通状态、下载进度、外部状态、手动对账同步和显式重试控件。
+- 根据受检 OpenAPI 契约生成 TypeScript API 类型。
+- 运维视图展示依赖状态、持久化作业、执行运行、失败工作和审计历史。
+- 仪表盘失败工作汇总，以及候选项确认和发布资源映射控件。
+- 八天播出日历、缺集警告列表、可编辑播出元数据和单集覆盖项、单动画分集历史及实例区域设置。
 
-**Choice:** `01`, `7.50`, and `01-02` become `1`, `7.5`, and `1-2`. Floating
-point values are never used.
+## 3. 决策记录
 
-**Reason:** Decimal episodes and ranges must remain exact and stable in database
-keys and API responses.
+### ING-001：订阅源 URL 唯一性使用密钥派生盲索引
 
-### REC-005: Recognition confidence is structural
+**选择：** 使用实例主密钥下按用途隔离的 HMAC，为已配置端点的精确字节建立索引。该索引唯一，API 创建/更新遇到冲突时映射为 HTTP 409。升级期间，现有 URL 的第一份记录占用索引；已经重复的记录保持不变，但不能继续增加。
 
-**Choice:** A title with release group, series, and episode is high confidence;
-series and episode without a group is medium; missing series or episode is low.
+**理由：** 私有 token URL 需要确定性防重，同时不能存储明文端点或可离线猜测的无密钥摘要。
 
-**Reason:** This version measures parser evidence only. It does not claim that
-the parsed series has been matched to authoritative anime metadata.
+### REC-001：发布资源去重与分集分组相互独立
 
-### REC-006: Recognition does not rank or reject preferences
+**选择：** 将每个不同的 info hash 保留为一个 Release。只有当多个 Release 解析为同一系列和集数时，才在识别读模型中将其分组。
 
-**Choice:** Recognition records resolution, codec, subtitles, RAW, batch,
-movie, and special markers but does not apply hard filters or choose a winner.
-`recognition_eligible` means only that torrent identity and structural parsing
-are reliable enough to enter selection.
+**理由：** 不同字幕组、来源、编码和修订版都是真实备选项。物理合并会破坏后续筛选和解释所需的证据。
 
-**Reason:** 4K, subtitle, codec, and subtitle-group preferences belong to a
-subscription rule snapshot owned by `selection`, not to the parser.
+### REC-002：元数据匹配前使用精确的标准化系列键
 
-### REC-007: Parse attempts are immutable and candidates are idempotent
+**选择：** 临时系列键取集数标记之前的第一个本地化标题片段，并通过 Unicode NFKC、大小写折叠及移除标点和空白进行标准化。不执行模糊字符串匹配。
 
-**Choice:** Every feed-entry observation has one versioned attempt. A Release
-has at most one canonical candidate. Integration-event delivery is idempotent.
+**理由：** 错误分组比暂时不匹配发布资源危害更大。Bangumi 别名和用户修正随后会用稳定的目录标识替换该临时键。
 
-**Reason:** Failed and historical parser evidence must survive rule changes,
-while retries and duplicate events must not create duplicate candidates.
+### REC-003：解析季度，但不将其纳入临时分组键
 
-### REC-008: Event dispatch queries pending work per consumer
+**选择：** 候选组使用 `(series_key, episode_key)`。季度标记会被存储并返回，但缺少 `S01` 和明确写有 `S01` 的资源不会因此将同一集拆成两组。
 
-**Choice:** The dispatcher selects events lacking a delivery record for the
-specific consumer and drains event chains until idle with a bounded limit.
+**权衡：** 显示系列标题和集数完全相同、但季度冲突的两个发布资源可能暂时被分到一起。自动筛选前，目录匹配必须明确季度标识。
 
-**Reason:** Reading the oldest global events and skipping delivered rows would
-starve newer consumers after the event table grew beyond the batch size.
+### REC-004：集数使用规范十进制字符串
 
-### CAT-001: Bangumi is advisory and local identity is permanent
+**选择：** `01`、`7.50` 和 `01-02` 分别变为 `1`、`7.5` 和 `1-2`。绝不使用浮点值。
 
-**Choice:** Imported and locally created anime receive the same permanent local
-ID. Bangumi search is cached for six hours; a stale cache may serve an outage.
+**理由：** 小数集数和范围在数据库键及 API 响应中必须保持精确稳定。
 
-**Reason:** Metadata availability must not block RSS recognition, subscription
-rules, or historical review.
+### REC-005：识别置信度基于结构
 
-### SUB-001: Subscription matching uses an explicit title-key snapshot
+**选择：** 标题同时包含发布组、系列和集数时为高置信度；包含系列和集数但没有发布组时为中；缺少系列或集数时为低。
 
-**Choice:** Creating or editing a subscription snapshots normalized catalog
-titles and supplied aliases into `match_keys`.
+**理由：** 此版本只衡量解析器证据，不声称解析出的系列已匹配到权威动画元数据。
 
-**Tradeoff:** Adding a catalog alias later does not silently change an existing
-subscription. The subscription must be edited so the new matching boundary is
-visible and reviewable.
+### REC-006：识别模块不排序或按偏好拒绝
 
-### SUB-002: Activation time uses global Release first-seen time
+**选择：** 识别模块记录分辨率、编码、字幕、RAW、合集、剧场版和特别篇标记，但不应用硬性过滤，也不选择胜出项。`recognition_eligible` 仅表示 torrent 标识和结构解析足够可靠，可以进入筛选决策。
 
-**Choice:** Automatic selection accepts only candidates whose Release was first
-seen at or after the current following epoch began. Pause/resume starts a new
-epoch; historical items require backfill.
+**理由：** 4K、字幕、编码和字幕组偏好属于 `selection` 负责的订阅规则快照，而不属于解析器。
 
-**Reason:** Adding another feed or resuming a subscription must not turn old
-releases into unexpected automatic downloads.
+### REC-007：解析尝试不可变，候选项幂等
 
-### SUB-003: Global preferences are live; overrides are explicit
+**选择：** 每次订阅源条目观测都有一个带版本的尝试。一个 Release 最多有一个规范候选项。集成事件投递保持幂等。
 
-**Choice:** A single versioned default profile is resolved when a subscription is
-read for selection. New subscriptions inherit it unless they explicitly store an
-override. Existing subscriptions created before migration remain overrides so an
-upgrade cannot silently change their behavior.
+**理由：** 失败和历史解析器证据必须跨规则变更保留，同时重试和重复事件不得创建重复候选项。
 
-**Reason:** One editable default makes new subscriptions cheap while the explicit
-inheritance flag preserves reviewable ownership and lets each decision snapshot
-the exact effective rules.
+### REC-008：事件分发按消费者查询待处理工作
 
-### SUB-004: Lifecycle commands expose only legal state transitions
+**选择：** 分发器为特定消费者选择尚无投递记录的事件，并在有界限制内持续处理事件链直到空闲。
 
-**Choice:** The subscription row uses an action menu derived from the backend
-state machine. Following and paused subscriptions can complete or archive;
-completed subscriptions can resume or archive; archived subscriptions restore to
-paused before they can follow again. Archived rows live in a separate view.
+**理由：** 如果读取全局最旧事件再跳过已投递记录，当事件表增长超过批次大小后，新消费者会被饿死。
 
-**Reason:** A binary pause toggle cannot represent completed and archived
-semantics and previously attempted the illegal `archived -> following` transition.
-The explicit menu keeps operator intent aligned with selection behavior: completed
-allows same-span same-group upgrades only, while archived stops all automation.
+### CAT-001：Bangumi 仅供参考，本地标识永久有效
 
-### SEL-001: Unknown safety attributes fail hard filters
+**选择：** 导入和本地创建的动画获得同样的永久本地 ID。Bangumi 搜索缓存六小时；服务中断时可以使用过期缓存。
 
-**Choice:** Default automatic rules require an episode content kind, recognized
-Chinese subtitles, an allowed resolution, and an allowed codec. An unknown
-value is not promoted into a preference rank.
+**理由：** 元数据可用性不得阻塞 RSS 识别、订阅规则或历史审核。
 
-**Reason:** Missing evidence is not evidence that a release satisfies a safety
-requirement. The administrator can deliberately widen an allow-list.
+### SUB-001：订阅匹配使用显式标题键快照
 
-### SEL-002: Preferences are compared lexicographically
+**选择：** 创建或编辑订阅时，将标准化目录标题和提供的别名快照到 `match_keys`。
 
-**Choice:** Candidates compare release group, subtitle, resolution, codec,
-revision descending, first-seen time, and Release identity in that order. Every
-backfill loser records the first field that differed from the winner.
+**权衡：** 后续添加目录别名不会静默改变现有订阅。必须编辑订阅，才能让新的匹配边界可见且可审核。
 
-**Reason:** The result is deterministic, explainable, and stable across process
-restarts without a weighted score whose tradeoffs are difficult to inspect.
+### SUB-002：激活时间采用 Release 全局首次发现时间
 
-### SEL-003: Immediate preferred means every configured first choice matches
+**选择：** 自动筛选只接受在当前追踪周期开始时或之后首次发现的 Release 候选项。暂停/恢复会开始新周期；历史项目必须使用历史补全。
 
-**Choice:** A candidate is immediate only when each non-empty preference
-dimension equals its first configured value. Otherwise an acceptable candidate
-is a fallback.
+**理由：** 新增订阅源或恢复订阅时，不得让旧发布资源变成意外的自动下载。
 
-**Reason:** This gives "preferred" a precise contract instead of treating a
-single strong attribute as enough to bypass the waiting window.
+### SUB-003：全局偏好实时生效，覆盖项必须显式
 
-### SEL-004: The first fallback fixes the deadline
+**选择：** 筛选读取订阅时解析唯一一份带版本的默认配置。新订阅继承它，除非明确存储覆盖项。迁移前创建的现有订阅继续视为覆盖项，避免升级静默改变行为。
 
-**Choice:** The first acceptable fallback stores `now + fallback_wait_minutes`.
-Later better fallbacks replace the current best but never extend that deadline.
+**理由：** 可编辑默认值让创建新订阅成本更低；显式继承标记保留可审核的所有权，并让每个决策快照精确有效规则。
 
-**Reason:** Repeated releases cannot postpone an episode forever. The deadline
-is durable, processed at startup, and polled every 30 seconds while running.
+### SUB-004：生命周期命令只暴露合法状态转换
 
-### SEL-005: Decisions and rule snapshots are append-only
+**选择：** 订阅行使用由后端状态机派生的操作菜单。追踪中和已暂停订阅可以完结或归档；已完结订阅可以恢复或归档；已归档订阅必须先恢复到暂停，之后才能重新追踪。归档记录位于独立视图。
 
-**Choice:** A committed decision stores the candidate snapshot, canonical rank,
-trigger, and complete rule schema v1. It then emits a durable download request
-event in the same transaction.
+**理由：** 二元暂停开关无法表达完结和归档语义，且曾尝试非法的 `archived -> following` 转换。显式菜单使运维意图与筛选行为一致：已完结只允许相同范围、相同发布组的升级，已归档停止全部自动化。
 
-**Reason:** Later rule edits or downloader behavior cannot rewrite why a
-candidate won.
+### SEL-001：未知安全属性无法通过硬性过滤
 
-### SEL-006: Historical releases require preview and confirmation
+**选择：** 默认自动规则要求内容类型为单集、识别到中文字幕、分辨率在允许范围内且编码受支持。未知值不会被提升到偏好排序中。
 
-**Choice:** Backfill ignores the activation cutoff only for preview. It applies
-the current hard filters and ranking without a wait, then commits only the
-episode keys explicitly confirmed by the administrator.
+**理由：** 缺少证据不等于发布资源满足安全要求。管理员可以有意扩大允许列表。
 
-**Reason:** Subscription creation remains safe while historical acquisition is
-still efficient and reviewable.
+### SEL-002：偏好按字典序比较
 
-### SEL-007: Automatic upgrades require the same group and higher revision
+**选择：** 候选项依次比较发布组、字幕、分辨率、编码、修订版降序、首次发现时间和 Release 标识。每个历史补全落败项记录与胜出项首次不同的字段。
 
-**Choice:** After a slot is decided, only a candidate for the same episode and
-release group with a higher revision can create an automatic upgrade decision.
+**理由：** 结果确定、可解释且可跨进程重启稳定，不依赖难以检查权衡关系的加权分数。
 
-**Reason:** A later release from a different group is an alternative, not a V2
-replacement.
+### SEL-003：立即首选要求每个已配置维度都匹配第一选择
 
-### SEL-008: Manual episode commands append; they do not rewrite
+**选择：** 仅当每个非空偏好维度都等于其首个配置值时，候选项才可立即处理。否则，可接受候选项属于备选。
 
-**Choice:** Selection, replacement, rejection, reset, and acquired-elsewhere are
-stored as immutable manual actions. Replacement creates a new decision and emits
-the same cancellation intent used by revision upgrades. Reset reopens the local
-slot but never deletes or pauses an existing downloader task.
+**理由：** 这为“首选”提供精确契约，避免单个强属性就足以绕过等待窗口。
 
-**Reason:** The operator can correct an episode without losing the previous
-rationale. Download idempotency and qBittorrent reconciliation remain responsible
-for preventing duplicate external submissions.
+### SEL-004：第一个备选项固定截止时间
 
-### SEL-009: Range releases are atomic decisions with per-episode coverage
+**选择：** 第一个可接受备选项存储 `now + fallback_wait_minutes`。后续更好备选项可以替换当前最佳项，但绝不延长截止时间。
 
-**Choice:** Episode values use thousandths in coverage comparisons. A range such
-as `1-2` remains one Candidate, one Decision, and one DownloadTask, while the
-Decision appends coverage facts for `1` and `2`. A later single episode whose
-coverage is complete is ignored automatically. A range that only partly overlaps
-acquired episodes enters `needs_confirmation`; backfill cannot select it, while an
-explicit manual candidate selection may proceed. Coverage from Decisions and
-`acquired_elsewhere` actions is historical and survives a slot reset. Migration
-`0015` backfills both sources.
+**理由：** 重复发布资源不能无限推迟某一集。截止时间持久化，启动时处理，运行期间每 30 秒轮询。
 
-**Reason:** Similar titles are not duplicate release identity, but already acquired
-episode content is a separate selection invariant. Keeping the range atomic avoids
-inventing multiple downloader tasks, while the coverage join prevents ordinary
-single releases from downloading the same content again. Partial overlap is a real
-tradeoff and therefore cannot be guessed by automation.
+### SEL-005：决策和规则快照仅追加
 
-### UI-001: The interface documents the live policy boundary
+**选择：** 已提交决策存储候选项快照、规范排序、触发来源和完整的规则 schema v1，并在同一事务中发出持久化下载请求事件。
 
-**Choice:** The interface presents the automatic selection stages in execution
-order. It exposes backfill confirmation, candidate confirmation, unmatched
-release mapping, global preferences, and per-episode manual controls.
+**理由：** 后续规则编辑或下载器行为不能改写候选项胜出的原因。
 
-**Reason:** Operators must be able to predict automatic behavior without
-mistaking a visible confirmation state for an available manual command.
+### SEL-006：历史发布资源必须先预览再确认
 
-### DL-001: qBittorrent configuration is module-owned and encrypted
+**选择：** 历史补全仅在预览时忽略激活截止时间。它使用当前硬性过滤和排序且不等待，只提交管理员显式确认的集数键。
 
-**Choice:** `downloads` stores one qBittorrent Web API configuration. Endpoint,
-username, and password are encrypted with field-specific authenticated
-encryption purposes; only a redacted endpoint and username return through the
-API.
+**理由：** 既保证创建订阅安全，也让历史获取保持高效且可审核。
 
-**Reason:** Downloader credentials must not leak into settings files, logs,
-task rows, or browser responses while still remaining editable at runtime.
+### SEL-007：自动升级要求同发布组且修订版更高
 
-### DL-002: Every external effect starts with a durable local task
+**选择：** 时段已决后，只有同集数、同发布组且修订版更高的候选项才能创建自动升级决策。
 
-**Choice:** Consuming `DownloadRequested.v1` creates one task per decision with
-`download-request:{decision_id}:{release_id}:1` as its immutable idempotency key.
-The network call happens only after that transaction commits.
+**理由：** 来自不同发布组的后续发布资源是备选项，而不是 V2 替换。
 
-**Reason:** A crash can lose a response, but it cannot lose the reason for the
-operation or create another local request for the same decision.
+### SEL-008：手动分集命令只追加，不改写
 
-### DL-003: Every add and retry queries by info hash first
+**选择：** 选择、替换、拒绝、重置和“已通过其他方式获取”都存为不可变手动操作。替换创建新决策，并发出与修订版升级相同的取消意图。重置重新打开本地时段，但绝不删除或暂停现有下载器任务。
 
-**Choice:** The adapter authenticates and queries qBittorrent before every add.
-If the torrent already exists, the local task links to that observation without
-submitting again.
+**理由：** 运维人员可以修正某一集而不丢失先前理由。下载幂等性和 qBittorrent 对账同步继续负责阻止重复外部提交。
 
-**Reason:** This closes the timeout-after-success window that a database-only
-idempotency key cannot close across an external API boundary.
+### SEL-009：范围发布资源采用原子决策并记录逐集覆盖
 
-### DL-004: qBittorrent owns runtime state
+**选择：** 覆盖比较中的集数值使用千分位缩放整数。`1-2` 等范围仍是一个 Candidate、一个 Decision 和一个 DownloadTask，同时 Decision 为 `1` 和 `2` 追加覆盖事实。后续单集若已完全覆盖则自动忽略。只与已获取集数部分重叠的范围进入 `needs_confirmation`；历史补全不能选择它，但显式手动选择候选项可以继续。来自 Decision 和 `acquired_elsewhere` 操作的覆盖属于历史，可跨时段重置保留。迁移 `0015` 会回填两种来源。
 
-**Choice:** Reconciliation mirrors progress, pause, completion, save path,
-category, and tags. A network or authentication failure retains the last known
-state and marks it stale rather than interpreting an empty observation.
+**理由：** 标题相似不代表发布资源标识重复，但已获取的分集内容是另一项筛选不变量。保持范围原子性可避免虚构多个下载器任务，覆盖关联则阻止普通单集重复下载相同内容。部分重叠是真实权衡，因此自动化不能猜测。
 
-**Reason:** Selection history belongs to this application, while actual torrent
-execution belongs to qBittorrent and may be changed there deliberately.
+### UI-001：界面记录实际生效的策略边界
 
-The supported application contract is qBittorrent `>=4.6.0,<6.0.0` with Web API
-major version 2. Connection tests return both versions and reject malformed,
-older, or unknown-major responses. The real adapter acceptance runs fixed 4.6.7
-and 5.0.4 containers through authenticate, add, hash lookup, and incomplete
-delete-without-files operations.
+**选择：** 界面按执行顺序展示自动筛选阶段，并提供历史补全确认、候选项确认、未匹配发布资源映射、全局偏好和单集手动控制。
 
-### DL-005: External deletion is terminal by default
+**理由：** 运维人员必须能够预测自动行为，且不会把可见的确认状态误认为可用的手动命令。
 
-**Choice:** A previously observed torrent becomes `externally_removed` only after
-two consecutive successful hash lookups return empty. The first miss remains in
-its prior state with `external_removal_unconfirmed`; a lookup failure or present
-torrent resets the persisted counter. Confirmed removal leaves the automatic work
-queue, and only the explicit retry command clears that boundary.
+### DL-001：qBittorrent 配置由模块负责并加密
 
-**Reason:** Re-adding a torrent deleted by the administrator would fight the
-source of truth and could create an endless add/delete loop.
+**选择：** `downloads` 存储一份 qBittorrent Web API 配置。端点、用户名和密码按字段专用的认证加密用途加密；API 只返回脱敏端点和用户名。
 
-### DL-006: Transient failures retry; interrupted effects reconcile first
+**理由：** 下载器凭据不得泄漏到设置文件、日志、任务记录或浏览器响应中，同时仍可在运行时编辑。
 
-**Choice:** Submission failures classified as transient use bounded backoff.
-Tasks left in `submitting` or `canceling` recover after a stale interval; startup
-forces recovery immediately, then queries by hash before making an external
-change.
+### DL-002：所有外部副作用都始于持久化本地任务
 
-**Reason:** Restarts and temporary qBittorrent downtime must be recoverable
-without treating an uncertain response as proof of failure.
+**选择：** 消费 `DownloadRequested.v1` 时，每个决策创建一个任务，其不可变幂等键为 `download-request:{decision_id}:{release_id}:1`。只有事务提交后才执行网络调用。
 
-### DL-007: Revision replacement never deletes completed files
+**理由：** 崩溃可能丢失响应，但不能丢失操作原因，也不能为同一决策创建另一条本地请求。
 
-**Choice:** An upgrade decision emits an explicit cancellation request for the
-previous decision. The new submission waits until that step resolves. An
-incomplete old torrent is removed with `deleteFiles=false`; a completed old
-torrent is only marked superseded. The replacement readiness check requires the
-predecessor's persisted `superseded_at`; integration evidence asserts that the
-old hash delete call occurs before the replacement hash add call.
+### DL-003：每次添加和重试前先按 info hash 查询
 
-**Reason:** Replacement is a visible, retryable saga, and downloaded media is
-never removed as a side effect of choosing V2 or V3.
+**选择：** 适配器每次添加前先认证并查询 qBittorrent。若 torrent 已存在，本地任务直接关联该观测，不再提交。
 
-### DL-008: Download defaults are captured when a task is planned
+**理由：** 仅数据库幂等键无法跨外部 API 边界封闭“成功后超时”窗口，而该查询可以。
 
-**Choice:** qBittorrent configuration owns an optional default save path,
-category, and tags. A subscription save path overrides the instance default;
-otherwise the planned task records the instance defaults as an intent snapshot.
+### DL-004：qBittorrent 负责运行时状态
 
-**Reason:** Setup needs one useful default without forcing every subscription to
-repeat paths, while persisted tasks must not drift when configuration changes.
+**选择：** 对账同步会镜像进度、暂停、完成、保存路径、分类和标签。网络或认证失败时保留最近已知状态并标记为过期，而不是把空观测解释为删除。
 
-### DL-009: Manual Release downloads are a second explicit task origin
+**理由：** 筛选历史属于本应用，实际 torrent 执行属于 qBittorrent，用户可能有意在其中修改状态。
 
-**Choice:** Migration `0016` gives every DownloadTask an immutable
-`origin_kind`. Automatic tasks remain `selection_decision` and require both a
-Decision and Subscription; a `manual_release` task requires both references to
-be absent. The database enforces this distinction. `POST
-/api/v1/downloads/releases/{release_id}/submit` reuses any task already linked to
-the Release or inserts one `manual-release:{release_id}:1` intent before the
-worker performs network I/O.
+受支持的应用契约为 qBittorrent `>=4.6.0,<6.0.0`，Web API 主版本为 2。连接测试返回两个版本，并拒绝格式错误、过旧或未知主版本响应。真实适配器验收使用固定的 4.6.7 和 5.0.4 容器执行认证、添加、哈希查询和“不删除文件地删除未完成任务”。
 
-**Reason:** Unsupported title/content recognition may have no Candidate,
-Subscription, or episode identity, so manufacturing a Decision would corrupt
-selection history. A direct qBittorrent call would instead bypass durable retry
-and audit behavior. The explicit second origin preserves both boundaries while
-sharing submission and reconciliation. Pure BTMH releases remain unavailable
-until the downloader can reconcile v2 identities reliably; manual intent does
-not weaken that safety boundary. DownloadTask references also join the retention
-protection set so an old manually submitted Release cannot be pruned underneath
-its execution history.
+### DL-005：外部删除默认进入终态
 
-### OPS-001: One durable scheduler replaces module-local polling loops
+**选择：** 已观测 torrent 只有在连续两次成功按哈希查询均为空后才变为 `externally_removed`。第一次未命中时保持原状态并标记 `external_removal_unconfirmed`；查询失败或 torrent 存在会重置持久化计数。确认删除后离开自动工作队列，只有显式重试命令能清除该边界。
 
-**Choice:** `feed.refresh`, `events.dispatch`, `selection.process_due`, and
-`downloads.process_cycle` run through one generic scheduler with database
-leases. The composition layer maps job kinds to public module commands.
+**理由：** 重新添加管理员删除的 torrent 会与事实来源对抗，并可能形成无限添加/删除循环。
 
-**Reason:** Restart and retry behavior is observable in one place, while each
-business module remains independently readable and owns its own state.
+### DL-006：瞬时失败可重试，中断的副作用先对账同步
 
-### OPS-002: Business deadlines remain authoritative
+**选择：** 分类为瞬时的提交失败使用有界退避。停留在 `submitting` 或 `canceling` 的任务在过期间隔后恢复；启动时立即强制恢复，随后在进行外部变更前按哈希查询。
 
-**Choice:** Feed `next_fetch_at` may replace the queued job due time during
-synchronization. Generic periodic jobs retain the next due time written by the
-worker. Selection fallback deadlines remain in selection tables and are queried
-by the scheduled command.
+**理由：** 重启和 qBittorrent 临时停机必须可恢复，不能把不确定响应视为失败证据。
 
-**Reason:** Rebuilding the scheduler queue cannot lose or invent a business
-deadline, and manual feed refresh cannot trigger an immediate duplicate fetch.
+### DL-007：修订版替换绝不删除已完成文件
 
-### OPS-003: Claims and executions are separate records
+**选择：** 升级决策为前一决策发出显式取消请求。新提交等待该步骤完成。未完成的旧 torrent 使用 `deleteFiles=false` 移除；已完成的旧 torrent 只标记为已被取代。替换就绪检查要求前序任务已持久化 `superseded_at`；集成证据断言先调用旧哈希删除，再调用替换哈希添加。
 
-**Choice:** The current job row stores the next intent and lease. Every claim
-creates an append-only run row with worker, attempt, outcome, error class, and
-timing. Expired running rows become `recovered` before the job is reclaimed.
+**理由：** 替换是一套可见、可重试的 saga；选择 V2 或 V3 绝不会产生删除已下载媒体的副作用。
 
-**Reason:** A mutable queue row is sufficient for execution but insufficient for
-diagnosis or proof of restart recovery.
+### DL-008：规划任务时捕获下载默认值
 
-### OPS-004: Optional dependencies do not gate readiness
+**选择：** qBittorrent 配置负责可选的默认保存路径、分类和标签。订阅保存路径覆盖实例默认值；否则，规划任务会将实例默认值记录为意图快照。
 
-**Choice:** Readiness continues to verify the local database. RSS aggregate
-health, Bangumi on-demand state, qBittorrent observations, and scheduler
-heartbeats are returned as administrator diagnostics.
+**理由：** 设置流程需要一组实用默认值，不能强迫每个订阅重复配置路径；同时持久化任务不得随配置变更漂移。
 
-**Reason:** A metadata or downloader outage should be visible without causing
-the local application process to fail readiness and restart repeatedly.
+### DL-009：手动 Release 下载是第二种显式任务来源
 
-### OPS-005: Failed-work summaries use public module queries
+**选择：** 迁移 `0016` 为每个 DownloadTask 增加不可变 `origin_kind`。自动任务保持为 `selection_decision`，并要求同时存在 Decision 和 Subscription；`manual_release` 任务要求两个引用都不存在。数据库强制该区分。`POST /api/v1/downloads/releases/{release_id}/submit` 会复用任何已关联到该 Release 的任务；若没有，则在工作器执行网络 I/O 前插入一条 `manual-release:{release_id}:1` 意图。
 
-**Choice:** The composition-level diagnostics adapter aggregates feed failures,
-unmatched releases, download failures, and scheduler errors through public API
-DTOs. `operations` does not query another module's tables.
+**理由：** 不受支持的标题/内容识别可能没有 Candidate、Subscription 或集数标识，为此伪造 Decision 会破坏筛选历史。直接调用 qBittorrent 又会绕过持久化重试和审计行为。明确的第二来源既保留两项边界，又共享提交和对账同步。纯 BTMH 发布资源在下载器能够可靠对账 v2 标识前仍不可用；手动意图不会削弱该安全边界。DownloadTask 引用也加入保留保护集合，避免手动提交的旧 Release 在执行历史下方被清理。
 
-**Reason:** The dashboard needs one actionable queue, but that read requirement
-must not erode table ownership or create hidden cross-module write logic.
+### OPS-001：一个持久化调度器替代模块内轮询循环
 
-### REC-009: Manual recognition actions preserve parser and decision evidence
+**选择：** `feed.refresh`、`events.dispatch`、`selection.process_due` 和 `downloads.process_cycle` 通过一个使用数据库租约的通用调度器运行。组合层将作业类型映射到模块公共命令。
 
-**Choice:** Confirming a medium-confidence candidate promotes that candidate for
-re-evaluation. Mapping any release requires structured series and episode fields.
-If an active candidate exists, a new candidate supersedes it and both remain in
-history. Undecided selection slots reopen; decided slots keep their decision and
-candidate snapshot while a correction action is appended. The new candidate is
-then evaluated normally.
+**理由：** 重启和重试行为可在一处观测，同时各业务模块仍可独立阅读并负责自己的状态。
 
-**Reason:** Administrators can unblock real releases without silently rewriting
-what parser v1 originally observed, destroying prior candidate evidence, or
-mutating an existing selection decision after external work may have occurred.
+### OPS-002：业务截止时间保持权威
 
-### REC-010: Parser re-runs append evidence and adopt only safe changes
+**选择：** 同步期间，订阅源 `next_fetch_at` 可以替换队列作业的到期时间。通用周期性作业保留工作器写入的下次到期时间。筛选备选截止时间留在筛选模块表中，由调度命令查询。
 
-**Choice:** `POST /api/v1/recognition/releases/{release_id}/rerun` resolves the
-source observation behind the active candidate and always appends a new immutable
-attempt marked `explicit_rerun`. Initial event-driven recognition remains
-concurrency-safe through a partial unique index for `trigger = 'initial'`, while
-same-version explicit runs are allowed. An unchanged result retains the active
-candidate. A changed, structurally complete medium/high-confidence result creates
-a new Candidate that supersedes the previous one and is evaluated normally. A
-low-confidence or incomplete result is recorded but cannot remove a valid active
-Candidate. Existing Decisions are never rewritten.
+**理由：** 重建调度器队列不能丢失或虚构业务截止时间，手动刷新订阅源也不能立即触发重复抓取。
 
-**Reason:** Parser upgrades and operator diagnostics need replayable evidence,
-but re-running deterministic code must not duplicate candidates or let a parser
-regression destroy a known-good mapping. Keeping attempt, Candidate, and Decision
-lifecycles separate preserves both retry safety and historical explanation.
+### OPS-003：领取与执行使用独立记录
 
-### REC-011: Parser fixtures are a versioned executable contract
+**选择：** 当前作业记录存储下一个意图和租约。每次领取创建一条仅追加运行记录，包含工作器、尝试、结果、错误类别和时间信息。过期的运行中记录在作业重新领取前变为 `recovered`。
 
-**Choice:** `parser-fixtures/title-rules.v2.json` defines a reviewable matrix that
-expands to 320 complete output snapshots plus focused malformed cases. A separate
-deterministic Unicode gate exercises 512 arbitrary strings and NFKC-equivalent
-forms. Rule v2 bounds post-casefold series keys to 300 characters and accepts
-revision suffixes only from `V1` through `V999`.
+**理由：** 可变队列记录足以执行，却不足以诊断或证明重启恢复。
 
-**Reason:** A list of hand-picked happy paths does not protect parser behavior
-across subtitle groups, localized titles, episode syntaxes, and media tags.
-Casefold can expand Unicode text, and an unbounded numeric revision can exceed
-database integer limits. Versioned data makes behavior changes reviewable while
-property invariants protect termination, determinism, and persistence bounds.
+### OPS-004：可选依赖不阻塞就绪状态
 
-### SEC-001: Setup is a database compare-and-create operation
+**选择：** 就绪检查继续验证本地数据库。RSS 汇总健康状态、Bangumi 按需状态、qBittorrent 观测和调度器心跳作为管理员诊断返回。
 
-**Choice:** A clean database exposes only setup, login, status, and health. The
-first valid setup request creates the fixed administrator account and an
-authenticated session; later setup requests conflict.
+**理由：** 元数据或下载器中断应当可见，但不应导致本地应用就绪失败并反复重启。
 
-**Reason:** A container image does not need a baked-in password or environment
-secret, and setup state remains part of the restored application state.
+### OPS-005：失败工作汇总使用模块公共查询
 
-### SEC-002: Sessions are opaque and revocable
+**选择：** 组合层诊断适配器通过公共 API DTO 汇总订阅源失败、未匹配发布资源、下载失败和调度器错误。`operations` 不查询其他模块的数据表。
 
-**Choice:** New and reset passwords use Argon2id with 64 MiB memory, time cost 3,
-parallelism 1, a 32-byte hash, and a 16-byte salt. The prior fixed-parameter
-`scrypt-v1` format remains verification-only: a successful login replaces it in
-the same transaction, preserves `password_changed_at`, and records
-`system.password_hash_upgraded`. Unknown, malformed, or altered legacy parameter
-sets fail as invalid credentials. Session and CSRF tokens use independent random
-values, and only SHA-256 hashes are stored. Password reset revokes every session.
+**理由：** 仪表盘需要一个可操作队列，但该读取需求不得侵蚀表所有权或创建隐藏的跨模块写逻辑。
 
-**Reason:** Database disclosure does not reveal reusable browser tokens, while a
-single-user operator retains a direct recovery command.
+### REC-009：手动识别操作保留解析器和决策证据
 
-### SEC-003: Mutations use double-submit CSRF validation
+**选择：** 确认中置信度候选项会提升它并重新评估。映射任意发布资源都要求结构化系列和集数字段。若已有活跃候选项，新候选项会取代它，两者都保留在历史中。未决筛选时段重新打开；已决时段保留决策和候选项快照，同时追加修正操作。新候选项随后正常评估。
 
-**Choice:** The session cookie is HTTP-only and SameSite=Lax. A separate readable
-SameSite cookie must match `X-CSRF-Token` and the session-bound stored hash for
-every authenticated non-safe method.
+**理由：** 管理员可以解除真实发布资源的阻塞，而不会静默改写解析器 v1 的原始观测、破坏先前候选项证据，或在外部工作可能已发生后修改现有筛选决策。
 
-**Reason:** Browser forms cannot create authenticated mutations, and the frontend
-does not need access to the session credential.
+### REC-010：解析器重新运行会追加证据，且只采纳安全变更
 
-### SEC-004: Browser authority is explicit and rate limits are local
+**选择：** `POST /api/v1/recognition/releases/{release_id}/rerun` 解析活跃候选项背后的来源观测，并始终追加一条标记为 `explicit_rerun` 的不可变尝试。事件驱动的初始识别通过 `trigger = 'initial'` 的部分唯一索引保持并发安全，同时允许相同版本的显式运行。结果不变时保留活跃候选项。结果变化、结构完整且置信度为中/高时，创建新 Candidate 取代旧项并正常评估。低置信度或不完整结果会被记录，但不能移除有效活跃 Candidate。现有 Decision 绝不改写。
 
-**Choice:** Every request validates `Host`. IP literals, `localhost`, and configured
-exact or wildcard hostnames are accepted. Unsafe browser requests with `Origin`
-must match either the request authority or an explicitly configured exact HTTP(S)
-origin; `Sec-Fetch-Site: cross-site` is rejected. This supports an HTTPS reverse
-proxy without trusting `X-Forwarded-*` headers or silently accepting arbitrary DNS
-names.
+**理由：** 解析器升级和运维诊断需要可重放证据，但重新运行确定性代码不得复制候选项，也不能让解析器回归破坏已知正确映射。分离尝试、Candidate 和 Decision 生命周期同时保留重试安全与历史解释。
 
-Setup and login use a sliding window of five attempts per five minutes,
-isolated by path and direct client address. Feed, qBittorrent, and Webhook connection
-tests each allow ten attempts per minute. Limits are configurable, process-local,
-thread-safe, and bounded to 10,000 client/path buckets. `Retry-After` accompanies
-429 responses. Forwarded client addresses are deliberately ignored, so a reverse
-proxy shares one conservative bucket.
+### REC-011：解析器夹具是带版本的可执行契约
 
-**Reason:** Double-submit CSRF alone does not prevent DNS rebinding, hostile browser
-origins, password guessing, or expensive connection-test amplification. The V1
-single-process deployment does not need distributed rate-limit state, and trusting
-forwarded headers without an explicit proxy trust chain would let clients forge
-their identity.
+**选择：** `parser-fixtures/title-rules.v2.json` 定义可审核矩阵，可扩展为 320 个完整输出快照和专门的错误格式用例。独立确定性 Unicode 门禁验证 512 个任意字符串和 NFKC 等价形式。规则 v2 将大小写折叠后的系列键限制为 300 字符，只接受 `V1` 至 `V999` 修订后缀。
 
-### API-001: Successful mutations can be replayed for 24 hours
+**理由：** 人工挑选的成功路径无法保护跨字幕组、本地化标题、集数语法和媒体标签的解析器行为。大小写折叠可能扩展 Unicode 文本，无界数字修订版可能超过数据库整数限制。带版本数据让行为变更可审核，属性不变量则保护终止性、确定性和持久化边界。
 
-**Choice:** Every API mutation may carry `Idempotency-Key`. Migration `0017`
-stores a SHA-256 key digest, a method/path/query/body request digest, and the
-successful response in SQLite for 24 hours. An identical request replays the
-stored response, a different request using the same key returns 409, and a
-concurrent in-progress request returns 409 with `Retry-After`. Failed responses
-release the claim so corrected requests can retry. The browser client generates a
-UUID for every unsafe request.
+### SEC-001：设置是数据库比较并创建操作
 
-Authentication setup/login/logout are excluded because replaying session cookies
-would be unsafe. Restore staging is excluded because buffering and retaining a
-large backup upload in generic middleware is the wrong ownership boundary.
+**选择：** 全新数据库只暴露设置、登录、状态和健康接口。第一个有效设置请求创建固定管理员账户和已认证 Session；后续设置请求产生冲突。
 
-**Reason:** A client that loses a success response can repeat the command without
-creating a second business action, while durable storage preserves this guarantee
-across process restarts.
+**理由：** 容器镜像无需内置密码或环境密钥，且设置状态仍属于恢复后的应用状态。
 
-### API-002: Mutable resources require explicit versions
+### SEC-002：Session 不透明且可撤销
 
-**Choice:** Versioned `PUT`, `PATCH`, and `DELETE` operations require `If-Match`;
-creating a singleton configuration or episode override uses version `0`. Missing
-preconditions return 428 and stale versions return 409. Catalog Anime now has its
-own migrated version for alias and airing-schedule changes; feed deletion consumes
-the Feed version. Idempotent writes that do not change an alias or schedule retain
-the current version.
+**选择：** 新密码和重置密码使用 Argon2id：64 MiB 内存、时间成本 3、并行度 1、32 字节哈希和 16 字节盐。先前固定参数的 `scrypt-v1` 格式仅用于验证：成功登录时在同一事务中替换，保留 `password_changed_at`，并记录 `system.password_hash_upgraded`。未知、格式错误或参数被篡改的旧格式视为无效凭据。Session 和 CSRF token 使用独立随机值，且只存储 SHA-256 哈希。重置密码会撤销全部 Session。
 
-**Reason:** The web interface and external clients cannot silently overwrite a
-newer administrator change, and a version continues to mean an actual resource
-transition rather than an API call count.
+**理由：** 数据库泄漏不会暴露可复用浏览器 token，同时单用户运维人员仍有直接恢复命令。
 
-### API-003: Pagination preserves existing array responses
+### SEC-003：修改操作使用双提交 CSRF 验证
 
-**Choice:** Growing list endpoints accept a bounded `limit` and opaque offset
-cursor. Responses remain JSON arrays for frontend compatibility and expose
-`X-Next-Cursor` plus `X-Page-Limit`; the checked OpenAPI contract declares those
-headers. Page size is capped at 200 and cursor offset at 10,000.
+**选择：** Session Cookie 为 HTTP-only 且 `SameSite=Lax`。每个已认证的非安全方法都要求另一枚可读 SameSite Cookie 同时匹配 `X-CSRF-Token` 和绑定 Session 的已存哈希。
 
-**Tradeoff:** This is not a database snapshot. Concurrent insertions or removals
-between page requests may move offsets. The cursor contract guarantees ordered,
-non-overlapping traversal only while the underlying ordered result is stable; a
-future high-volume deployment should replace module queries with keyset cursors
-without changing the response headers.
+**理由：** 浏览器表单无法创建已认证修改，前端也无需访问 Session 凭据。
 
-### API-004: Errors and correlation use one public envelope
+### SEC-004：浏览器权限边界明确，限流状态位于本地
 
-**Choice:** HTTP, validation, authentication, CSRF, precondition, idempotency, and
-unexpected failures return `code`, `message`, optional `details`, and
-`correlation_id`. The legacy `detail` message remains during the current client
-transition. Every response also returns `X-Correlation-ID`. OpenAPI advertises the
-error model, mutation idempotency header, preconditions, and pagination headers;
-the generated TypeScript schema is checked into the repository.
+**选择：** 每个请求都验证 `Host`。接受 IP 字面量、`localhost` 以及已配置的精确或通配主机名。带 `Origin` 的非安全浏览器请求必须匹配请求 authority 或显式配置的精确 HTTP(S) 源；拒绝 `Sec-Fetch-Site: cross-site`。这样可支持 HTTPS 反向代理，同时不信任 `X-Forwarded-*` 请求头，也不静默接受任意 DNS 名称。
 
-**Reason:** Operators can connect browser failures to JSON logs and durable audit
-history, while clients can branch on a stable code rather than translated text.
+设置和登录使用每五分钟五次尝试的滑动窗口，按路径和直连客户端地址隔离。订阅源、qBittorrent 和 Webhook 连接测试各允许每分钟十次。限制可配置、进程本地、线程安全，并限制为 10,000 个客户端/路径桶。429 响应附带 `Retry-After`。有意忽略转发客户端地址，因此反向代理共享一个保守桶。
 
-### NOTIFY-001: Notifications are downstream facts only
+**理由：** 仅双提交 CSRF 无法阻止 DNS 重绑定、恶意浏览器源、密码猜测或高成本连接测试放大。V1 单进程部署不需要分布式限流状态；若没有明确代理信任链就信任转发请求头，客户端可以伪造身份。
 
-**Choice:** `notifications` consumes versioned integration events after the
-originating transaction. A notification or Webhook failure never changes feed
-retry, recognition, selection, or download state.
+### API-001：成功的修改操作可在 24 小时内重放
 
-**Reason:** Operator visibility must not become a second business-decision path.
+**选择：** 每次 API 修改可携带 `Idempotency-Key`。迁移 `0017` 在 SQLite 中保存 SHA-256 键摘要、方法/路径/查询/正文请求摘要和成功响应 24 小时。相同请求会重放已存响应；使用同一键的不同请求返回 409；并发进行中的请求返回带 `Retry-After` 的 409。失败响应释放占用，使修正后的请求可以重试。浏览器客户端为每个非安全请求生成 UUID。
 
-### NOTIFY-002: Webhook delivery has its own durable retry state
+认证设置/登录/退出不在此范围内，因为重放 Session Cookie 不安全。恢复暂存也不在此范围内，因为在通用中间件中缓冲并保留大型备份上传属于错误的所有权边界。
 
-**Choice:** One channel attempt is created per notification when Webhook delivery
-is enabled. The notification ID is the external idempotency key; transient network,
-429, and 5xx failures retry with bounded exponential delay for at most eight
-attempts. Interrupted deliveries become retryable after five minutes.
+**理由：** 丢失成功响应的客户端可以重复命令而不产生第二次业务操作；持久化存储使该保证可跨进程重启保留。
 
-**Reason:** External delivery is recoverable across restarts without replaying the
-originating action or issuing an unbounded request stream.
+### API-002：可变资源要求显式版本
 
-### NOTIFY-003: The external contract is generic JSON
+**选择：** 带版本的 `PUT`、`PATCH` 和 `DELETE` 操作要求 `If-Match`；创建单例配置或分集覆盖项使用版本 `0`。缺少前置条件返回 428，版本过期返回 409。目录 Anime 现在拥有自己的迁移版本，用于别名和播出计划变更；删除订阅源会消费 Feed 版本。不改变别名或计划的幂等写入保留当前版本。
 
-**Choice:** The first adapter sends a stable JSON envelope with kind, level,
-message, entity, time, and optional encrypted bearer token. Provider-specific
-Slack, Feishu, or Telegram formatting is not embedded in the core module.
+**理由：** Web 界面和外部客户端不能静默覆盖管理员的更新变更；版本继续表示实际资源转换，而不是 API 调用次数。
 
-**Reason:** A neutral contract works with automation relays now and leaves each
-provider adapter independently extractable later.
+### API-003：分页保留现有数组响应
 
-### BACKUP-001: A backup includes encrypted data and its key
+**选择：** 增长型列表端点接受有界 `limit` 和不透明偏移游标。为兼容前端，响应仍为 JSON 数组，并公开 `X-Next-Cursor` 和 `X-Page-Limit`；受检 OpenAPI 契约声明这些请求头。页面大小最多 200，游标偏移最多 10,000。
 
-**Choice:** Each versioned ZIP archive contains an SQLite online-backup snapshot,
-manifest, and the exact 32-byte master key. Archives are not encrypted by the app
-and are documented as credentials.
+**权衡：** 这不是数据库快照。页面请求之间的并发插入或删除可能移动偏移。只有底层有序结果稳定时，游标契约才保证有序且不重叠的遍历；未来高流量部署应将模块查询替换为 keyset 游标，但不改变响应头。
 
-**Reason:** Copying only SQLite would restore ciphertext that a clean container
-cannot decrypt. Operator-controlled storage is a clearer boundary than inventing
-a second key-management password in the first release.
+### API-004：错误和关联信息使用统一公共 envelope
 
-### BACKUP-002: Live restore stages; startup applies
+**选择：** HTTP、验证、认证、CSRF、前置条件、幂等和意外失败统一返回 `code`、`message`、可选 `details` 和 `correlation_id`。当前客户端过渡期间保留旧版 `detail` 消息。每个响应还返回 `X-Correlation-ID`。OpenAPI 声明错误模型、修改幂等请求头、前置条件和分页请求头；生成的 TypeScript schema 纳入仓库检查。
 
-**Choice:** Upload validates the archive, SQLite integrity, application schema,
-and master key, then stages files under the data volume. The next startup creates
-a pre-restore archive, atomically replaces database and key, and runs migrations.
+**理由：** 运维人员可以将浏览器失败关联到 JSON 日志和持久化审计历史，客户端则能按稳定代码分支，而不是依赖翻译文本。
 
-**Reason:** Replacing a database while services and scheduler sessions are live is
-not a safe recovery primitive. A required restart makes the cutover explicit and
-keeps every module on one database generation.
+### NOTIFY-001：通知只表示下游事实
 
-### BACKUP-003: Retention is count-based and scheduler-owned
+**选择：** `notifications` 在原始事务之后消费带版本集成事件。通知或 Webhook 失败绝不改变订阅源重试、识别、筛选或下载状态。
 
-**Choice:** The generic scheduler creates one backup every 24 hours by default and
-keeps the newest seven archives. Manual and pre-restore archives participate in the
-same configurable count.
+**理由：** 运维可见性不能成为第二条业务决策路径。
 
-**Reason:** Count retention is predictable on small NAS volumes and does not add a
-second timer loop or a hidden file owner.
+### NOTIFY-002：Webhook 投递有独立的持久化重试状态
 
-### BACKUP-004: Restore and migration share one fail-closed startup lock
+**选择：** 启用 Webhook 投递后，每条通知创建一次渠道尝试。通知 ID 是外部幂等键；瞬时网络、429 和 5xx 失败使用有界指数延迟重试，最多八次。中断的投递五分钟后可重试。
 
-**Choice:** Startup and the migration CLI take an advisory file lock adjacent to
-the SQLite database before restore inspection or Alembic work. Lock acquisition
-times out after 60 seconds by default and process exit releases ownership. Inside
-the lock, the service compares current and target Alembic heads. A pending
-migration of an existing versioned database creates a consistent online archive
-with reason `pre-migration`; only a successful backup permits migration. Clean
-installs, current schemas, and the second process after a concurrent migration do
-not create an archive. A migration failure leaves the archive in normal retention.
+**理由：** 外部投递可跨重启恢复，无需重放原始操作或产生无界请求流。
 
-**Reason:** A database row cannot serialize work that starts before the schema is
-known, and a marker file without an OS lock can become permanently stale after a
-crash. Check, snapshot, and upgrade must be one critical section so overlapping
-container generations cannot both migrate or replace the same SQLite file.
+### NOTIFY-003：外部契约采用通用 JSON
 
-### BACKUP-005: Restored master keys are always private files
+**选择：** 首个适配器发送稳定 JSON envelope，包含 kind、level、message、entity、time 和可选的加密 bearer token。核心模块不内置 Slack、飞书或 Telegram 专用格式。
 
-**Choice:** New and restored master-key files are explicitly set to mode `0600`.
-The read-only doctor treats a key with group or world permissions as a failure.
+**理由：** 中立契约现在即可与自动化中继配合，也让各服务方适配器以后可以独立拆分。
 
-**Reason:** Archive extraction is affected by process umask and must not silently
-turn the credential that decrypts every stored secret into a group-readable file.
+### BACKUP-001：备份包含加密数据及其密钥
 
-### OPS-004: Correlation context is persisted across every execution boundary
+**选择：** 每份带版本 ZIP 归档包含 SQLite 在线备份快照、manifest 和精确的 32 字节主密钥。应用不加密归档，并在文档中将其定义为凭据。
 
-**Choice:** HTTP requests accept only canonical UUID correlation IDs and generate
-one otherwise. Background jobs create a new correlation ID and use the durable job
-ID as causation. Integration events persist both IDs; dispatch restores the
-correlation and makes the event ID the next causation ID. Audit writes inherit the
-active correlation automatically.
+**理由：** 只复制 SQLite 会恢复出全新容器无法解密的密文。由运维人员控制存储，比在首个版本中再发明一个密钥管理密码边界更清晰。
 
-**Reason:** One identifier now follows feed fetch, release parsing, candidate
-selection, task planning, and external submission without coupling domain APIs to
-HTTP request objects or logger arguments.
+### BACKUP-002：运行时恢复先暂存，启动时应用
 
-### OPS-005: JSON logs and diagnostic history are bounded independently
+**选择：** 上传时验证归档、SQLite 完整性、应用 schema 和主密钥，再将文件暂存到数据卷下。下次启动创建恢复前归档，原子替换数据库和密钥，然后运行迁移。
 
-**Choice:** The process writes structured JSON to stdout and
-`data/logs/application.jsonl`; the file rotates at UTC midnight and keeps 14 days
-by default. Probe requests are excluded. A central formatter redacts URL query
-values and sensitive fields, including messages emitted by dependencies.
+**理由：** 服务和调度器 Session 运行时替换数据库并不安全。强制重启让切换明确，并让所有模块使用同一代数据库。
 
-**Tradeoff:** Container-runtime stdout retention remains an operator concern. The
-application-owned file provides a predictable local diagnostic window without
-trying to configure Docker or NAS logging policy.
+### BACKUP-003：保留策略按数量计算并由调度器负责
 
-### OPS-006: Local and CI release gates share stable commands
+**选择：** 通用调度器默认每 24 小时创建一份备份，并保留最新七份归档。手动和恢复前归档纳入同一可配置数量。
 
-**Choice:** The Makefile exposes `doctor`, `openapi-check`, `security-scan`,
-`clean-room-acceptance`, `release-evidence`, and `release-evidence-check`.
-`doctor` is read-only. OpenAPI drift generation uses temporary files. Security
-scanning audits the locked runtime dependency graph, the complete npm lockfile,
-and medium-or-higher Bandit findings. Clean-room acceptance operates on the exact
-committed revision in a detached Git worktree with fresh dependency installs and
-runs ordinary verification, Compose upgrade/restore, and the qBittorrent version
-matrix. GitHub Actions calls the same quality and external-contract entry points.
+**理由：** 按数量保留在小型 NAS 数据卷上可预测，也不会增加第二个计时循环或隐藏文件所有者。
 
-Release evidence is created only after the seven-day report and a separate manual
-review file are complete. The immutable per-version directory checksum-binds the
-commit, automated log, acceptance criteria, redacted report, and review. The
-checker refuses a different HEAD, pending soak state, unchecked review, modified
-evidence, or a dirty source tree.
+### BACKUP-004：恢复和迁移共享一个失败关闭的启动锁
 
-**Reason:** A release claim must be reproducible from the source commit and must
-not depend on generated files left in a developer worktree or on an undocumented
-sequence of commands. Automated counts cannot replace manual mapping review, so
-both forms of evidence remain explicit.
+**选择：** 启动过程和迁移 CLI 在检查恢复或执行 Alembic 前，获取 SQLite 数据库旁的咨询文件锁。默认 60 秒后获取超时，进程退出会释放所有权。锁内服务比较当前和目标 Alembic head。已有版本数据库若有待处理迁移，会创建原因标记为 `pre-migration` 的一致性在线归档；只有备份成功才允许迁移。全新安装、当前 schema 以及并发迁移后的第二个进程不会创建归档。迁移失败后，归档进入普通保留策略。
 
-### RET-001: Each module applies retention to its owned records
+**理由：** 数据库记录无法串行化 schema 尚未知前就开始的工作；没有操作系统锁的标记文件可能在崩溃后永久过期。检查、快照和升级必须位于同一临界区，防止重叠容器代同时迁移或替换同一 SQLite 文件。
 
-**Choice:** A daily `system.retention` job asks selection and recognition for
-release IDs that must survive, then invokes public cleanup commands. Subscription
-evaluations, decisions, and manual actions protect their releases. Recognition
-manual corrections protect fingerprints permanently. Other unmatched releases
-and unresolved feed entries expire after 90 days; redacted fetch failures expire
-after seven days. Delivered integration events and completed job runs expire after
-90 days.
+### BACKUP-005：恢复的主密钥始终是私有文件
 
-**Reason:** `operations` owns timing and evidence, but never deletes another
-module's tables. This preserves module extraction boundaries and prevents cleanup
-from rewriting decisions or deleting corrected fingerprints.
+**选择：** 新建和恢复的主密钥文件显式设置为 `0600`。只读 doctor 将组或全局可读的密钥视为失败。
 
-### UI-002: Security and recovery live behind one application gate
+**理由：** 归档解压受进程 umask 影响，不能静默将可解密全部已存密钥的凭据变为组可读文件。
 
-**Choice:** The React root resolves authentication before mounting any product
-route. One system view owns Webhook configuration, messages, backups, restore,
-and logout; the shared API client attaches CSRF headers to all mutations. A
-successful logout clears the in-memory query cache and reloads the document.
+### OPS-004：关联上下文跨每个执行边界持久化
 
-**Reason:** Feature pages remain unaware of session mechanics, and operator tasks
-have one discoverable surface on desktop and mobile. Reloading at the logout
-boundary removes protected projections and prevents stale credential form state
-from surviving the authenticated application.
+**选择：** HTTP 请求只接受规范 UUID 关联 ID，否则生成一个。后台作业创建新关联 ID，并以持久化作业 ID 作为因果 ID。集成事件持久化两个 ID；分发时恢复关联 ID，并以事件 ID 作为下一因果 ID。审计写入自动继承活跃关联信息。
 
-### PKG-001: Production is one non-root process and one data volume
+**理由：** 一个标识现在可以贯穿订阅源抓取、发布资源解析、候选项筛选、任务规划和外部提交，而无需将领域 API 耦合到 HTTP 请求对象或日志参数。
 
-**Choice:** A multi-stage image builds React assets and runs Python as an
-unprivileged user with one Uvicorn worker. Compose mounts `/data`, publishes one
-port, and probes database readiness.
+### OPS-005：JSON 日志与诊断历史分别受限
 
-**Reason:** This matches SQLite's single-writer workload, keeps install state in
-one portable volume, and avoids process-manager behavior that could duplicate the
-embedded scheduler.
+**选择：** 进程将结构化 JSON 写到 stdout 和 `data/logs/application.jsonl`；文件在 UTC 午夜轮转，默认保留 14 天。探针请求不记录。中央格式化器脱敏 URL 查询值和敏感字段，包括依赖发出的消息。
 
-### PKG-002: Release images are reproducible across lifecycle transitions
+**权衡：** 容器运行时 stdout 保留仍由运维人员负责。应用自有文件提供可预测的本地诊断窗口，但不尝试配置 Docker 或 NAS 日志策略。
 
-**Choice:** GitHub Actions publishes `linux/amd64` and `linux/arm64` images to
-GHCR for `master`, version tags, and commit SHAs. BuildKit emits maximum-mode
-provenance and an SBOM, and GitHub attaches a registry-backed build provenance
-attestation. Compose accepts an `ANIME_RSS_IMAGE` override while retaining the
-local-build default.
+### OPS-006：本地与 CI 发布门禁共享稳定命令
 
-The `make acceptance-compose` harness selects the newest historical commit before
-the current migration, builds baseline and current images, and exercises setup,
-operator backup, in-place upgrade, clean-volume restore, and backup-based rollback.
-Every transition starts the full service, logs in again, and verifies settings,
-subscription, and feed projections. Test projects and volumes are uniquely named
-and removed on both success and failure.
+**选择：** Makefile 提供 `doctor`、`openapi-check`、`security-scan`、`clean-room-acceptance`、`release-evidence` 和 `release-evidence-check`。`doctor` 只读。OpenAPI 漂移生成使用临时文件。安全扫描审计锁定的运行时依赖图、完整 npm 锁文件及 Bandit 中等级别以上发现。无污染环境验收在分离 Git worktree 中针对精确提交修订运行，重新安装依赖，并执行普通验证、Compose 升级/恢复和 qBittorrent 版本矩阵。GitHub Actions 调用相同的质量与外部契约入口。
 
-**Reason:** Schema migration, encryption-key portability, and rollback behavior
-must be proven at the container boundary. Unit-level backup tests cannot detect
-image entrypoint, volume ownership, static asset, or Compose wiring regressions.
+只有七天报告和独立手动审核文件均完成后，才创建发布证据。不可变的单版本目录通过校验和绑定提交、自动化日志、验收标准、脱敏报告和审核。HEAD 不同、浸泡待处理、审核未勾选、证据被修改或源工作区不干净时，检查器都会拒绝。
 
-**Tradeoff:** The local acceptance harness validates one native architecture.
-Cross-architecture builds, registry publication, SBOM attachment, and attestation
-are verified only when the GitHub Actions workflow runs.
+**理由：** 发布声明必须可从源提交复现，不能依赖开发者工作区残留生成文件或未记录命令序列。自动计数不能替代手动映射审核，因此两种证据都保持明确。
 
-### PKG-003: Publication requires per-architecture runtime and vulnerability proof
+### RET-001：各模块对自有记录应用保留策略
 
-**Choice:** Before publishing the manifest, GitHub Actions builds loadable amd64
-and arm64 images under QEMU. Each image starts on a clean volume, serves readiness
-and the SPA, reports the current migration head through the in-container doctor,
-runs as non-root, and reaches Docker health `healthy`. Trivy blocks high or
-critical fixed vulnerabilities. Only after both jobs pass is the multi-architecture
-image pushed, attested, and signed keylessly with Cosign. Multi-architecture Node
-and Python base-image indexes and qBittorrent contract images are digest-pinned.
-Dependabot opens weekly grouped updates for Python, npm, Docker, and GitHub Actions
-dependencies.
+**选择：** 每日 `system.retention` 作业向筛选和识别模块查询必须保留的发布资源 ID，再调用公共清理命令。订阅评估、决策和手动操作会保护其发布资源。识别模块的手动修正永久保护指纹。其他未匹配发布资源和未解决订阅源条目 90 天后过期；脱敏抓取失败 7 天后过期；已投递集成事件和已完成作业运行 90 天后过期。
 
-**Reason:** Build success proves neither that a foreign-architecture image starts
-nor that its final filesystem is releasable. Digest pins keep the downloader
-contract reproducible, while scheduled update PRs make those pins maintainable
-instead of silently stale.
+**理由：** `operations` 负责时机和证据，但绝不删除其他模块的数据表。这样保留模块拆分边界，并阻止清理改写决策或删除已修正指纹。
 
-### ACC-001: Live acceptance is an immutable, redacted evidence window
+### UI-002：安全与恢复位于统一应用门禁之后
 
-**Choice:** The `anime-rss acceptance` CLI exposes `preflight`, `start`, `status`,
-and `report` commands. Preflight requires completed setup, two healthy feeds, two
-following Bangumi-backed anime, a successfully tested qBittorrent connection,
-and a healthy scheduler. `start` writes one immutable timestamp under
-`/data/acceptance`; repeated starts preserve the original boundary.
+**选择：** React 根节点先解析认证，再挂载任何产品路由。一个系统视图负责 Webhook 配置、消息、备份、恢复和退出；共享 API 客户端为所有修改附加 CSRF 请求头。成功退出会清空内存查询缓存并重新加载文档。
 
-Status and report use a disposable, read-only cross-module SQLite projection.
-They aggregate feed refreshes, cross-feed releases, recognition and manual actions,
-decisions, downloader attempts, job failures, duplicate task identities, and lost
-decision references. They never read endpoint ciphertext, payload ciphertext,
-credentials, raw magnet links, or private URL fields.
+**理由：** 功能页面无需了解 Session 机制，运维任务在桌面和移动端都有一个可发现入口。在退出边界重新加载可以移除受保护投影，并防止过期凭据表单状态残留在已认证应用中。
 
-**Reason:** Existing durable histories already contain the evidence needed for a
-seven-day run. A read-only projection avoids a second monitoring write model and
-cannot alter Candidate, Decision, DownloadTask, or user history. The explicit
-start marker prevents a failed or partial run from being silently restarted to
-produce a favorable window.
+### PKG-001：生产环境使用一个非 root 进程和一个数据卷
 
-**Tradeoff:** Counts can detect duplication and state-integrity failures but cannot
-prove that an anime title was semantically matched correctly. Final approval
-requires human review of the mapped episodes. The marker survives restarts on the
-same data volume but is intentionally outside operator backup archives; a clean
-restore restarts the seven-day clock.
+**选择：** 多阶段镜像构建 React 资源，并以非特权用户运行 Python 和一个 Uvicorn 工作器。Compose 挂载 `/data`、发布一个端口并探测数据库就绪状态。
 
-### SCH-001: Schedule is a downstream projection, never an acquisition source
+**理由：** 这符合 SQLite 单写者工作负载，使安装状态保留在一个可移植数据卷中，并避免进程管理器行为复制嵌入式调度器。
 
-**Choice:** `schedule` reads catalog metadata, subscriptions, selection slots,
-decisions, and instance settings through public APIs. It owns expected-episode
-rows and may emit only `EpisodeMissing.v1`.
+### PKG-002：发布镜像可跨生命周期转换复现
 
-**Reason:** A broadcast plan is advisory and can be incomplete or wrong. Keeping
-it outside recognition and selection makes it structurally impossible for a
-calendar row to create a downloader task.
+**选择：** GitHub Actions 将 `master`、版本标签和提交 SHA 对应的 `linux/amd64` 与 `linux/arm64` 镜像发布到 GHCR。BuildKit 生成 maximum 模式来源信息和 SBOM，GitHub 附加注册表支持的构建来源证明。Compose 接受 `ANIME_RSS_IMAGE` 覆盖，同时保留本地构建默认值。
 
-### SCH-002: Weekly expectations are anchored to the first air date
+`make acceptance-compose` 测试工具选择当前迁移之前最新的历史提交，构建基线和当前镜像，并执行设置、运维备份、原地升级、空数据卷恢复和基于备份的回滚。每次转换都会启动完整服务、重新登录，并验证设置、订阅和订阅源投影。测试项目和数据卷名称唯一，无论成功或失败都会清理。
 
-**Choice:** The stored first air date and source-local airtime define episode 1;
-subsequent numeric episodes are seven days apart, stop at the known episode
-count, and begin no earlier than the subscription activation epoch. Bangumi
-times use `Asia/Tokyo`; manual schedules require an explicit IANA timezone.
+**理由：** schema 迁移、加密密钥可移植性和回滚行为必须在容器边界证明。单元级备份测试无法发现镜像 entrypoint、数据卷所有权、静态资源或 Compose 接线回归。
 
-**Tradeoff:** The generator does not guess irregular broadcasts. Corrections are
-explicit episode-level facts supplied manually or by a future provider adapter.
+**权衡：** 本地验收工具只验证一个原生架构。跨架构构建、注册表发布、SBOM 附加和证明只能在 GitHub Actions 工作流实际运行时验证。
 
-### SCH-003: Missing means no acquisition and no acceptable fallback
+### PKG-003：发布要求逐架构运行时和漏洞证明
 
-**Choice:** A decision or `acquired_elsewhere` state marks the expected episode
-acquired. A waiting fallback is acceptable and suppresses a warning. Otherwise a
-following subscription becomes missing after the instance grace period, once.
+**选择：** 发布 manifest 前，GitHub Actions 在 QEMU 下构建可加载的 amd64 和 arm64 镜像。每个镜像从空数据卷启动，提供就绪端点和 SPA，通过容器内 doctor 报告当前迁移 head，以非 root 身份运行，并达到 Docker `healthy` 状态。Trivy 阻止高危或严重的已有修复漏洞。只有两个作业都通过后，才推送多架构镜像、附加证明，并使用 Cosign 无密钥签名。多架构 Node/Python 基础镜像索引和 qBittorrent 契约镜像均按摘要固定。Dependabot 每周为 Python、npm、Docker 和 GitHub Actions 依赖创建分组更新。
 
-**Reason:** The alert should identify absent usable releases, not pressure a
-still-running selection wait or repeatedly notify on every scheduler cycle.
+**理由：** 构建成功既不能证明异构架构镜像可启动，也不能证明最终文件系统可发布。摘要固定使下载器契约可复现，定时更新 PR 则让这些固定值可维护，而不会静默过期。
 
-### SCH-004: Irregular broadcasts are versioned episode-level overrides
+### ACC-001：真实验收使用不可变且脱敏的证据窗口
 
-**Choice:** `schedule_episode_overrides` owns one row per anime and episode key.
-An override may replace the timezone-aware expected time, add an arbitrary safe
-key such as `SP1` or `OVA1`, or mark the episode cancelled. Two keys may share a
-timestamp, which represents a double-episode broadcast. `source` is `manual` in
-the interface and can identify a future provider without changing the merge
-contract. Split cours are represented by explicit rows for their resumed dates.
+**选择：** `anime-rss acceptance` CLI 提供 `preflight`、`start`、`status` 和 `report` 命令。预检要求设置已完成、两个健康订阅源、两个正在追踪且有 Bangumi 标识的动画、通过测试的 qBittorrent 连接和健康调度器。`start` 在 `/data/acceptance` 下写入一个不可变时间戳；重复启动保留原始边界。
 
-The synchronizer builds the numeric weekly baseline, overlays these rows, and
-then reconciles the durable projection. Cancelled keys and keys moved outside
-the activation-to-eight-day horizon make an existing expected row `inactive`
-rather than deleting it. Deleting an override restores the weekly baseline on
-the next sync. A moved or reactivated row clears its stale missing-notification
-claim and is evaluated once at the corrected time.
+状态和报告使用可丢弃、只读、跨模块 SQLite 投影。它们汇总订阅源刷新、跨订阅源发布资源、识别和手动操作、决策、下载器尝试、作业失败、重复任务标识和丢失的决策引用。它们绝不读取端点密文、载荷密文、凭据、原始 magnet 链接或私有 URL 字段。
 
-Mutations are idempotent when values do not change, accept `If-Match` optimistic
-versions, and append create, update, and delete audit events. The merge can only
-emit `EpisodeMissing.v1`; tests assert that overrides cannot create Candidate,
-Decision, or DownloadTask records.
+**理由：** 现有持久化历史已经包含七天运行所需证据。只读投影避免第二套监控写模型，也不能改变 Candidate、Decision、DownloadTask 或用户历史。显式开始标记可防止失败或不完整运行被静默重启，以制造有利窗口。
 
-**Reason:** Irregular schedules need a durable correction layer, but they remain
-advisory broadcast facts. Keeping them inside `schedule` preserves the boundary
-that only recognition and selection can cause acquisition work, while inactive
-history makes corrections and later baseline restoration inspectable.
+**权衡：** 计数可以发现重复和状态完整性失败，但无法证明动画标题的语义匹配正确。最终批准需要人工审核已映射分集。标记可在同一数据卷重启后保留，但有意不进入运维备份归档；全新恢复会重新开始七天计时。
 
-### SYS-001: Locale and missing threshold are versioned instance settings
+### SCH-001：播出计划是下游投影，绝不是获取来源
 
-**Choice:** Timezone, interface language, grace hours, completed setup steps, and
-setup completion live in one optimistic-lock settings row. Stored timestamps
-remain UTC; only query projections convert them.
+**选择：** `schedule` 通过公共 API 读取目录元数据、订阅、筛选时段、决策和实例设置。它负责预期集数记录，只能发出 `EpisodeMissing.v1`。
 
-**Reason:** One instance-owned source keeps UI rendering and background missing
-evaluation consistent while leaving setup progress durable across restarts.
+**理由：** 播出计划仅供参考，可能不完整或错误。将其放在识别和筛选之外，可以从结构上阻止日历记录创建下载器任务。
 
-### SYS-002: Guided setup composes module APIs with fixed durable steps
+### SCH-002：每周预期以首播日期为锚点
 
-**Choice:** The eight step IDs are fixed and ordered. Administrator creation
-records step one in the same transaction; later steps call their owning module's
-normal API and then idempotently record completion. The final candidate step only
-uses the read-only backfill preview query. Existing installations with an
-administrator are marked complete by migration `0010`; clean installations are
-not seeded.
+**选择：** 存储的首播日期和来源当地播出时间定义第 1 集；后续数字集数间隔七天，在已知集数处停止，且不早于订阅激活周期。Bangumi 时间使用 `Asia/Tokyo`；手动计划要求显式 IANA 时区。
 
-**Reason:** The wizard remains a resumable application workflow rather than a
-second implementation of feed, download, catalog, subscription, or selection
-behavior. Upgrades do not force established instances through a new first-run
-flow.
+**权衡：** 生成器不猜测不规则播出。修正由人工或未来服务方适配器提供显式单集事实。
 
-## 4. Parser v1 Contract
+### SCH-003：缺集表示既未获取，也没有可接受备选项
 
-Supported episode shapes:
+**选择：** Decision 或 `acquired_elsewhere` 状态会将预期集数标记为已获取。等待中的备选项可接受，并抑制警告。否则，追踪中订阅在超过实例宽限时间后只进入一次缺集状态。
+
+**理由：** 警告应指出缺少可用发布资源，而不是催促仍在运行的筛选等待，也不能在每次调度循环重复通知。
+
+### SCH-004：不规则播出使用带版本的单集覆盖项
+
+**选择：** `schedule_episode_overrides` 按动画和集数键各负责一条记录。覆盖项可以替换带时区的预期时间、添加 `SP1` 或 `OVA1` 等任意安全键，或将某集标记为取消。两个键可以共享时间戳，表示连续播出两集。界面中的 `source` 为 `manual`，也可以标识未来服务方而不改变合并契约。分割放送通过恢复日期对应的显式记录表示。
+
+同步器构建数字集数每周基线，再覆盖这些记录并对账持久化投影。已取消的键和移出激活至未来八天范围的键，会使现有预期记录变为 `inactive`，而不是删除。删除覆盖项后，下次同步恢复每周基线。移动或重新激活记录会清除过期缺集通知占用，并在修正时间只评估一次。
+
+值未变化时修改保持幂等，接受 `If-Match` 乐观版本，并追加创建、更新和删除审计事件。合并只能发出 `EpisodeMissing.v1`；测试断言覆盖项不能创建 Candidate、Decision 或 DownloadTask 记录。
+
+**理由：** 不规则计划需要持久化修正层，但它们仍是参考性播出事实。将其保留在 `schedule` 中，可以维持只有识别和筛选才能触发获取工作的边界；inactive 历史则让修正及后续基线恢复可检查。
+
+### SYS-001：区域设置和缺集阈值属于带版本实例设置
+
+**选择：** 时区、界面语言、宽限小时数、已完成设置步骤和设置完成状态位于一条乐观锁设置记录中。存储时间戳保持 UTC，只有查询投影进行转换。
+
+**理由：** 单一实例自有来源使 UI 展示和后台缺集评估一致，同时让设置进度可跨重启持久化。
+
+### SYS-002：引导式设置使用固定持久化步骤组合模块 API
+
+**选择：** 八个步骤 ID 固定且有序。创建管理员时在同一事务记录第一步；后续步骤调用所属模块的普通 API，再幂等记录完成。最后的候选项步骤只使用只读历史补全预览查询。已有管理员的安装通过迁移 `0010` 标记为完成；全新安装不预置记录。
+
+**理由：** 向导保持为可恢复的应用工作流，而不是第二套订阅源、下载、目录、订阅或筛选实现。升级不会强迫现有安装重新经历首次运行流程。
+
+## 4. 解析器 v1 契约
+
+支持的集数形式：
 
 - `S01E02`
 - `S01E07.5`
 - `- 02`
 - `- 01-02`
-- bracketed episode numbers such as `[02]`
-- suffix revisions such as `V2`
+- `[02]` 等带方括号集数
+- `V2` 等后缀修订版
 
-Recognized media attributes:
+可识别的媒体属性：
 
-- Resolution: 2160p, 1080p, 720p, 480p and common pixel dimensions.
-- Codec: HEVC/H.265/x265, AVC/H.264/x264, and AV1.
-- Subtitles: simplified Chinese, traditional Chinese, combined simplified and
-  traditional Chinese, RAW, or unknown.
-- Content kinds: episode, batch, movie, and special/OVA/OAD.
+- 分辨率：2160p、1080p、720p、480p 及常见像素尺寸。
+- 编码：HEVC/H.265/x265、AVC/H.264/x264 和 AV1。
+- 字幕：简体中文、繁体中文、简繁双语、RAW 或未知。
+- 内容类型：单集、合集、剧场版和特别篇/OVA/OAD。
 
-Parser changes require a new parser version and fixture coverage. Existing
-attempts are not silently rewritten.
+解析器变更要求新的解析器版本和夹具覆盖。现有尝试不会被静默改写。
 
-## 5. Known Boundaries
+## 5. 已知边界
 
-- Provisional recognition grouping remains visible before a catalog identity is
-  linked through a subscription alias snapshot.
-- Only qBittorrent Web API v2 is implemented; there is no alternate downloader
-  adapter or app-side pause/resume command.
-- qBittorrent save path, category, and tags are defaults captured when the task
-  is planned; later external edits are reflected rather than overwritten.
-- The service does not terminate TLS; secure-cookie mode requires an HTTPS reverse
-  proxy with one consistent browser origin.
-- Backup archives are portable but unencrypted and contain the master key.
-- Restore requires an explicit service restart after upload.
-- The Webhook adapter emits generic JSON; provider-specific message formats are
-  not implemented.
+- 在通过订阅别名快照关联目录标识前，临时识别分组仍然可见。
+- 只实现 qBittorrent Web API v2；没有其他下载器适配器或应用侧暂停/恢复命令。
+- qBittorrent 保存路径、分类和标签是规划任务时捕获的默认值；后续外部编辑会反映到应用中，而不是被覆盖。
+- 服务不终止 TLS；安全 Cookie 模式要求使用具有统一浏览器源的 HTTPS 反向代理。
+- 备份归档可移植但未加密，且包含主密钥。
+- 上传恢复归档后需要显式重启服务。
+- Webhook 适配器发送通用 JSON；未实现服务方专用消息格式。
 
-## 6. Remaining Plan Audit
+## 6. 剩余计划审计
 
-The earlier record incorrectly reduced remaining work to live-feed acceptance.
-The original implementation plan is broader. This matrix is the current source of
-truth; a row is complete only when code and proportionate evidence both exist.
+早期记录错误地将剩余工作缩减为真实订阅源验收。原始实现计划范围更广。下表是当前事实来源；只有代码和与风险相称的证据都存在时，一行才算完成。
 
-| Area | Current evidence | Remaining work |
+| 领域 | 当前证据 | 剩余工作 |
 |---|---|---|
-| Episode span coverage | `0015`, domain/integration/migration/frontend tests | Complete |
-| Subscription lifecycle | All legal commands, archived view, revision-only completed behavior, and archived-stop integration coverage | Complete |
-| Unsupported release handling | `0016`, durable manual task origin, idempotent API, audit evidence, release-page command, backend/frontend tests | Complete |
-| Parser regression contract | `title-rules.v2`, 320-case golden matrix, focused malformed cases, and 512-case Unicode/property gates | Complete |
-| HTTP consistency | `0017`, durable replay/conflict tests, version/precondition tests, cursor traversal tests, structured error tests, and checked OpenAPI/TypeScript contract | Complete |
-| Browser-origin security | Host/IP and proxy-origin policy, Fetch Metadata rejection, bounded per-client setup/login and connection-test limits, deployment documentation, and security integration tests | Complete |
-| Password KDF | Argon2id setup/reset, fixed parameters, successful-login legacy scrypt migration, timestamp preservation, audit event, malformed-hash rejection, and integration coverage | Complete |
-| Startup migration safety | OS-released lock spans restore/check/backup/upgrade; versioned pending schemas receive a validated online `pre-migration` archive; clean/current/failure/contention paths have integration coverage; Compose lifecycle passes | Complete |
-| qBittorrent contract | Explicit 4.6/5.x plus Web API 2 policy; fixed real 4.6.7 and 5.0.4 container acceptance; `0018` persisted two-success removal confirmation; failure reset; delete-before-replacement ordering; migration and integration coverage | Complete |
-| Stable engineering gates | Read-only doctor, temporary OpenAPI drift check, hash-verified Python/npm/Bandit scanning, detached-worktree acceptance, per-architecture image gates, CI parity, checksum-bound release evidence, and `cryptography` 48.0.1 | Complete |
-| External acceptance | Durable seven-day evidence tooling exists | Configure two real feeds, two Bangumi subscriptions, qBittorrent, then complete seven natural days |
+| 分集范围覆盖 | `0015`、领域/集成/迁移/前端测试 | 已完成 |
+| 订阅生命周期 | 全部合法命令、归档视图、已完结状态仅允许修订版的行为，以及归档停止集成覆盖 | 已完成 |
+| 不支持发布资源处理 | `0016`、持久化手动任务来源、幂等 API、审计证据、发布资源页面命令、后端/前端测试 | 已完成 |
+| 解析器回归契约 | `title-rules.v2`、320 用例黄金矩阵、专门错误格式用例和 512 用例 Unicode/属性门禁 | 已完成 |
+| HTTP 一致性 | `0017`、持久化重放/冲突测试、版本/前置条件测试、游标遍历测试、结构化错误测试和受检 OpenAPI/TypeScript 契约 | 已完成 |
+| 浏览器源安全 | Host/IP 与代理源策略、Fetch Metadata 拒绝、单客户端设置/登录及连接测试有界限流、部署文档和安全集成测试 | 已完成 |
+| 密码 KDF | Argon2id 设置/重置、固定参数、成功登录时旧版 scrypt 迁移、时间戳保留、审计事件、错误哈希拒绝和集成覆盖 | 已完成 |
+| 启动迁移安全 | 操作系统释放锁覆盖恢复/检查/备份/升级；待迁移的带版本 schema 获得已验证在线 `pre-migration` 归档；全新/当前/失败/竞争路径有集成覆盖；Compose 生命周期通过 | 已完成 |
+| qBittorrent 契约 | 明确 4.6/5.x 加 Web API 2 策略；固定真实 4.6.7 和 5.0.4 容器验收；`0018` 持久化两次成功删除确认；失败重置；替换前先删除；迁移和集成覆盖 | 已完成 |
+| 稳定工程门禁 | 只读 doctor、临时 OpenAPI 漂移检查、哈希验证的 Python/npm/Bandit 扫描、分离 worktree 验收、逐架构镜像门禁、CI 等价、校验和绑定发布证据及 `cryptography` 48.0.1 | 已完成 |
+| 外部验收 | 已有持久化七天证据工具 | 配置两个真实订阅源、两个 Bangumi 订阅和 qBittorrent，再完成七个自然日 |
 
-After the engineering gates are verified, the remaining implementation-independent
-work is external acceptance. The seven-day clock starts only after its external
-preflight is genuinely satisfied; release-evidence checking remains fail-closed
-until that duration and manual semantic review are complete.
+工程门禁验证后，剩余与实现无关的工作是外部验收。只有外部预检真实满足后才开始七天计时；在时长和手动语义审核完成前，发布证据检查继续采用失败关闭策略。
 
-## 7. Current Verification Evidence
+## 7. 当前验证证据
 
-Verified on 2026-07-22 with `cryptography` 48.0.1, migration `0018`, and parser
-`title-rules.v2`:
+于 2026-07-22 使用 `cryptography` 48.0.1、迁移 `0018` 和解析器 `title-rules.v2` 完成验证：
 
-- Ruff formatting and lint: passed.
-- Pyright: passed with zero errors.
-- Backend: 116 tests passed, 89.15% statement coverage.
-- Frontend: ESLint and TypeScript passed; 14 Vitest tests passed.
-- Production Vite build: passed.
-- OpenAPI regeneration in a temporary directory matched both checked artifacts.
-- Security scanning passed with hashes required for the locked Python runtime
-  graph, no known Python or npm vulnerabilities, and no medium-or-higher Bandit
-  findings.
-- The native-architecture release image started from an empty volume, served its
-  health and SPA endpoints, passed the in-container doctor as the non-root runtime
-  user, and reached Docker health `healthy`.
-- Authentication integration evidence covers Argon2id setup and reset, valid
-  legacy scrypt login migration, timestamp preservation, one-time audit output,
-  session revocation, and malformed or unknown hash rejection.
-- Startup migration evidence covers clean installation, Alembic head inspection,
-  a snapshot that remains at the prior revision, one-time backup behavior,
-  fail-before-migrate ordering, lock timeout, and post-failure recovery evidence.
-- qBittorrent evidence covers explicit version rejection, real 4.6.7/5.0.4
-  containers, add/lookup/delete-without-files, two-pass removal confirmation,
-  failed-query reset, delete-before-replacement ordering, and an
-  `0017 -> 0018 -> 0017 -> 0018` migration round trip.
-- Disposable Compose lifecycle: passed for clean setup, operator backup,
-  in-place upgrade through `0018`, clean-volume restore, and backup-based
-  rollback, including audit history, waiting work, Decision, and DownloadTask
-  associations.
-- Detached-worktree clean-room acceptance passed from the committed revision with
-  fresh Python and npm installs, full verification and security scanning, Compose
-  lifecycle acceptance, and both supported qBittorrent contracts.
-- Container publishing workflow: statically validated for `linux/amd64` and
-  `linux/arm64`, per-architecture runtime smoke and Trivy gates, GHCR tags,
-  BuildKit provenance, SBOM, GitHub attestation, and keyless Cosign signing;
-  cross-architecture execution and registry publication still require an actual
-  GitHub Actions run.
-- Observability and retention integration evidence covers caller-supplied and
-  generated correlation IDs, audit/event propagation, private URL redaction,
-  scheduled cleanup of unmatched history, and preservation of subscription and
-  manual-correction evidence.
-- Feed and recognition integration evidence covers private-URL duplicate
-  rejection, distinct tokenized URLs, encrypted-at-rest URL handling, candidate
-  supersession, immutable prior decisions, and normal evaluation of the corrected
-  candidate.
-- Parser re-run evidence covers concurrent-safe initial recognition, append-only
-  same-version attempts, unchanged-candidate reuse, changed-candidate supersession,
-  immutable prior Decisions, and rejection of low-confidence replacements. The
-  `0013` migration passed an `0012 -> head -> 0012 -> head` round trip, and browser
-  checks covered real command feedback plus narrow-desktop and 390px layouts.
-- Guided-setup integration evidence covers clean administrator setup, ordered and
-  idempotent progress, existing-install migration, default download-path capture,
-  and a read-only final candidate preview.
-- Schedule integration evidence covers UTC-to-instance-timezone rendering,
-  one-time missing notification, acquired-elsewhere recovery, and the absence of
-  download tasks from schedule processing.
-- Episode-override evidence covers postponements, double episodes, special keys,
-  cancellations, split-cour-style explicit dates, horizon deactivation, baseline
-  restoration, optimistic conflicts, timezone validation, corrected missing
-  timing, audit history, and frontend create/edit/delete commands. The `0014`
-  migration passed a `0013 -> head -> 0013 -> head` round trip. A disposable
-  no-auth browser instance verified those commands at 1280px and 390px with no
-  horizontal overflow or console errors.
-- Episode-coverage evidence covers scaled integer/decimal spans, range-to-single
-  suppression, partial-overlap confirmation, explicit manual override, reset-safe
-  history, backfill exclusion, frontend explanation, and migration of prior
-  Decisions plus `acquired_elsewhere` actions. Migration `0015` passed an
-  `0014 -> head -> 0014 -> head` round trip.
-- Subscription-lifecycle evidence covers all legal transitions, rejection of a
-  direct archived-to-following jump, completed-state revision upgrades without
-  ordinary new episodes, archived-state suppression, lifecycle menus, and the
-  separate archived view. A disposable no-auth browser instance verified the
-  active and archived views at 914px and 390px with no horizontal overflow,
-  action overlap, or clipped lifecycle menu.
-- Manual-Release evidence covers the database-enforced origin split, idempotent
-  task reuse, reuse of automatic tasks, unsupported/missing Release rejection,
-  audit correlation, and retention protection. Migration `0016` passed an
-  `0015 -> head -> 0015 -> head` round trip. A disposable no-auth browser
-  instance verified successful BTIH submission, existing-queue status, disabled
-  pure-BTMH actions, and the Release table at desktop and 390px widths with no
-  horizontal overflow or console errors.
-- Parser-regression evidence covers 320 full-output golden combinations across
-  subtitle groups, localized titles, episode forms, and media profiles; focused
-  malformed and unsupported shapes; and 512 deterministic Unicode cases checked
-  for NFKC equivalence, repeatability, and persistence bounds. Rule v2 also
-  proves bounded casefold expansion, 4096-character input truncation, and safe
-  rejection of zero or oversized revisions.
-- HTTP-contract evidence covers durable same-request replay, different-request
-  key conflict, missing and stale preconditions, version preservation for no-op
-  writes, three-page traversal without duplicate or missing rows, invalid cursors,
-  structured errors with caller and generated correlation IDs, and checked
-  OpenAPI headers. Migration `0017` passed an
-  `0016 -> head -> 0016 -> head` round trip, and the disposable Compose lifecycle
-  passed setup, backup, in-place upgrade, clean restore, and rollback.
-- Browser-security evidence covers IP literals, exact and wildcard trusted hosts,
-  untrusted-host rejection, default same-origin writes, cross-origin and cross-site
-  Fetch Metadata rejection, explicit HTTPS proxy origins, per-route login and all
-  three connection-test limits, structured 429 responses, and `Retry-After`.
-- Soak acceptance evidence covers incomplete-preflight refusal, idempotent start,
-  the exact seven-day boundary, redacted reporting, cross-feed observation counts,
-  and duplicate task identity signals.
-- Alias correction evidence proves a newly arriving episode matches after an
-  explicit subscription alias update while the earlier unmatched record remains
-  historical evidence.
+- Ruff 格式化和 lint：通过。
+- Pyright：通过，零错误。
+- 后端：116 项测试通过，语句覆盖率 89.15%。
+- 前端：ESLint 和 TypeScript 通过；14 项 Vitest 测试通过。
+- 生产 Vite 构建：通过。
+- 在临时目录重新生成 OpenAPI，与两份受检生成物一致。
+- 安全扫描通过：锁定的 Python 运行时依赖图强制哈希；没有已知 Python 或 npm 漏洞；Bandit 没有中等级别及以上发现。
+- 原生架构发布镜像从空数据卷启动，提供健康和 SPA 端点，以非 root 运行时用户通过容器内 doctor，并达到 Docker `healthy` 状态。
+- 认证集成证据覆盖 Argon2id 设置与重置、有效旧版 scrypt 登录迁移、时间戳保留、一次性审计输出、Session 撤销，以及错误或未知哈希拒绝。
+- 启动迁移证据覆盖全新安装、Alembic head 检查、保持在先前修订版的快照、一次性备份行为、迁移前失败顺序、锁超时和失败后恢复证据。
+- qBittorrent 证据覆盖显式版本拒绝、真实 4.6.7/5.0.4 容器、添加/查询/不删除文件地删除、两阶段删除确认、失败查询重置、替换前先删除，以及 `0017 -> 0018 -> 0017 -> 0018` 迁移往返。
+- 一次性 Compose 生命周期通过全新设置、运维备份、经 `0018` 原地升级、空数据卷恢复和基于备份的回滚，包括审计历史、等待工作、Decision 和 DownloadTask 关联。
+- 分离 worktree 无污染环境验收针对已提交修订通过，重新安装 Python 与 npm 依赖，执行完整验证和安全扫描、Compose 生命周期验收及两个受支持 qBittorrent 契约。
+- 容器发布工作流已静态验证 `linux/amd64` 和 `linux/arm64`、逐架构运行时冒烟和 Trivy 门禁、GHCR 标签、BuildKit 来源、SBOM、GitHub 证明及 Cosign 无密钥签名；跨架构执行和注册表发布仍需实际运行 GitHub Actions。
+- 可观测性和保留集成证据覆盖调用方提供及生成的关联 ID、审计/事件传播、私有 URL 脱敏、定时清理未匹配历史，以及保留订阅和手动修正证据。
+- 订阅源和识别集成证据覆盖私有 URL 重复拒绝、不同 token URL、加密存储 URL、候选项取代、不可变先前决策和修正候选项正常评估。
+- 解析器重新运行证据覆盖并发安全的初始识别、仅追加同版本尝试、未变化候选项复用、变化候选项取代、不可变先前 Decision 和拒绝低置信度替换。迁移 `0013` 通过 `0012 -> head -> 0012 -> head` 往返；浏览器检查覆盖真实命令反馈、窄桌面和 390px 布局。
+- 引导式设置集成证据覆盖全新管理员设置、有序且幂等的进度、现有安装迁移、默认下载路径捕获和只读最终候选项预览。
+- 播出计划集成证据覆盖 UTC 到实例时区展示、一次性缺集通知、“已通过其他方式获取”恢复，以及播出计划处理不产生下载任务。
+- 单集覆盖项证据覆盖延期、连续两集、特别篇键、取消、分割放送式显式日期、范围停用、基线恢复、乐观冲突、时区验证、修正的缺集时机、审计历史和前端创建/编辑/删除命令。迁移 `0014` 通过 `0013 -> head -> 0013 -> head` 往返。一次性免认证浏览器实例在 1280px 和 390px 下验证这些命令，无水平溢出或控制台错误。
+- 分集覆盖证据覆盖缩放整数/小数范围、范围到单集抑制、部分重叠确认、显式手动覆盖、重置安全历史、历史补全排除、前端解释，以及迁移先前 Decision 与 `acquired_elsewhere` 操作。迁移 `0015` 通过 `0014 -> head -> 0014 -> head` 往返。
+- 订阅生命周期证据覆盖所有合法转换、拒绝直接从归档跳到追踪中、已完结状态只允许修订版升级而不接受普通新集数、归档状态抑制、生命周期菜单和独立归档视图。一次性免认证浏览器实例在 914px 和 390px 下验证活跃及归档视图，无水平溢出、操作重叠或生命周期菜单裁切。
+- 手动 Release 证据覆盖数据库强制的来源分离、幂等任务复用、自动任务复用、不支持/缺失 Release 拒绝、审计关联和保留保护。迁移 `0016` 通过 `0015 -> head -> 0015 -> head` 往返。一次性免认证浏览器实例验证成功提交 BTIH、现有队列状态、禁用纯 BTMH 操作，以及桌面和 390px 宽度下的 Release 表格，无水平溢出或控制台错误。
+- 解析器回归证据覆盖字幕组、本地化标题、集数形式和媒体配置的 320 个完整输出黄金组合；专门的错误和不支持形式；以及针对 NFKC 等价、可重复性和持久化边界检查的 512 个确定性 Unicode 用例。规则 v2 还证明大小写折叠扩展有界、输入截断为 4096 字符，并安全拒绝零或超大修订版。
+- HTTP 契约证据覆盖持久化相同请求重放、不同请求键冲突、缺失及过期前置条件、无操作写入保留版本、三页遍历无重复或缺失记录、无效游标、带调用方及生成关联 ID 的结构化错误和受检 OpenAPI 请求头。迁移 `0017` 通过 `0016 -> head -> 0016 -> head` 往返，一次性 Compose 生命周期通过设置、备份、原地升级、全新恢复和回滚。
+- 浏览器安全证据覆盖 IP 字面量、精确及通配可信主机、不可信主机拒绝、默认同源写入、跨源及跨站 Fetch Metadata 拒绝、显式 HTTPS 代理源、逐路由登录及全部三类连接测试限制、结构化 429 响应和 `Retry-After`。
+- 浸泡验收证据覆盖拒绝不完整预检、幂等启动、精确七天边界、脱敏报告、跨订阅源观测计数和重复任务标识信号。
+- 别名修正证据证明：显式更新订阅别名后，新到达集数能够匹配，同时较早的未匹配记录继续作为历史证据保留。
 
-The two-feed/two-anime external acceptance and seven-day real-feed soak remain
-runtime work and are not inferred from the automated suites. The 2026-07-22
-preflight found administrator setup and the durable scheduler ready, but only
-one healthy feed, zero following Bangumi anime, and no verified qBittorrent
-connection; it therefore correctly refused to start the seven-day clock.
+两个订阅源/两部动画的外部验收和七天真实订阅源浸泡测试仍属于运行时工作，不能从自动化测试套件推断。2026-07-22 的预检发现管理员设置和持久化调度器已就绪，但只有一个健康订阅源、零个追踪中的 Bangumi 动画，且没有已验证 qBittorrent 连接；因此它正确拒绝开始七天计时。

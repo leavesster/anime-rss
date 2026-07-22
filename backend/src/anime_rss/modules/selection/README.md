@@ -1,29 +1,13 @@
-# Selection module
+# 筛选决策模块
 
-Owns deterministic candidate evaluations, fixed fallback deadlines, serialized
-episode slots, immutable decisions, backfill previews, revision upgrades, and
-append-only manual episode actions. It also owns scaled episode-span coverage:
-range decisions append one coverage fact per atomic episode, fully covered later
-releases are skipped, and partial overlaps require an explicit manual selection.
+负责确定性的候选项评估、固定的备选截止时间、串行化的分集时段、不可变决策、历史补全预览、修订版升级，以及仅追加的手动分集操作。它还负责按比例表示跨集范围覆盖：范围决策会为每个原子集数追加一条覆盖事实；后续发布资源若已被完全覆盖则跳过，若仅部分重叠则必须显式手动选择。
 
-Coverage is acquisition history, not mutable slot state. Resetting a decision
-does not erase coverage or make a normal backfill eligible again. A deliberate
-manual candidate selection may cross that boundary and creates another immutable
-Decision plus its own coverage facts.
+覆盖记录表示获取历史，而非可变的时段状态。重置决策不会清除覆盖记录，也不会使普通历史补全重新变为可选。明确的手动候选项选择可以越过该边界，并创建另一条不可变 Decision 及其自己的覆盖事实。
 
-It consumes recognition and subscription DTOs through their public `api.py`
-surfaces. It never reparses titles and never calls a downloader. A committed
-decision emits `DownloadRequested.v1`; replacement also emits
-`DownloadCancellationRequested.v1`, leaving external effects to downloads.
+本模块通过 `recognition` 和 `subscriptions` 的公共 `api.py` 接口使用 DTO。它绝不重新解析标题，也绝不调用下载器。提交决策会发出 `DownloadRequested.v1`；替换还会发出 `DownloadCancellationRequested.v1`，由下载模块负责外部副作用。
 
-Recognition remaps append selection correction actions. Undecided slots using
-the old candidate reopen; decided slots retain their immutable decision snapshot
-while the replacement candidate is evaluated through the normal path.
+识别结果重新映射会追加筛选修正操作。使用旧候选项且尚未决策的时段会重新打开；已经决策的时段保留不可变的决策快照，同时通过正常流程评估替换候选项。
 
-Parser-driven Candidate supersession follows the same reassignment boundary and
-is consumed before replacement evaluation, so an undecided slot cannot retain a
-superseded candidate.
+解析器驱动的 Candidate 取代遵循相同的重新分配边界，并在替换评估前被消费，因此未决策时段不能继续保留已被取代的候选项。
 
-`SelectionService.retained_release_ids` exposes the releases referenced by
-evaluations, decisions, or manual actions so operations can apply retention
-without querying selection-owned tables.
+`SelectionService.retained_release_ids` 会公开被评估、决策或手动操作引用的发布资源，使运维模块可以在不查询筛选决策模块自有表的情况下执行保留策略。

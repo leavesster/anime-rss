@@ -1,12 +1,7 @@
-# Catalog module
+# 目录模块
 
-Owns stable anime identities, imported metadata, aliases, and the bounded
-Bangumi search cache. Other modules consume only DTOs from `api.py`.
+负责稳定的动画标识、导入的元数据、别名，以及有界的 Bangumi 搜索缓存。其他模块只能使用 `api.py` 提供的 DTO。
 
-It also owns advisory weekly airing metadata. Bangumi imports use the provider's
-Japan-local schedule when present; administrators can replace it with an
-explicit date, time, and IANA timezone.
+本模块还负责提供参考性的每周播出元数据。Bangumi 导入在存在数据时采用服务方给出的日本当地播出计划；管理员可以用明确的日期、时间和 IANA 时区覆盖该计划。
 
-It does not parse release titles, rank candidates, or create download decisions.
-External metadata is advisory: local anime records and aliases remain usable
-when Bangumi is unavailable.
+本模块不解析发布资源标题、不对候选项排序，也不创建下载决策。外部元数据仅供参考：即使 Bangumi 不可用，本地动画记录和别名仍然可用。

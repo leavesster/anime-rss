@@ -1,614 +1,540 @@
-# Anime RSS Service Design
+# Anime RSS Service 产品设计
 
-Status: Product design approved
+状态：产品设计已批准
 
-Date: 2026-07-17
+日期：2026-07-17
 
-Target: First public self-hosted release
+目标：首个公开自托管版本
 
-## 1. Product Definition
+## 1. 产品定义
 
-This product is a single-user, self-hosted anime download automation service.
-It periodically reads multiple user-configured RSS or Atom feeds, identifies
-releases for subscribed seasonal TV anime, selects the best acceptable release
-for each episode, and submits it to qBittorrent exactly once.
+本产品是面向单用户、自托管场景的动画下载自动化服务。它会周期性读取用户配置的多个 RSS 或 Atom 订阅源，识别已订阅的当季电视动画发布资源，为每一集选择最佳且可接受的版本，并且只向 qBittorrent 提交一次。
 
-The product is centered on anime subscriptions. RSS feeds are candidate sources,
-not the primary object exposed to users.
+产品以动画订阅为核心。RSS 订阅源只是候选资源来源，不是暴露给用户的主要对象。
 
-The automation boundary ends after a download has been submitted, monitored, and
-confirmed complete. Playback, transcoding, media scraping, and watch progress are
-owned by existing systems such as Jellyfin, Emby, or Plex.
+自动化边界止于下载任务已经提交、受监控并确认完成。播放、转码、媒体刮削和观看进度由 Jellyfin、Emby 或 Plex 等现有系统负责。
 
-## 2. Target User and Deployment
+## 2. 目标用户与部署
 
-- One administrator.
-- Self-hosted on a NAS or Linux machine.
-- Trusted home or private network, while still requiring application login.
-- Distributed as an open-source, reusable tool.
-- Delivered as one Docker container with a persistent data volume.
-- Docker Compose is the primary installation path.
-- Both amd64 and arm64 images are required.
+- 单一管理员。
+- 自托管于 NAS 或 Linux 设备。
+- 部署在可信家庭或私有网络中，但仍要求应用登录。
+- 以开源、可复用工具的形式分发。
+- 作为单个 Docker 容器交付，并使用持久化数据卷。
+- Docker Compose 是主要安装方式。
+- 必须提供 amd64 和 arm64 镜像。
 
-The first release does not support registration, multiple users, roles, shared
-subscriptions, high availability, or public hosted operation.
+首个版本不支持注册、多用户、角色、共享订阅、高可用或公共托管运行。
 
-## 3. Core Workflow
+## 3. 核心流程
 
 ```text
-Configured RSS/Atom feeds
+已配置的 RSS/Atom 订阅源
         |
         v
-Fetch, validate, normalize, and deduplicate entries
+抓取、验证、标准化并去重条目
         |
         v
-Parse release title into structured attributes
+将发布资源标题解析为结构化属性
         |
         v
-Match anime and episode with an explicit confidence level
+以明确置信度匹配动画与集数
         |
         v
-Apply subscription hard filters and ordered preferences
+应用订阅的硬性过滤条件和有序偏好
         |
         v
-Choose immediately or wait for a preferred release
+立即选择，或等待首选发布资源
         |
         v
-Create an idempotent download decision
+创建幂等的下载决策
         |
         v
-Submit to qBittorrent and reconcile task state
+提交到 qBittorrent 并对账同步任务状态
         |
         v
-Complete, fail, get externally removed, or be superseded by V2/V3
+完成、失败、被外部移除，或被 V2/V3 取代
 ```
 
-Every transition that affects a download decision must be persisted. Restarting
-the application must not lose waiting windows, retries, decisions, or task links.
+所有影响下载决策的状态转换都必须持久化。应用重启不得丢失等待窗口、重试、决策或任务关联。
 
-## 4. Scope of Supported Content
+## 4. 支持内容范围
 
-The first release automatically handles currently airing TV anime published as
-individual episode releases.
+首个版本会自动处理当前播出的电视动画单集发布资源。
 
-Supported episode forms:
+支持的集数形式：
 
-- Integer episodes such as `01` and `12`.
-- Decimal episodes such as `7.5`.
-- Episode ranges such as `01-02`.
-- Same-group revisions such as `V2` and `V3`.
+- `01`、`12` 等整数集数。
+- `7.5` 等小数集数。
+- `01-02` 等集数范围。
+- 同字幕组的 `V2`、`V3` 修订版。
 
-The following may be collected and shown, but are not automatically selected:
+以下内容可以收集和展示，但不会被自动选择：
 
-- Movies.
-- OVA and OAD releases.
-- Specials.
-- BDRip batches.
-- Full-season packs.
-- Historical bulk downloads.
+- 剧场版。
+- OVA 和 OAD。
+- 特别篇。
+- BDRip 合集。
+- 整季合集。
+- 历史批量下载。
 
-Users may manually submit unsupported entries to qBittorrent.
+用户可以手动将不受支持的条目提交到 qBittorrent。
 
-## 5. Domain Model
+## 5. 领域模型
 
-The implementation should preserve the following conceptual entities even if
-some are initially represented by fewer database tables.
+即使部分概念最初由较少的数据库表表示，实现也应保留下列概念实体。
 
-### Feed
+### 订阅源（Feed）
 
-Stores the configured URL, authentication method, request headers, refresh
-interval, cache validators, last successful fetch, retry state, and health.
+存储已配置 URL、认证方式、请求头、刷新间隔、缓存验证器、最近一次成功抓取、重试状态和健康状态。
 
-### Feed Entry
+### 订阅源条目（Feed Entry）
 
-Stores source identity, GUID, title, publication time, links, enclosure metadata,
-normalized magnet or torrent reference, fetch time, and parsing status.
+存储来源标识、GUID、标题、发布时间、链接、enclosure 元数据、标准化 magnet 或 torrent 引用、抓取时间和解析状态。
 
-### Release
+### 发布资源（Release）
 
-Represents a unique BitTorrent publication. The final identity is its info hash.
-The same release may be observed in multiple feeds and through multiple entries.
+表示一份唯一的 BitTorrent 发布资源，最终标识是其 info hash。同一发布资源可能通过多个订阅源和多个条目被观测到。
 
-### Anime
+### 动画（Anime）
 
-Stores a stable local ID, Bangumi ID when available, titles, aliases, cover,
-airing metadata, expected episode count, and user overrides.
+存储稳定的本地 ID、可用时的 Bangumi ID、标题、别名、封面、播出元数据、预期集数和用户覆盖项。
 
-### Subscription
+### 订阅（Subscription）
 
-Connects an anime to version rules, aliases, waiting policy, save path, and
-lifecycle state. New subscriptions inherit a global preference profile and may
-override individual fields.
+将动画与版本规则、别名、等待策略、保存路径和生命周期状态关联起来。新订阅继承全局偏好配置，并可覆盖单个字段。
 
-### Episode
+### 分集（Episode）
 
-Represents an expected or observed episode identity. Episode identifiers cannot
-be restricted to integers because decimals and ranges are supported.
+表示预期或已观测到的集数标识。由于支持小数和范围，集数标识不能局限于整数。
 
-### Candidate
+### 候选项（Candidate）
 
-Connects a parsed release to an anime episode and records confidence, normalized
-attributes, filter results, ordered preference comparison, and explanations.
+将解析后的发布资源关联到动画集数，并记录置信度、标准化属性、过滤结果、有序偏好比较和解释。
 
-### Decision
+### 决策（Decision）
 
-Records why a candidate was selected, rejected, delayed, manually overridden, or
-superseded. A decision is separate from the downloader's current task state.
+记录候选项为何被选择、拒绝、延迟、手动覆盖或取代。决策与下载器的当前任务状态相互独立。
 
-### Download Task
+### 下载任务（Download Task）
 
-Stores the adapter, qBittorrent task identity, info hash, actual save path,
-category, tags, last observed state, submission attempts, and external changes.
+存储适配器、qBittorrent 任务标识、info hash、实际保存路径、分类、标签、最近观测状态、提交尝试和外部变更。
 
-### Event
+### 事件（Event）
 
-An append-oriented audit record for automatic decisions, user actions, errors,
-retries, notifications, and reconciliation results.
+面向追加的审计记录，涵盖自动决策、用户操作、错误、重试、通知和对账同步结果。
 
-## 6. Anime Metadata
+## 6. 动画元数据
 
-Bangumi is the primary metadata and search source for the first release.
+Bangumi 是首个版本主要的元数据和搜索来源。
 
-For each anime, cache at least:
+每部动画至少缓存：
 
-- Local permanent ID.
-- Bangumi subject ID.
-- Chinese, Japanese, English, and romanized titles when available.
-- Additional aliases.
-- Air date and airing state.
-- Expected episode count.
-- Broadcast weekday and schedule.
-- Cover reference.
-- User-defined matching aliases.
+- 本地永久 ID。
+- Bangumi 条目 ID。
+- 可用时的中文、日文、英文和罗马字标题。
+- 其他别名。
+- 首播日期和播出状态。
+- 预期集数。
+- 播出星期和时间安排。
+- 封面引用。
+- 用户定义的匹配别名。
 
-External metadata is advisory. RSS ingestion, matching, and downloading must
-continue when Bangumi is unavailable. Users must be able to create a local anime
-record and override imported metadata.
+外部元数据仅供参考。Bangumi 不可用时，RSS 获取、匹配和下载必须继续运行。用户必须能够创建本地动画记录并覆盖导入的元数据。
 
-Bangumi schedules are used for calendar display and missing-episode alerts only.
-They never create download decisions. By default, an episode becomes potentially
-missing 24 hours after its expected airtime if no acceptable candidate exists.
+Bangumi 播出计划只用于日历展示和缺集警告，绝不创建下载决策。默认情况下，如果预期播出时间过去 24 小时仍无可接受候选项，该集可能被判定为缺失。
 
-All stored timestamps use UTC. The interface renders the administrator's chosen
-timezone.
+所有时间戳以 UTC 存储，界面按管理员选择的时区展示。
 
-## 7. Title Parsing and Matching
+## 7. 标题解析与匹配
 
-Title parsing is deterministic and independent of the decision engine. It should
-extract, when present:
+标题解析必须是确定性的，并与决策引擎相互独立。存在相关信息时，应提取：
 
-- Anime title and candidate aliases.
-- Episode number, decimal number, or range.
-- Release group.
-- Resolution.
-- Video codec.
-- Subtitle language and packaging.
-- Revision number.
-- Batch, movie, special, or unsupported-content markers.
+- 动画标题和候选别名。
+- 整数、小数或范围形式的集数。
+- 发布组或字幕组。
+- 分辨率。
+- 视频编码。
+- 字幕语言和封装方式。
+- 修订版号。
+- 合集、剧场版、特别篇或不支持内容的标记。
 
-Each match has a confidence class:
+每次匹配都有一个置信度等级：
 
-- High: safe for automatic decisions.
-- Medium: plausible but requires user confirmation.
-- Low: unrecognized and not eligible for automation.
+- 高：可以安全用于自动决策。
+- 中：结果可信，但需要用户确认。
+- 低：无法识别，不允许参与自动化。
 
-The system must never silently guess when anime or episode identity is ambiguous.
-The interface must explain which alias matched, which fields were extracted, and
-why a candidate was accepted or rejected.
+当动画或集数标识存在歧义时，系统绝不能静默猜测。界面必须解释匹配了哪个别名、提取了哪些字段，以及候选项为何被接受或拒绝。
 
-Manual correction may add an instance-local alias or matching rule. Corrections
-must not become global parsing rules without reviewed regression coverage.
+手动修正可以添加实例本地的别名或匹配规则。未经审核的回归测试覆盖，不得将修正提升为全局解析规则。
 
-The parser requires a fixture-based regression corpus containing real title
-shapes across release groups, languages, episode formats, revisions, resolutions,
-codecs, subtitle variants, misleading years or resolution numbers, malformed
-input, and oversized input. Parsing the same title must always produce the same
-result.
+解析器需要基于夹具的回归语料库，覆盖不同发布组、语言、集数格式、修订版、分辨率、编码、字幕变体、容易误判的年份或分辨率数字、格式错误输入和超长输入。相同标题每次都必须产生相同结果。
 
-The first release does not use an LLM at runtime for title parsing.
+首个版本的运行时标题解析不使用 LLM。
 
-## 8. Version Rules
+## 8. 版本规则
 
-Rules use two separate concepts.
+规则使用两个彼此独立的概念。
 
-### Hard Filters
+### 硬性过滤条件
 
-Hard filters express releases that must never be downloaded, for example:
+硬性过滤条件表示绝不能下载的发布资源，例如：
 
-- Raw releases without subtitles.
-- 4K releases.
-- Unsupported subtitle languages.
-- Batches or specials.
-- Explicitly blocked release groups.
+- 无字幕 RAW 资源。
+- 4K 资源。
+- 不支持的字幕语言。
+- 合集或特别篇。
+- 明确屏蔽的发布组。
 
-### Ordered Preferences
+### 有序偏好
 
-Soft preferences are compared lexicographically instead of through opaque
-numeric weights. The default field order is:
+软偏好按字典序比较，而不是使用不透明的数值权重。默认字段顺序为：
 
-1. Preferred release group order.
-2. Subtitle language order.
-3. Resolution order.
-4. Video codec order.
-5. Revision number.
-6. Publication time.
-7. Info hash as a stable final tie breaker.
+1. 首选发布组顺序。
+2. 字幕语言顺序。
+3. 分辨率顺序。
+4. 视频编码顺序。
+5. 修订版号。
+6. 发布时间。
+7. info hash，作为稳定的最终决胜条件。
 
-Preference values are ordered lists, for example:
+偏好值使用有序列表，例如：
 
 ```text
-Release group: MiaoMeng > LoliHouse > Sakurato
-Resolution: 1080p > 720p
-Codec: HEVC > AVC
+发布组：MiaoMeng > LoliHouse > Sakurato
+分辨率：1080p > 720p
+编码：HEVC > AVC
 ```
 
-The candidate view must identify the first comparison field on which one release
-lost to another.
+候选项视图必须指出某个发布资源首次在哪个比较字段上败给另一个发布资源。
 
-## 9. Selection Timing
+## 9. 筛选时机
 
-Selection uses a preferred-release and fallback-delay model.
+筛选决策采用首选发布资源与备选延迟模型。
 
-- A candidate that satisfies all preferred conditions is submitted immediately.
-- An acceptable fallback starts a configurable waiting window, default two hours.
-- A preferred candidate arriving during the window wins.
-- If the window expires, the best currently acceptable fallback is submitted.
-- Ordinary later releases are ignored after an episode has been downloaded.
-- Waiting deadlines and candidate state survive application restarts.
+- 满足全部首选条件的候选项会立即提交。
+- 可接受的备选候选项会启动可配置的等待窗口，默认两小时。
+- 等待窗口内到达的首选候选项胜出。
+- 等待窗口到期后，提交当前最佳且可接受的备选候选项。
+- 某集下载后，忽略后续普通发布资源。
+- 等待截止时间和候选项状态可跨应用重启保留。
 
-When a subscription is created, only entries first observed after activation are
-eligible for automatic decisions. Historical episodes use an explicit backfill
-flow: scan, choose an episode range, preview selected releases, confirm, and then
-submit. Backfill chooses the current best candidate without a waiting window.
+创建订阅时，只有激活后首次观测到的条目才有资格参与自动决策。历史集数使用显式历史补全流程：扫描、选择集数范围、预览已选发布资源、确认后提交。历史补全直接选择当前最佳候选项，不经过等待窗口。
 
-## 10. Revision Upgrades
+## 10. 修订版升级
 
-A release is an automatic revision upgrade only when anime, episode, and release
-group match and its revision number is higher.
+仅当动画、集数和发布组均匹配，且修订版号更高时，发布资源才属于自动修订版升级。
 
-- If the old task is incomplete, cancel it and submit the new revision.
-- If the old task is complete, submit the new revision and mark the old release
-  as superseded.
-- Never automatically delete completed files.
-- A later release from a different group is not an automatic upgrade.
+- 旧任务未完成时，取消旧任务并提交新修订版。
+- 旧任务已完成时，提交新修订版，并将旧发布资源标记为已被取代。
+- 绝不自动删除已完成文件。
+- 来自不同发布组的后续发布资源不属于自动升级。
 
-## 11. Deduplication and Idempotency
+## 11. 去重与幂等性
 
-Deduplication is layered:
+去重分为多层：
 
-1. BitTorrent info hash is the final release identity.
-2. A normalized magnet link is used when the hash can be extracted from it.
-3. A fetched `.torrent` file is validated and hashed before submission.
-4. `feed + GUID` prevents repeated ingestion from the same source while torrent
-   identity is not yet available.
+1. BitTorrent info hash 是发布资源的最终标识。
+2. 能从 magnet 链接中提取哈希时，使用标准化 magnet 链接。
+3. 抓取的 `.torrent` 文件在提交前必须经过验证并计算哈希。
+4. 当 torrent 标识尚不可用时，`feed + GUID` 用于避免重复获取同一来源条目。
 
-Similar titles are not sufficient evidence that two entries are the same release.
-Every downloader submission has a durable idempotency key. Scheduler retries,
-application restarts, repeated feed observations, and concurrent jobs must never
-submit the same decision twice.
+标题相似不足以证明两个条目是同一发布资源。每次下载器提交都有一个持久化幂等键。调度器重试、应用重启、重复订阅源观测和并发作业绝不能重复提交同一个决策。
 
-## 12. qBittorrent Integration
+## 12. qBittorrent 集成
 
-qBittorrent Web API is the only complete downloader adapter in the first release.
-The internal contract should still be adapter-based so other clients can be
-added later.
+qBittorrent Web API 是首个版本中唯一完整的下载器适配器。内部契约仍应基于适配器设计，以便将来接入其他客户端。
 
-Required capabilities:
+必需能力：
 
-- Authenticate and test connectivity.
-- Add a magnet URI or uploaded `.torrent` payload.
-- Set save path, category, and tags.
-- Query task state and progress.
-- Cancel an incomplete superseded task.
-- Distinguish an existing torrent from a failed submission.
-- Reconcile actual downloader state with local records.
+- 认证并测试连通性。
+- 添加 magnet URI 或上传的 `.torrent` 载荷。
+- 设置保存路径、分类和标签。
+- 查询任务状态和进度。
+- 取消被取代且尚未完成的任务。
+- 区分已存在的 torrent 和提交失败。
+- 对账同步下载器实际状态和本地记录。
 
-qBittorrent is the source of truth for runtime task state. The application is the
-source of truth for selection rationale and history.
+qBittorrent 是运行时任务状态的事实来源。应用是筛选理由和历史记录的事实来源。
 
-External qBittorrent actions are respected:
+应用尊重 qBittorrent 中的外部操作：
 
-- External pause remains paused.
-- External deletion becomes `externally removed` and is not automatically added
-  again.
-- External path or tag changes are reflected in the application.
-- Temporary connection failure retains the last known state and marks it stale;
-  it must not be interpreted as task deletion.
+- 外部暂停后保持暂停。
+- 外部删除会变为 `externally removed`，且不会被自动重新添加。
+- 外部路径或标签变更会反映到应用中。
+- 临时连接失败时保留最近已知状态并标记为过期；不得将其解释为任务已删除。
 
-The application only controls the qBittorrent save path. It does not rename,
-move, hard-link, copy, or delete downloaded files.
+应用只控制 qBittorrent 保存路径，不会重命名、移动、硬链接、复制或删除已下载文件。
 
-## 13. Subscription Lifecycle
+## 13. 订阅生命周期
 
-Subscriptions have four states:
+订阅有四种状态：
 
-- Following: process new releases automatically.
-- Paused: retain rules and history but stop new decisions.
-- Completed: stop expecting ordinary new episodes but continue recognizing
-  same-group V2/V3 revisions.
-- Archived: hide from the daily dashboard and stop all automatic processing.
+- 追踪中：自动处理新发布资源。
+- 已暂停：保留规则和历史，但停止新决策。
+- 已完结：不再预期普通新集数，但继续识别同发布组的 V2/V3 修订版。
+- 已归档：从日常仪表盘隐藏，并停止全部自动处理。
 
-External metadata may suggest completion but cannot automatically archive a
-subscription. Resuming after a pause does not automatically download entries
-observed during the pause; those use the backfill preview flow.
+外部元数据可以建议完结，但不能自动归档订阅。暂停后恢复时，不会自动下载暂停期间观测到的条目；这些条目使用历史补全预览流程。
 
-## 14. Manual Controls and Auditability
+## 14. 手动控制与可审计性
 
-For each episode, the administrator can:
+对于每一集，管理员可以：
 
-- Inspect all candidates and comparison explanations.
-- Select a candidate immediately.
-- Reject a release.
-- Remap a release to the correct anime or episode.
-- Mark an episode as acquired elsewhere.
-- Retry a failed submission.
-- Reset an automatic decision without bypassing info-hash deduplication.
-
-Every action creates an event. Decisions must not be silently overwritten or
-removed to simulate a reset.
-
-## 15. User Interface
-
-The home page is an exception-oriented anime dashboard, not an RSS reader.
-
-It shows:
-
-- Today's and the next seven days' airing schedule.
-- The latest state for each followed anime and episode.
-- Releases waiting for a preferred candidate.
-- Items requiring manual confirmation.
-- Missing-episode warnings.
-- Feed and downloader failures.
-- Recent automatic decisions.
-
-Additional views:
-
-- Anime search and subscription creation.
-- Subscription detail with episodes, candidates, aliases, and overrides.
-- Manual confirmation inbox.
-- Raw release library for search and debugging.
-- Feed management and fetch history.
-- qBittorrent connection and task reconciliation.
-- Global preference profile.
-- Notifications, audit events, backup, and system health.
-
-The web application must be responsive. A phone can review exceptions, inspect
-candidates, select a release, retry a task, and pause a subscription. Complex
-configuration is optimized for desktop. A native app and offline PWA behavior
-are not first-release requirements.
-
-## 16. Initial Setup
-
-An unconfigured installation enters a guided setup flow:
-
-1. Create the administrator password.
-2. Choose timezone and interface language.
-3. Connect to qBittorrent and verify required API capabilities.
-4. Configure default save path, category, and tags.
-5. Add at least one feed and preview normalized entries.
-6. Configure the global version preference profile.
-7. Search for and subscribe to the first anime.
-8. Preview currently known candidates without automatically backfilling them.
-
-Errors must be specific enough to act on, such as authentication failure,
-unsupported feed format, invalid torrent payload, or qBittorrent API rejection.
-
-## 17. Feed Support
-
-The application provides configuration presets for common feed shapes, but users
-supply all actual feed URLs and credentials. It does not operate a central feed,
-torrent index, proxy, or public aggregation service.
-
-Supported configuration:
-
-- Public RSS or Atom URL.
-- Private token embedded in a URL.
-- HTTP Basic Authentication.
-- Custom request headers.
-- Per-feed refresh interval.
-- Manual connectivity and parsing test.
-
-Fetch behavior:
-
-- Default interval: ten minutes.
-- Configurable range: five to sixty minutes.
-- Random jitter to avoid synchronized requests.
-- ETag and Last-Modified support.
-- Exponential retry backoff up to one hour.
-- Immediate credential-error state for HTTP 401 or 403.
-- Persisted retry state across restarts.
-- One failure notification after a threshold and one recovery event.
-
-## 18. Notifications
-
-The first release provides in-application notifications and a generic structured
-JSON webhook.
-
-Notify on:
-
-- Episode submitted for download.
-- Fallback selected after its waiting window.
-- V2/V3 replacement.
-- Repeated feed failure and recovery.
-- Downloader unavailability or submission failure.
-- Item requiring manual confirmation.
-- Episode still missing after the configured schedule threshold.
-
-Platform-specific Telegram, DingTalk, Slack, Gotify, and similar integrations are
-future adapters rather than first-release dependencies.
-
-## 19. Authentication and Secrets
-
-- One administrator account.
-- First-run password creation.
-- Password stored only as a strong password hash.
-- Secure cookie-based web session.
-- API protected by the same authentication boundary.
-- Command-line administrator password reset.
-- Feed, qBittorrent, and webhook credentials encrypted at rest.
-- Secrets and URL tokens redacted from UI diagnostics, logs, and error reports.
-- No registration, password email recovery, OAuth, or role system.
-
-## 20. Network and Input Safety
-
-- Only explicitly configured feed URLs are fetched as feeds.
-- Automatically fetched torrent responses have strict size and time limits.
-- Redirect count is limited.
-- Authentication headers are not forwarded to a different redirect host.
-- Only HTTP(S) torrent downloads and magnet URIs are accepted.
-- Torrent payloads must be valid bencode with valid info dictionaries.
-- Feed descriptions do not cause automatic image, script, or attachment fetches.
-- Internal addresses are allowed for explicitly configured feeds, qBittorrent,
-  and webhooks because private-network self-hosting is a core use case.
-
-## 21. Data Retention and Backup
-
-- Releases and decisions related to subscriptions: retain until the user deletes
-  the subscription data.
-- Unmatched feed entries: retain 90 days.
-- Manually rejected or corrected release fingerprints: retain permanently.
-- Raw feed XML: do not retain during normal successful operation.
-- Redacted parsing-failure payload: retain up to seven days.
-- Rolling application logs: retain 14 days by default.
-- Create a consistent daily SQLite backup and retain seven backups by default.
-- Backup and restore must preserve subscriptions, aliases, rules, decisions,
-  waiting windows, and task links.
-- Credential export is encrypted and handled separately from ordinary readable
-  configuration export.
-
-## 22. Technical Architecture
-
-Recommended first-release stack:
-
-- Python backend.
-- FastAPI for the HTTP API and authentication boundary.
-- SQLAlchemy for persistence.
-- Alembic for schema migrations.
-- SQLite in WAL mode where appropriate.
-- A lightweight scheduler whose durable job state lives in the database.
-- `feedparser` or an equivalent mature RSS/Atom parser.
-- A dedicated deterministic anime-title parsing module.
-- TypeScript and React frontend.
-- OpenAPI-generated frontend API types.
-- Frontend static assets served by the backend in the production container.
-
-The production topology is one application process group and one SQLite data
-volume. Redis, PostgreSQL, and a separate task queue are not required. Scheduler
-leases or database locks must prevent duplicate work if the application briefly
-has overlapping workers during restart.
-
-## 23. Observability
-
-The application should expose:
-
-- Health endpoint for process and database readiness.
-- Feed health and last successful fetch.
-- Bangumi metadata freshness.
-- qBittorrent connectivity and last successful reconciliation.
-- Scheduler job state and next execution time.
-- Pending waiting decisions.
-- Failed submission attempts.
-- Structured logs with correlation IDs for fetch, parse, decision, and submit
-  operations.
-
-Normal health checks must not flood application logs.
-
-## 24. First-Release Non-Goals
-
-- Multiple users, registration, roles, and shared subscriptions.
-- Online playback, transcoding, media scraping, and watch progress.
-- Transmission, Deluge, aria2, and other downloaders.
-- Automatic movies, OVA, specials, BDRip batches, and season packs.
-- Automatic historical backfill without preview and confirmation.
-- Automatic file renaming, moving, copying, hard-linking, or deletion.
-- LLM-based runtime matching.
-- Native mobile applications.
-- Public RSS or torrent indexing.
-- Web-page scraping and resource search.
-- Redis, PostgreSQL, multi-node operation, Kubernetes, and high availability.
-- Plugin marketplace or arbitrary user-script execution.
-- Automatic upgrades across different release groups.
-
-## 25. Delivery Stages
-
-### Stage 1: Ingestion Foundation
-
-- Feed configuration and secure fetching.
-- RSS/Atom normalization.
-- Torrent validation and info-hash identity.
-- Release storage and layered deduplication.
-- Feed health and retry state.
-
-### Stage 2: Anime and Parsing
-
-- Bangumi search and local metadata cache.
-- Local anime and alias management.
-- Deterministic title parser.
-- Confidence classification.
-- Parser fixture corpus and regression suite.
-
-### Stage 3: Subscription Decision Engine
-
-- Global preferences and per-anime overrides.
-- Hard filters and lexicographic preferences.
-- Episode candidates and explanations.
-- Preferred/fallback waiting windows.
-- Backfill preview.
-- V2/V3 upgrade decisions.
-
-### Stage 4: qBittorrent Integration
-
-- Adapter contract.
-- Idempotent submission.
-- Task-state reconciliation.
-- External modification behavior.
-- Retry and failure handling.
-
-### Stage 5: Product Interface
-
-- Administrator setup and login.
-- Initialization wizard.
-- Dashboard and airing calendar.
-- Subscription and episode views.
-- Manual confirmation inbox.
-- Release and audit views.
-- Responsive mobile interactions.
-
-### Stage 6: Operational Delivery
-
-- Webhooks and notifications.
-- Backup, restore, retention, and migrations.
-- Multi-architecture Docker image.
-- Docker Compose documentation.
-- Security review and diagnostic redaction.
-- Seven-day live soak test.
-
-## 26. Acceptance Criteria
-
-The first release is complete only when all of the following hold:
-
-1. A clean Docker Compose environment can complete the setup wizard.
-2. At least two different feeds can be connected and refreshed reliably.
-3. Two currently airing anime can be found through Bangumi and subscribed.
-4. Preferred, fallback, and hard-rejected releases are distinguished correctly.
-5. A fallback waiting window survives an application restart.
-6. The same release observed through multiple feeds is submitted only once.
-7. Temporary qBittorrent downtime can be recovered without duplicate submission.
-8. One manual alias correction causes later entries of that shape to match.
-9. V2 can replace an incomplete task while completed old files remain untouched.
-10. External deletion in qBittorrent is respected and does not trigger re-add.
-11. Backup restoration into a clean container preserves subscriptions, history,
-    waiting jobs, and task associations.
-12. The service runs for seven consecutive days against real feeds without an
-    incorrect anime match, duplicate download, or lost decision state.
-
-## 27. Design Principle
-
-The service must always be able to answer three questions:
-
-1. Why was this release considered to be this anime and episode?
-2. Why did this release win or lose against the other candidates?
-3. Why was this qBittorrent task created, replaced, retried, or left alone?
-
-If a feature cannot preserve those explanations and idempotent behavior, it does
-not belong in the first release.
+- 检查全部候选项及比较解释。
+- 立即选择一个候选项。
+- 拒绝某个发布资源。
+- 将发布资源重新映射到正确的动画或集数。
+- 将某集标记为已通过其他方式获取。
+- 重试提交失败。
+- 重置自动决策，但不能绕过 info-hash 去重。
+
+每次操作都会创建事件。不得通过静默覆盖或删除决策来模拟重置。
+
+## 15. 用户界面
+
+首页是面向异常处理的动画仪表盘，而不是 RSS 阅读器。
+
+它展示：
+
+- 今天及未来七天的播出计划。
+- 每个追踪中动画和集数的最新状态。
+- 正在等待首选候选项的发布资源。
+- 需要手动确认的项目。
+- 缺集警告。
+- 订阅源和下载器故障。
+- 最近的自动决策。
+
+其他视图：
+
+- 动画搜索和订阅创建。
+- 包含集数、候选项、别名和覆盖项的订阅详情。
+- 手动确认收件箱。
+- 用于搜索和调试的原始发布资源库。
+- 订阅源管理和抓取历史。
+- qBittorrent 连接和任务对账同步。
+- 全局偏好配置。
+- 通知、审计事件、备份和系统健康状态。
+
+Web 应用必须支持响应式布局。手机端可以处理异常、查看候选项、选择发布资源、重试任务和暂停订阅。复杂配置主要针对桌面端优化。原生应用和离线 PWA 行为不属于首个版本要求。
+
+## 16. 初始设置
+
+未配置的安装实例会进入引导式设置流程：
+
+1. 创建管理员密码。
+2. 选择时区和界面语言。
+3. 连接 qBittorrent，并验证必需的 API 能力。
+4. 配置默认保存路径、分类和标签。
+5. 添加至少一个订阅源并预览标准化条目。
+6. 配置全局版本偏好。
+7. 搜索并订阅第一部动画。
+8. 预览当前已知候选项，但不自动执行历史补全。
+
+错误必须具体到足以采取行动，例如认证失败、不支持的订阅源格式、无效 torrent 载荷或 qBittorrent API 拒绝。
+
+## 17. 订阅源支持
+
+应用为常见订阅源格式提供配置预设，但所有实际订阅源 URL 和凭据均由用户提供。应用不运营中央订阅源、种子索引、代理或公共聚合服务。
+
+支持的配置：
+
+- 公共 RSS 或 Atom URL。
+- URL 中嵌入的私有 token。
+- HTTP Basic Authentication。
+- 自定义请求头。
+- 单订阅源刷新间隔。
+- 手动连通性和解析测试。
+
+抓取行为：
+
+- 默认间隔：10 分钟。
+- 可配置范围：5 至 60 分钟。
+- 通过随机抖动避免同步请求。
+- 支持 ETag 和 Last-Modified。
+- 指数退避重试，最长一小时。
+- HTTP 401 或 403 会立即进入凭据错误状态。
+- 重试状态可跨重启持久化。
+- 达到阈值时发送一次失败通知，恢复时发送一次恢复事件。
+
+## 18. 通知
+
+首个版本提供应用内通知和通用结构化 JSON Webhook。
+
+以下情况触发通知：
+
+- 已提交某集下载。
+- 等待窗口结束后选择了备选资源。
+- V2/V3 替换。
+- 订阅源重复失败及恢复。
+- 下载器不可用或提交失败。
+- 某项目需要手动确认。
+- 超过配置的播出计划阈值后仍然缺集。
+
+Telegram、钉钉、Slack、Gotify 等平台专用集成属于未来适配器，不是首个版本依赖。
+
+## 19. 认证与密钥
+
+- 单一管理员账户。
+- 首次运行时创建密码。
+- 密码只以强密码哈希形式存储。
+- 使用安全的 Cookie Web Session。
+- API 受相同认证边界保护。
+- 支持通过命令行重置管理员密码。
+- 订阅源、qBittorrent 和 Webhook 凭据加密存储。
+- UI 诊断、日志和错误报告会脱敏密钥及 URL token。
+- 不支持注册、密码邮件找回、OAuth 或角色系统。
+
+## 20. 网络与输入安全
+
+- 只将显式配置的订阅源 URL 作为订阅源抓取。
+- 自动抓取 torrent 响应时有严格的大小和时间限制。
+- 限制重定向次数。
+- 认证请求头不会转发到不同的重定向主机。
+- 只接受 HTTP(S) torrent 下载和 magnet URI。
+- Torrent 载荷必须是有效 bencode，且包含有效 info 字典。
+- 订阅源描述不会触发自动获取图片、脚本或附件。
+- 由于私有网络自托管是核心场景，显式配置的订阅源、qBittorrent 和 Webhook 允许使用内部地址。
+
+## 21. 数据保留与备份
+
+- 与订阅相关的发布资源和决策：保留到用户删除订阅数据为止。
+- 未匹配的订阅源条目：保留 90 天。
+- 手动拒绝或修正的发布资源指纹：永久保留。
+- 原始订阅源 XML：正常成功运行时不保留。
+- 脱敏的解析失败载荷：最多保留 7 天。
+- 滚动应用日志：默认保留 14 天。
+- 每日创建一致性 SQLite 备份，默认保留 7 份。
+- 备份和恢复必须保留订阅、别名、规则、决策、等待窗口和任务关联。
+- 凭据导出必须加密，并与普通可读配置导出分开处理。
+
+## 22. 技术架构
+
+推荐的首个版本技术栈：
+
+- Python 后端。
+- FastAPI，提供 HTTP API 和认证边界。
+- SQLAlchemy，负责持久化。
+- Alembic，负责 schema 迁移。
+- 在合适场景下使用 WAL 模式的 SQLite。
+- 轻量调度器，持久化作业状态存储在数据库中。
+- `feedparser` 或同等成熟的 RSS/Atom 解析器。
+- 独立的确定性动画标题解析模块。
+- TypeScript 与 React 前端。
+- 通过 OpenAPI 生成前端 API 类型。
+- 生产容器由后端提供前端静态资源。
+
+生产拓扑是一个应用进程组和一个 SQLite 数据卷。不需要 Redis、PostgreSQL 或独立任务队列。如果应用重启时短暂存在重叠工作器，必须通过调度器租约或数据库锁阻止重复工作。
+
+## 23. 可观测性
+
+应用应提供：
+
+- 进程和数据库就绪状态的健康端点。
+- 订阅源健康状态及最近一次成功抓取。
+- Bangumi 元数据新鲜度。
+- qBittorrent 连通性和最近一次成功对账同步。
+- 调度器作业状态和下次执行时间。
+- 等待中的筛选决策。
+- 失败的提交尝试。
+- 带关联 ID 的结构化日志，覆盖抓取、解析、决策和提交操作。
+
+普通健康检查不得淹没应用日志。
+
+## 24. 首个版本不包含的目标
+
+- 多用户、注册、角色和共享订阅。
+- 在线播放、转码、媒体刮削和观看进度。
+- Transmission、Deluge、aria2 及其他下载器。
+- 自动处理剧场版、OVA、特别篇、BDRip 合集和整季包。
+- 未经预览和确认的自动历史补全。
+- 自动重命名、移动、复制、硬链接或删除文件。
+- 基于 LLM 的运行时匹配。
+- 原生移动应用。
+- 公共 RSS 或种子索引。
+- 网页抓取和资源搜索。
+- Redis、PostgreSQL、多节点运行、Kubernetes 和高可用。
+- 插件市场或任意用户脚本执行。
+- 不同发布组之间的自动升级。
+
+## 25. 交付阶段
+
+### 阶段 1：获取基础
+
+- 订阅源配置和安全抓取。
+- RSS/Atom 标准化。
+- Torrent 验证和 info-hash 标识。
+- 发布资源存储和分层去重。
+- 订阅源健康状态和重试状态。
+
+### 阶段 2：动画与解析
+
+- Bangumi 搜索和本地元数据缓存。
+- 本地动画和别名管理。
+- 确定性标题解析器。
+- 置信度分类。
+- 解析器夹具语料库和回归测试套件。
+
+### 阶段 3：订阅决策引擎
+
+- 全局偏好和单动画覆盖项。
+- 硬性过滤和字典序偏好。
+- 分集候选项和解释。
+- 首选/备选等待窗口。
+- 历史补全预览。
+- V2/V3 升级决策。
+
+### 阶段 4：qBittorrent 集成
+
+- 适配器契约。
+- 幂等提交。
+- 任务状态对账同步。
+- 外部修改行为。
+- 重试和失败处理。
+
+### 阶段 5：产品界面
+
+- 管理员设置和登录。
+- 初始化向导。
+- 仪表盘和播出日历。
+- 订阅和分集视图。
+- 手动确认收件箱。
+- 发布资源和审计视图。
+- 响应式移动端交互。
+
+### 阶段 6：运维交付
+
+- Webhook 和通知。
+- 备份、恢复、保留策略和迁移。
+- 多架构 Docker 镜像。
+- Docker Compose 文档。
+- 安全审核和诊断信息脱敏。
+- 七天真实环境浸泡测试。
+
+## 26. 验收标准
+
+只有满足以下全部条件，首个版本才算完成：
+
+1. 全新的 Docker Compose 环境可以完成设置向导。
+2. 至少可以连接并可靠刷新两个不同订阅源。
+3. 可以通过 Bangumi 找到并订阅两部当前播出的动画。
+4. 可以正确区分首选、备选和被硬性拒绝的发布资源。
+5. 备选等待窗口可以跨应用重启保留。
+6. 通过多个订阅源观测到的同一发布资源只提交一次。
+7. qBittorrent 临时停机后可以恢复，且不会重复提交。
+8. 一次手动别名修正会使后续同类条目成功匹配。
+9. V2 可以替换未完成任务，同时不触碰已完成的旧文件。
+10. 尊重 qBittorrent 中的外部删除，且不会触发重新添加。
+11. 将备份恢复到全新容器后，订阅、历史、等待作业和任务关联均得以保留。
+12. 服务连续七天连接真实订阅源运行，期间没有错误动画匹配、重复下载或决策状态丢失。
+
+## 27. 设计原则
+
+服务必须始终能够回答三个问题：
+
+1. 为什么这个发布资源被认定为这部动画的这一集？
+2. 为什么这个发布资源在与其他候选项比较时胜出或落败？
+3. 为什么这个 qBittorrent 任务被创建、替换、重试或保持不变？
+
+如果一项功能无法保留这些解释并维持幂等行为，它就不属于首个版本。

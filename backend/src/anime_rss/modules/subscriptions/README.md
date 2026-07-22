@@ -1,10 +1,5 @@
-# Subscriptions module
+# 订阅模块
 
-Owns subscription lifecycle, activation cutoffs, title-key snapshots, the
-versioned global preference profile, and explicit per-subscription overrides. It
-exposes an immutable selection-facing DTO with resolved effective rules from
-`api.py`.
+负责订阅生命周期、激活截止时间、标题键快照、带版本的全局偏好配置，以及明确的单订阅覆盖项。它通过 `api.py` 向筛选决策模块提供不可变 DTO，其中包含解析后的有效规则。
 
-It does not parse titles, rank candidates, or contact a downloader. Resuming a
-subscription starts a new activation epoch; releases first seen while paused
-remain historical and require backfill.
+本模块不解析标题、不对候选项排序，也不联系下载器。恢复订阅会开始一个新的激活周期；暂停期间首次出现的发布资源仍属于历史数据，必须通过历史补全处理。

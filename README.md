@@ -1,46 +1,38 @@
 # Anime RSS Service
 
-Single-user, self-hosted anime RSS ingestion and download automation. Product
-requirements live in `DESIGN.md`; module boundaries and dependency rules live
-in `ARCHITECTURE.md`; implemented behavior and concrete choices are tracked in
-`IMPLEMENTATION.md`; first-release proof is tracked in `ACCEPTANCE.md`.
+面向单用户、自托管场景的动画 RSS 获取与下载自动化服务。产品需求见 `DESIGN.md`；模块边界和依赖规则见 `ARCHITECTURE.md`；已实现行为和具体选择记录在 `IMPLEMENTATION.md`；首个版本的验收证据记录在 `ACCEPTANCE.md`。
 
-## Current implementation status
+## 当前实现状态
 
-The feed-to-qBittorrent product path and self-hosted delivery layer are implemented:
+从订阅源到 qBittorrent 的产品链路和自托管交付层已经实现：
 
-- FastAPI application and SQLite/Alembic runtime
-- encrypted feed URLs, headers, magnet links, and torrent payloads
-- bounded RSS/Atom fetching with safe redirect handling and cache validators
-- persisted feed health, retry state, fetch history, and normalized entries
-- exact raw bencoded `info` hashing for v1, hybrid, and pure v2 torrents
-- cross-feed release deduplication through durable integration events
-- durable scheduler leases, execution history, recovery, and automatic feed refresh
-- responsive React dashboard, feed management, fetch history, and release library
-- generated TypeScript API types and production static asset serving
-- deterministic title recognition and same-episode candidate grouping
-- local/Bangumi anime catalog and lifecycle-aware subscriptions
-- deterministic hard filters, ordered preferences, fallback waits, and backfill decisions
-- encrypted qBittorrent configuration and connectivity validation
-- idempotent magnet/torrent submission, task reconciliation, and explicit retry
-- qBittorrent 4.6/5.x Web API compatibility checks and two-pass deletion confirmation
-- V2/V3 cancellation without deleting completed files
-- dependency health, failed-work aggregation, and append-only audit history
-- manual candidate confirmation and unmatched-release mapping
-- first-run administrator setup, session cookies, and CSRF-protected mutations
-- in-application notifications and encrypted Webhook delivery with durable retry
-- portable SQLite and master-key backups, retention, and restart-safe restore staging
-- serialized startup migration with automatic consistent pre-migration backups
-- production image, Compose data volume, readiness health check, and non-root runtime
-- versioned implementation decision record for handoff and review
-- advisory airing calendar, versioned per-episode overrides, episode history, and one-time
-  missing warnings
+- FastAPI 应用及 SQLite/Alembic 运行时
+- 加密存储订阅源 URL、请求头、magnet 链接和 torrent 载荷
+- 有界 RSS/Atom 抓取、安全重定向处理和缓存验证器
+- 持久化订阅源健康状态、重试状态、抓取历史和标准化条目
+- 对 v1、混合型和纯 v2 种子的原始 bencode `info` 精确计算哈希
+- 通过持久化集成事件实现跨订阅源发布资源去重
+- 持久化调度器租约、执行历史、恢复和自动订阅源刷新
+- 响应式 React 仪表盘、订阅源管理、抓取历史和发布资源库
+- 生成 TypeScript API 类型并在生产环境提供静态资源
+- 确定性标题识别和同集候选项分组
+- 本地/Bangumi 动画目录及感知生命周期的订阅
+- 确定性硬性过滤、有序偏好、备选等待和历史补全决策
+- 加密的 qBittorrent 配置和连通性验证
+- 幂等的 magnet/torrent 提交、任务对账同步和显式重试
+- qBittorrent 4.6/5.x Web API 兼容性检查及两阶段删除确认
+- 取消 V2/V3 任务时不删除已完成文件
+- 依赖健康状态、失败工作汇总和仅追加审计历史
+- 手动确认候选项及未匹配发布资源映射
+- 首次运行管理员设置、Session Cookie 和受 CSRF 保护的修改操作
+- 应用内通知，以及带持久化重试的加密 Webhook 投递
+- 可移植的 SQLite 与主密钥备份、保留策略和重启安全的恢复暂存
+- 串行化启动迁移，并在迁移前自动创建一致性备份
+- 生产镜像、Compose 数据卷、就绪健康检查和非 root 运行时
+- 带版本的实现决策记录，便于交接和审核
+- 参考性播出日历、带版本的单集覆盖项、分集历史和一次性缺集警告
 
-The application is designed for one administrator and one process. Put it behind
-HTTPS before exposing it outside a trusted network and set
-`ANIME_RSS_AUTH_COOKIE_SECURE=true` when TLS terminates at the service origin.
-IP-address access and `localhost` work by default. A hostname or reverse proxy
-must also declare its browser boundary:
+应用按单管理员、单进程设计。若要暴露到可信网络以外，请置于 HTTPS 后方；当 TLS 在服务源站终止时，设置 `ANIME_RSS_AUTH_COOKIE_SECURE=true`。默认支持使用 IP 地址和 `localhost` 访问。使用主机名或反向代理时，还必须声明浏览器信任边界：
 
 ```bash
 ANIME_RSS_BROWSER_TRUSTED_HOSTS="anime.home,anime.example" \
@@ -49,14 +41,7 @@ ANIME_RSS_AUTH_COOKIE_SECURE=true \
 docker compose up -d
 ```
 
-Trusted hosts are comma-separated hostnames and may use a leading `*.` wildcard.
-Trusted origins are exact comma-separated HTTP(S) origins including any non-default
-port. Keep the proxy's original `Host` header. The service rejects untrusted Host,
-cross-origin writes, and cross-site Fetch Metadata before business commands run.
-Setup and login allow five attempts per five minutes per client address; feed,
-qBittorrent, and Webhook connection tests allow ten attempts per minute. Because
-forwarded client IP headers are not trusted, clients behind one proxy intentionally
-share its conservative limit bucket.
+可信主机是以逗号分隔的主机名，可以使用前置 `*.` 通配符。可信源是以逗号分隔的精确 HTTP(S) 源，非默认端口也必须包含在内。代理应保留原始 `Host` 请求头。业务命令执行前，服务会拒绝不可信 Host、跨源写入和跨站 Fetch Metadata。初始设置和登录按客户端地址限制为每 5 分钟 5 次；订阅源、qBittorrent 和 Webhook 连接测试限制为每分钟 10 次。由于服务不信任转发的客户端 IP 请求头，处于同一代理后的客户端会有意共享该代理对应的保守限流桶。
 
 ## Docker Compose
 
@@ -64,18 +49,15 @@ share its conservative limit bucket.
 docker compose up -d --build
 ```
 
-Open `http://127.0.0.1:8080` and complete the administrator setup. Compose stores
-the database, encryption key, seven rolling backup archives, and 14 days of JSONL
-application logs in the `anime-rss-data` volume. Do not delete or recreate that
-volume during an image upgrade.
+打开 `http://127.0.0.1:8080`，完成管理员设置。Compose 会把数据库、加密密钥、7 份滚动备份归档和 14 天的 JSONL 应用日志存储在 `anime-rss-data` 数据卷中。升级镜像时不要删除或重建该数据卷。
 
-To run a published image instead of building locally, set `ANIME_RSS_IMAGE`:
+若要直接运行已发布镜像而不是在本地构建，请设置 `ANIME_RSS_IMAGE`：
 
 ```bash
 ANIME_RSS_IMAGE=ghcr.io/OWNER/anime-rss-service:VERSION docker compose up -d
 ```
 
-Create an operator backup before upgrades either in the system page or with:
+升级前，请通过系统页面或以下命令创建运维备份：
 
 ```bash
 docker compose exec anime-rss anime-rss backup --data-dir /data
@@ -84,26 +66,20 @@ docker compose up -d
 docker compose ps
 ```
 
-Migrations run before HTTP and scheduled work starts. Restore and migration work
-is serialized by an OS file lock; an existing versioned database receives a
-`pre-migration` archive before Alembic changes it. Clean installs and restarts on
-the current schema do not create one. Lock acquisition waits 60 seconds by default
-and can be bounded with `ANIME_RSS_MIGRATION_LOCK_TIMEOUT_SECONDS`.
+迁移会在 HTTP 服务和调度工作启动前运行。恢复和迁移操作通过操作系统文件锁串行化；Alembic 修改已有版本的数据库之前，会先创建一份 `pre-migration` 归档。全新安装和已使用当前 schema 的重启不会创建该归档。获取锁默认最多等待 60 秒，可以通过 `ANIME_RSS_MIGRATION_LOCK_TIMEOUT_SECONDS` 限制等待时间。
 
-To roll back application data, upload a `.backup` archive in the system page and
-restart the container:
+若要回滚应用数据，请在系统页面上传 `.backup` 归档并重启容器：
 
 ```bash
 docker compose restart anime-rss
 ```
 
-Restore archives contain the master encryption key and must be protected like
-credentials. Applying a staged restore creates a `pre-restore` archive first.
+恢复归档包含主加密密钥，必须像凭据一样妥善保护。应用已暂存的恢复前，会先创建一份 `pre-restore` 归档。
 
-## Development
+## 开发
 
-Python 3.13 is required.
-Node.js 22 is required for frontend development.
+需要 Python 3.13。
+前端开发需要 Node.js 22。
 
 ```bash
 python3 -m venv .venv
@@ -114,14 +90,9 @@ make migrate
 make run
 ```
 
-Build the web application with `make build-web`. The backend then serves both
-the interface and API at `http://127.0.0.1:8080`; OpenAPI remains available at
-`/docs`. During frontend development, run `make run-web` in a second terminal
-and open `http://127.0.0.1:5173`; Vite proxies API calls to the backend. Runtime
-data defaults to `./data` and is ignored by Git.
+使用 `make build-web` 构建 Web 应用。之后，后端会在 `http://127.0.0.1:8080` 同时提供界面和 API；OpenAPI 仍可通过 `/docs` 访问。前端开发期间，在第二个终端中运行 `make run-web` 并打开 `http://127.0.0.1:5173`；Vite 会把 API 调用代理到后端。运行时数据默认存放在 `./data`，并被 Git 忽略。
 
-The stable engineering gates are exposed through the Makefile rather than hidden
-inside CI:
+稳定的工程门禁通过 Makefile 对外提供，而不是隐藏在 CI 中：
 
 ```bash
 make doctor
@@ -130,58 +101,28 @@ make security-scan
 make clean-room-acceptance
 ```
 
-`doctor` is a read-only installation check for data-directory access, SQLite
-integrity and migration head, the 32-byte `0600` master key, staged restore state,
-and built web assets. `openapi-check` regenerates into a temporary directory and
-fails if either checked generated artifact is stale. `security-scan` audits locked
-Python and npm dependencies and rejects medium-or-higher Bandit findings; it needs
-network access to the vulnerability databases. `clean-room-acceptance` requires a
-clean commit, creates a detached worktree with fresh Python and npm installs, then
-runs verification, security, Compose lifecycle, and both supported qBittorrent
-contracts.
+`doctor` 是只读安装检查，涵盖数据目录访问、SQLite 完整性和迁移 head、32 字节且权限为 `0600` 的主密钥、已暂存恢复状态，以及构建后的 Web 资源。`openapi-check` 会在临时目录中重新生成文件，只要任一受检生成物已过期就会失败。`security-scan` 审计已锁定的 Python 和 npm 依赖，并拒绝 Bandit 中等级别及以上的发现；它需要联网访问漏洞数据库。`clean-room-acceptance` 要求当前提交无未提交改动，然后创建分离的 worktree，重新安装 Python 和 npm 依赖，再执行验证、安全检查、Compose 生命周期测试和两个受支持的 qBittorrent 契约测试。
 
-Release candidates use immutable evidence directories:
+候选发布版本使用不可变的证据目录：
 
 ```bash
 cp scripts/release-review-template.md release-review.md
-# Complete the three review items after the seven-day soak.
+# 完成七天浸泡测试后的三个审核项。
 make release-evidence VERSION=0.1.0
 make release-evidence-check VERSION=0.1.0
 ```
 
-The first command records the exact commit and automated clean-room log, captures
-the completed redacted real-feed soak report, and seals the completed manual
-review under `release-evidence/<version>/`. It refuses to create partial evidence.
-The checker rejects checksum drift, a different
-commit, an incomplete seven-day soak, pending preconditions, unchecked review
-items, or a dirty worktree. Evidence directories are intentionally ignored by Git
-and should be archived with the release instead of edited in place.
+第一条命令会记录精确提交和自动化无污染环境日志，捕获已完成且脱敏的真实订阅源浸泡测试报告，并将已完成的手动审核封存在 `release-evidence/<version>/` 下。它拒绝生成不完整证据。检查器会拒绝校验和漂移、提交不一致、七天浸泡测试未完成、前置条件待处理、审核项未勾选或工作区不干净等情况。证据目录会被 Git 有意忽略，应随发布版本归档，而不能原地编辑。
 
-Run `make acceptance-compose` before changing image packaging, migrations, or
-backup behavior. It builds a historical baseline and the current image, then
-verifies clean setup, backup, in-place upgrade, clean-volume restore, and
-backup-based rollback with disposable Compose projects.
+修改镜像打包、迁移或备份行为前，请运行 `make acceptance-compose`。它会构建历史基线和当前镜像，然后使用一次性 Compose 项目验证全新设置、备份、原地升级、空数据卷恢复和基于备份的回滚。
 
-Run `make acceptance-qbittorrent` after changing the downloader adapter. It uses
-digest-pinned qBittorrent 4.6.7 and 5.0.4 containers to exercise the real Web API
-contract.
+修改下载器适配器后，请运行 `make acceptance-qbittorrent`。它使用按摘要固定的 qBittorrent 4.6.7 和 5.0.4 容器验证真实 Web API 契约。
 
-Container publication is gated by separate amd64 and arm64 image builds. Each
-architecture must start from an empty volume, serve the SPA and readiness endpoint,
-pass the in-container doctor as a non-root user, reach Docker health `healthy`, and
-pass a high/critical Trivy scan before the multi-architecture manifest is pushed.
-The published digest receives an SBOM, provenance attestation, and keyless Cosign
-signature. Dependabot proposes weekly Python, npm, Docker, and Actions lock updates.
-The Dockerfile and qBittorrent contract matrix retain readable version labels while
-pinning their multi-architecture image indexes by digest.
+容器发布受 amd64 和 arm64 两套独立镜像构建门禁约束。每个架构都必须从空数据卷启动，提供 SPA 和就绪端点，以非 root 用户通过容器内 doctor 检查，达到 Docker `healthy` 健康状态，并通过 Trivy 高危/严重漏洞扫描，之后才会推送多架构 manifest。已发布的摘要会附带 SBOM、来源证明和无密钥 Cosign 签名。Dependabot 每周提出 Python、npm、Docker 和 Actions 锁定版本更新。Dockerfile 和 qBittorrent 契约矩阵会保留可读的版本标签，同时按摘要固定多架构镜像索引。
 
-For real-feed release acceptance, run `make acceptance-soak-preflight`. After it
-reports two healthy feeds, two following Bangumi anime, a verified qBittorrent
-connection, and a healthy scheduler, run `make acceptance-soak-start` once.
-`make acceptance-soak-status` and `make acceptance-soak-report` inspect the
-immutable seven-day window without exposing feed URLs or downloader credentials.
+真实订阅源发布验收使用 `make acceptance-soak-preflight`。当它报告两个健康订阅源、两个正在追踪的 Bangumi 动画、已验证的 qBittorrent 连接和健康调度器后，只运行一次 `make acceptance-soak-start`。`make acceptance-soak-status` 和 `make acceptance-soak-report` 可检查不可变的七天窗口，且不会暴露订阅源 URL 或下载器凭据。
 
-## Implemented API
+## 已实现 API
 
 ```text
 GET    /api/v1/health/live
