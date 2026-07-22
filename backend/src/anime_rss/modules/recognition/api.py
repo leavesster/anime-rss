@@ -29,13 +29,15 @@ from anime_rss.modules.recognition.persistence import (
     ManualActionRecord,
     MatchAttemptRecord,
 )
-from anime_rss.modules.releases.api import ReleaseRecognitionSource
+from anime_rss.modules.releases.api import ReleaseRecognitionSource, ReleaseReference
 
 
 class RecognitionSourceProvider(Protocol):
     def get_recognition_source(
         self, release_id: str, feed_entry_id: str
     ) -> ReleaseRecognitionSource | None: ...
+
+    def get_references(self, release_ids: set[str]) -> dict[str, ReleaseReference]: ...
 
 
 class CatalogTitleResolver(Protocol):
@@ -70,6 +72,7 @@ class Candidate:
     supersedes_candidate_id: str | None
     superseded_by_candidate_id: str | None
     superseded_at: datetime | None
+    source_url: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,6 +98,7 @@ class UnmatchedRelease:
     confidence: str
     reason_code: str
     parsed_at: datetime
+    source_url: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -631,7 +635,10 @@ class RecognitionService:
             )
             grouped[(identity, record.episode_key)].append(record)
 
-        groups = [self._to_group(key, candidates) for key, candidates in grouped.items()]
+        references = self._sources.get_references({record.release_id for record in records})
+        groups = [
+            self._to_group(key, candidates, references) for key, candidates in grouped.items()
+        ]
         groups.sort(key=lambda group: (group.latest_seen_at, group.key), reverse=True)
         return groups[:limit]
 
@@ -664,17 +671,23 @@ class RecognitionService:
                 .order_by(MatchAttemptRecord.parsed_at.desc())
                 .limit(min(max(limit, 1), 500))
             )
-            return [
-                UnmatchedRelease(
-                    id=record.id,
-                    release_id=record.release_id,
-                    source_title=record.source_title,
-                    confidence=record.confidence,
-                    reason_code=record.reason_code,
-                    parsed_at=record.parsed_at,
+            records = list(session.scalars(statement))
+            references = self._sources.get_references({record.release_id for record in records})
+            unmatched: list[UnmatchedRelease] = []
+            for record in records:
+                reference = references.get(record.release_id)
+                unmatched.append(
+                    UnmatchedRelease(
+                        id=record.id,
+                        release_id=record.release_id,
+                        source_title=record.source_title,
+                        confidence=record.confidence,
+                        reason_code=record.reason_code,
+                        parsed_at=record.parsed_at,
+                        source_url=reference.source_url if reference is not None else None,
+                    )
                 )
-                for record in session.scalars(statement)
-            ]
+            return unmatched
 
     def dismiss_release(self, release_id: str) -> None:
         now = self._clock()
@@ -960,7 +973,10 @@ class RecognitionService:
     def get_candidate(self, candidate_id: str) -> Candidate | None:
         with self._session_factory() as session:
             record = session.get(CandidateRecord, candidate_id)
-            return self._to_candidate(record) if record is not None else None
+            if record is None:
+                return None
+            reference = self._sources.get_references({record.release_id}).get(record.release_id)
+            return self._to_candidate(record, reference)
 
     def list_candidates_for_anime_id(self, anime_id: str) -> list[Candidate]:
         if not anime_id:
@@ -991,9 +1007,16 @@ class RecognitionService:
             )
 
     @staticmethod
-    def _to_group(key: tuple[str, str], records: list[CandidateRecord]) -> EpisodeGroup:
+    def _to_group(
+        key: tuple[str, str],
+        records: list[CandidateRecord],
+        references: dict[str, ReleaseReference],
+    ) -> EpisodeGroup:
         series_identity, episode_key = key
-        candidates = [RecognitionService._to_candidate(record) for record in records]
+        candidates = [
+            RecognitionService._to_candidate(record, references.get(record.release_id))
+            for record in records
+        ]
         latest_seen_at = max(candidate.first_seen_at for candidate in candidates)
         known_seasons = {
             candidate.season for candidate in candidates if candidate.season is not None
@@ -1014,7 +1037,9 @@ class RecognitionService:
         )
 
     @staticmethod
-    def _to_candidate(record: CandidateRecord) -> Candidate:
+    def _to_candidate(
+        record: CandidateRecord, reference: ReleaseReference | None = None
+    ) -> Candidate:
         return Candidate(
             id=record.id,
             release_id=record.release_id,
@@ -1042,4 +1067,5 @@ class RecognitionService:
             supersedes_candidate_id=record.supersedes_candidate_id,
             superseded_by_candidate_id=record.superseded_by_candidate_id,
             superseded_at=record.superseded_at,
+            source_url=reference.source_url if reference is not None else None,
         )

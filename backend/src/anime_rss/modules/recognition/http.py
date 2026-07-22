@@ -49,6 +49,7 @@ class CandidateResponse(BaseModel):
     supersedes_candidate_id: str | None
     superseded_by_candidate_id: str | None
     superseded_at: datetime | None
+    source_url: str | None = None
 
 
 class EpisodeGroupResponse(BaseModel):
@@ -72,6 +73,7 @@ class UnmatchedReleaseResponse(BaseModel):
     confidence: str
     reason_code: str
     parsed_at: datetime
+    source_url: str | None = None
 
 
 class RecognitionRerunResponse(BaseModel):

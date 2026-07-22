@@ -12883,6 +12883,17 @@
               }
             ],
             "title": "Superseded At"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
           }
         },
         "type": "object",
@@ -13520,6 +13531,17 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
           }
         },
         "type": "object",
@@ -15876,6 +15898,17 @@
             "type": "string",
             "format": "date-time",
             "title": "Parsed At"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
           }
         },
         "type": "object",

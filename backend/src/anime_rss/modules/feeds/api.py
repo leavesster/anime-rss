@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from typing import Any, cast
 from urllib.parse import urlsplit
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
@@ -25,6 +25,7 @@ from anime_rss.modules.feeds.domain import (
     FeedHealth,
     NormalizedFeedEntry,
     plan_transient_retry,
+    public_entry_url,
     redact_url,
     validate_refresh_interval,
 )
@@ -443,6 +444,8 @@ class FeedService:
             recovered = feed.consecutive_failures > 0
             for entry in entries:
                 entry_id = new_id()
+                link_redacted = redact_url(entry.link)
+                link_url = public_entry_url(entry.link)
                 reference_ciphertext = None
                 if entry.torrent_reference is not None:
                     reference_ciphertext = self._cipher.encrypt(
@@ -459,7 +462,8 @@ class FeedService:
                         title_raw=entry.title_raw,
                         title_normalized=entry.title_normalized,
                         published_at=entry.published_at,
-                        link_redacted=redact_url(entry.link),
+                        link_redacted=link_redacted,
+                        link_url=link_url,
                         torrent_reference_ciphertext=reference_ciphertext,
                         first_seen_at=now,
                     )
@@ -472,6 +476,15 @@ class FeedService:
                         session,
                         name="FeedEntryObserved.v1",
                         payload={"feed_entry_id": entry_id},
+                    )
+                else:
+                    session.execute(
+                        update(FeedEntryRecord)
+                        .where(
+                            FeedEntryRecord.feed_id == feed_id,
+                            FeedEntryRecord.guid_hash == entry.guid_hash,
+                        )
+                        .values(link_redacted=link_redacted, link_url=link_url)
                     )
 
             feed.health = FeedHealth.HEALTHY.value
@@ -749,6 +762,17 @@ class FeedEntryQueries:
                 headers=headers,
                 torrent_reference=reference,
             )
+
+    def get_public_links(self, entry_ids: set[str]) -> dict[str, str]:
+        if not entry_ids:
+            return {}
+        with self._session_factory() as session:
+            rows = session.execute(
+                select(FeedEntryRecord.id, FeedEntryRecord.link_url).where(
+                    FeedEntryRecord.id.in_(entry_ids), FeedEntryRecord.link_url.is_not(None)
+                )
+            )
+            return {entry_id: link for entry_id, link in rows if link is not None}
 
     def record_release_resolution(
         self, entry_id: str, *, status: str, error_code: str | None = None

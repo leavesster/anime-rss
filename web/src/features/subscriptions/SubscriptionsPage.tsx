@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, BookOpen, CalendarClock, Clock3, History, ListTree, Plus, Sparkles } from "lucide-react";
+import { Archive, BookOpen, CalendarClock, Check, Clock3, Copy, ExternalLink, History, ListTree, Plus, Sparkles } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -16,6 +16,7 @@ import { EmptyState } from "../../shared/components/EmptyState";
 import { ErrorBanner, LoadingState } from "../../shared/components/Feedback";
 import { PageHeader } from "../../shared/components/PageHeader";
 import { StatusBadge } from "../../shared/components/StatusBadge";
+import { copyText } from "../../shared/lib/clipboard";
 import { formatDate } from "../../shared/lib/format";
 import { AddAnimeDialog } from "./AddAnimeDialog";
 import { BackfillDialog } from "./BackfillDialog";
@@ -43,6 +44,7 @@ export function SubscriptionsPage() {
   const [backfill, setBackfill] = useState<Subscription | null>(null);
   const [episodeControl, setEpisodeControl] = useState<Subscription | null>(null);
   const [scheduleAnime, setScheduleAnime] = useState<Anime | null>(null);
+  const [copiedSubscriptionId, setCopiedSubscriptionId] = useState<string | null>(null);
   const [subscriptionView, setSubscriptionView] = useState<"active" | "archived">("active");
   const anime = useQuery({ queryKey: ["anime"], queryFn: listAnime });
   const subscriptions = useQuery({ queryKey: ["subscriptions"], queryFn: listSubscriptions });
@@ -61,6 +63,11 @@ export function SubscriptionsPage() {
   const visibleSubscriptions = subscriptions.data?.filter((item) =>
     subscriptionView === "archived" ? item.state === "archived" : item.state !== "archived",
   ) ?? [];
+  const copyAnimeTitle = async (subscription: Subscription) => {
+    if (!await copyText(subscription.anime_title)) return;
+    setCopiedSubscriptionId(subscription.id);
+    window.setTimeout(() => setCopiedSubscriptionId(null), 1600);
+  };
 
   return (
     <>
@@ -82,11 +89,11 @@ export function SubscriptionsPage() {
         <div className="subscription-layout">
           <section className="data-section"><div className="section-heading"><div><h2>追番订阅</h2><p>完结仅接收同组修订版；归档停止全部自动处理。</p></div><div className="segmented" aria-label="订阅视图"><button className={subscriptionView === "active" ? "active" : ""} onClick={() => setSubscriptionView("active")}>当前</button><button className={subscriptionView === "archived" ? "active" : ""} onClick={() => setSubscriptionView("archived")}><Archive size={14} />归档 {archived}</button></div></div>
             {subscriptions.data.length === 0 ? <EmptyState icon={BookOpen} title="还没有追番" description="先添加动画身份，再为它配置字幕组偏好和备选等待时间。" /> : visibleSubscriptions.length === 0 ? <EmptyState icon={Archive} title={subscriptionView === "archived" ? "没有归档订阅" : "没有当前订阅"} description={subscriptionView === "archived" ? "归档后的订阅会集中显示在这里。" : "恢复归档订阅或创建新的追番。"} /> : <div className="subscription-list">{visibleSubscriptions.map((subscription) => <article className="subscription-row" key={subscription.id}>
-              <div className="subscription-row__main"><span className="subscription-mark"><BookOpen size={18} /></span><div><strong>{subscription.anime_title}</strong><small>{subscription.match_keys.length} 个匹配标题 · 激活于 {formatDate(subscription.activation_at)}</small></div></div>
+              <div className="subscription-row__main"><span className="subscription-mark"><BookOpen size={18} /></span><div><div className="subscription-title-line"><strong>{subscription.anime_title}</strong><button className="title-copy-button" aria-label={copiedSubscriptionId === subscription.id ? `已复制《${subscription.anime_title}》名称` : `复制《${subscription.anime_title}》名称`} title={copiedSubscriptionId === subscription.id ? "已复制" : "复制动画名称"} onClick={() => void copyAnimeTitle(subscription)}>{copiedSubscriptionId === subscription.id ? <Check size={14} /> : <Copy size={14} />}</button></div><small>{subscription.match_keys.length} 个匹配标题 · 激活于 {formatDate(subscription.activation_at)}</small></div></div>
               <div className="subscription-rule"><small>{subscription.uses_global_rules ? "全局字幕组优先级" : "单独字幕组优先级"}</small><strong>{subscription.rules.preferred_groups?.join(" › ") || "不限制"}</strong></div>
               <div className="subscription-rule"><small>备选等待</small><strong>{subscription.rules.fallback_wait_minutes ?? 120} 分钟</strong></div>
               <StatusBadge status={subscription.state} />
-              <div className="feed-actions"><button className="button button--ghost button--small" onClick={() => setEpisodeControl(subscription)}><ListTree size={15} />剧集</button><button className="button button--ghost button--small" onClick={() => setScheduleAnime(anime.data.find((item) => item.id === subscription.anime_id) ?? null)}><CalendarClock size={15} />播出</button><button className="button button--ghost button--small" onClick={() => setBackfill(subscription)}><History size={15} />回填</button><LifecycleMenu state={subscription.state as "following" | "paused" | "completed" | "archived"} disabled={lifecycle.isPending} onChange={(state) => lifecycle.mutate({ subscription, state })} /></div>
+              <div className="feed-actions">{anime.data.find((item) => item.id === subscription.anime_id)?.bangumi_id && <a className="button button--ghost button--icon external-link" href={`https://bgm.tv/subject/${anime.data.find((item) => item.id === subscription.anime_id)?.bangumi_id}`} target="_blank" rel="noreferrer" referrerPolicy="no-referrer" aria-label={`在 Bangumi 查看《${subscription.anime_title}》`} title="在 Bangumi 查看"><ExternalLink size={15} /></a>}<button className="button button--ghost button--small" onClick={() => setEpisodeControl(subscription)}><ListTree size={15} />剧集</button><button className="button button--ghost button--small" onClick={() => setScheduleAnime(anime.data.find((item) => item.id === subscription.anime_id) ?? null)}><CalendarClock size={15} />播出</button><button className="button button--ghost button--small" onClick={() => setBackfill(subscription)}><History size={15} />回填</button><LifecycleMenu state={subscription.state as "following" | "paused" | "completed" | "archived"} disabled={lifecycle.isPending} onChange={(state) => lifecycle.mutate({ subscription, state })} /></div>
             </article>)}</div>}
           </section>
 

@@ -63,7 +63,7 @@ h3 { font-size: 15px; letter-spacing: 0; }
 
 .button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid transparent; border-radius: 6px; font-weight: 700; cursor: pointer; transition: border-color 130ms ease, background-color 130ms ease, color 130ms ease, transform 130ms ease; white-space: nowrap; }
 .button:active:not(:disabled) { transform: translateY(1px); }
-.button:focus-visible, input:focus-visible, select:focus-visible, .segmented button:focus-visible, .nav-link:focus-visible { outline: 3px solid rgba(40, 113, 167, 0.22); outline-offset: 2px; }
+.button:focus-visible, input:focus-visible, select:focus-visible, .segmented button:focus-visible, .nav-link:focus-visible, .title-copy-button:focus-visible { outline: 3px solid rgba(40, 113, 167, 0.22); outline-offset: 2px; }
 .button:disabled { opacity: .55; cursor: not-allowed; }
 .button--regular { min-height: 40px; padding: 0 15px; font-size: 13px; }
 .button--small { min-height: 34px; padding: 0 11px; font-size: 12px; }
@@ -215,6 +215,7 @@ a.compact-row:hover { background: var(--surface-soft); }
 .episode-group__header h2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .episode-number { min-width: 68px; padding: 6px 9px; color: var(--accent-dark); background: var(--accent-soft); border-radius: 5px; font-size: 11px; font-weight: 800; text-align: center; }
 .candidate-count { color: var(--muted); font-size: 11px; font-weight: 650; white-space: nowrap; }
+.candidate-source-actions { display: flex; align-items: center; gap: 5px; }
 .candidate-list { display: grid; }
 .candidate-row { min-height: 70px; display: grid; grid-template-columns: minmax(230px, 1fr) 180px 42px 70px 108px 76px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--soft-line); }
 .candidate-row:last-child { border-bottom: 0; }
@@ -256,6 +257,10 @@ a.compact-row:hover { background: var(--surface-soft); }
 .subscription-row__main { min-width: 0; display: flex; align-items: center; gap: 11px; }
 .subscription-mark { width: 34px; height: 34px; flex: 0 0 34px; display: grid; place-items: center; color: var(--accent); background: var(--accent-soft); border-radius: 6px; }
 .subscription-row__main > div, .subscription-rule, .decision-list article > div, .catalog-results article > div, .backfill-row > div { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.subscription-title-line { min-width: 0; display: flex; align-items: center; gap: 5px; }
+.subscription-title-line strong { min-width: 0; user-select: text; }
+.title-copy-button { width: 26px; height: 26px; flex: 0 0 26px; display: grid; place-items: center; color: var(--muted); background: transparent; border-radius: 4px; cursor: pointer; }
+.title-copy-button:hover { color: var(--accent-dark); background: var(--accent-soft); }
 .subscription-row__main strong, .decision-list strong, .catalog-results strong, .backfill-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .subscription-row__main small, .subscription-rule small, .decision-list small, .catalog-results small, .backfill-row small { overflow: hidden; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .subscription-rule strong { overflow: hidden; color: #3e4b46; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
@@ -299,7 +304,8 @@ a.compact-row:hover { background: var(--surface-soft); }
 .download-row { min-height: 78px; display: grid; grid-template-columns: minmax(190px, 1fr) 150px 120px 120px 112px 36px; align-items: center; gap: 16px; padding: 12px 15px; border-bottom: 1px solid var(--soft-line); }
 .download-row:last-child { border-bottom: 0; }
 .download-row__identity, .download-row__meta, .download-row__state, .download-row__time { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
-.download-row__identity strong { overflow: hidden; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.download-row__identity strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.download-row__hash { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .download-row__identity small, .download-row__meta small, .download-row__state small, .download-row__time small { overflow: hidden; color: var(--muted); font-size: 9px; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
 .download-row__meta strong, .download-row__time strong { overflow: hidden; color: #46534e; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .download-progress { min-width: 0; display: flex; align-items: center; gap: 8px; }

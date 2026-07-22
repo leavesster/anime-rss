@@ -70,6 +70,7 @@ class FeedEntryRecord(Base):
     title_normalized: Mapped[str] = mapped_column(String(4096))
     published_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     link_redacted: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    link_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     torrent_reference_ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     release_status: Mapped[str] = mapped_column(String(32), default="pending")
     release_error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)

@@ -39,6 +39,7 @@ def _rss() -> bytes:
     ]
     items = "".join(
         f"<item><guid>{guid}</guid><title>{title}</title>"
+        f"<link>https://releases.test/items/{guid}?token=private</link>"
         f'<enclosure url="magnet:?xt=urn:btih:{info_hash}" '
         'type="application/x-bittorrent" /></item>'
         for guid, title, info_hash in titles
@@ -78,6 +79,15 @@ def test_release_events_create_episode_candidate_groups(tmp_path: Path) -> None:
             for group in groups
             for candidate in group["candidates"]
         )
+        assert {
+            candidate["source_url"] for group in groups for candidate in group["candidates"]
+        } == {
+            "https://releases.test/items/nix-1",
+            "https://releases.test/items/mouse-1",
+            "https://releases.test/items/nix-2",
+            "https://releases.test/items/mouse-2",
+        }
+        assert b"private" not in (tmp_path / "recognition.sqlite3").read_bytes()
 
 
 def test_title_variant_sets_group_and_bind_season_without_guessing(tmp_path: Path) -> None:

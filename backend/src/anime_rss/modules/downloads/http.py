@@ -77,6 +77,7 @@ class DownloadTaskResponse(BaseModel):
     superseded_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    display_name: str | None = None
 
 
 class DownloadCycleResponse(BaseModel):

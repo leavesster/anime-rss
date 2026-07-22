@@ -156,6 +156,7 @@ def test_config_submit_reconcile_external_delete_and_explicit_retry(tmp_path: Pa
 
         planned = client.get("/api/v1/downloads/tasks").json()[0]
         assert planned["state"] == "planned"
+        assert planned["display_name"] == "[Nix-Raws] Download Anime - 01 [1080p HEVC][简体]"
         assert planned["origin_kind"] == "selection_decision"
         assert planned["decision_id"] is not None
         assert planned["subscription_id"] is not None

@@ -61,6 +61,12 @@ class ReleaseDownloadSource:
 
 
 @dataclass(frozen=True, slots=True)
+class ReleaseReference:
+    display_name: str | None
+    source_url: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class ReleaseRetentionResult:
     releases_removed: int
     feed_entries_removed: int
@@ -206,6 +212,41 @@ class ReleaseService:
                 kind=payload.kind,
                 content=content,
             )
+
+    def get_references(self, release_ids: set[str]) -> dict[str, ReleaseReference]:
+        if not release_ids:
+            return {}
+        with self._session_factory() as session:
+            rows = session.execute(
+                select(
+                    ReleaseRecord.id,
+                    ReleaseRecord.display_name,
+                    ReleaseSourceRecord.feed_entry_id,
+                )
+                .outerjoin(
+                    ReleaseSourceRecord,
+                    ReleaseSourceRecord.release_id == ReleaseRecord.id,
+                )
+                .where(ReleaseRecord.id.in_(release_ids))
+                .order_by(
+                    ReleaseRecord.id,
+                    ReleaseSourceRecord.observed_at,
+                    ReleaseSourceRecord.id,
+                )
+            )
+            first_sources: dict[str, tuple[str | None, str | None]] = {}
+            for release_id, display_name, feed_entry_id in rows:
+                first_sources.setdefault(release_id, (display_name, feed_entry_id))
+        links = self._feed_entries.get_public_links(
+            {entry_id for _, entry_id in first_sources.values() if entry_id is not None}
+        )
+        return {
+            release_id: ReleaseReference(
+                display_name=display_name,
+                source_url=links.get(entry_id) if entry_id is not None else None,
+            )
+            for release_id, (display_name, entry_id) in first_sources.items()
+        }
 
     def prune_unmatched(
         self, *, before: datetime, retained_release_ids: set[str]

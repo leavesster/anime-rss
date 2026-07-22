@@ -5,6 +5,7 @@ from anime_rss.modules.feeds.domain import (
     build_entry_identity,
     normalize_title,
     plan_transient_retry,
+    public_entry_url,
     redact_url,
 )
 
@@ -19,6 +20,14 @@ def test_redact_url_removes_credentials_path_query_values_and_fragment() -> None
     assert "private-token" not in redacted
     assert "abc" not in redacted
     assert "private" not in redacted
+
+
+def test_public_entry_url_keeps_path_and_drops_sensitive_parts() -> None:
+    assert (
+        public_entry_url("https://alice:secret@example.test/releases/episode-1?token=abc#download")
+        == "https://example.test/releases/episode-1"
+    )
+    assert public_entry_url("magnet:?xt=urn:btih:abc") is None
 
 
 def test_title_normalization_is_bounded_and_deterministic() -> None:

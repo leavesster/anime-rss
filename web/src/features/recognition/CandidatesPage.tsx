@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, CheckCircle2, Layers3, PencilLine, RefreshCw, Search, ShieldCheck, Trash2, UsersRound, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, ExternalLink, Layers3, PencilLine, RefreshCw, Rss, Search, ShieldCheck, Trash2, UsersRound, X } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 
@@ -81,6 +81,7 @@ export function CandidatesPage() {
   const filteredSeries = groups.data?.find((group) => group.series_identity === seriesFilter);
   const filteredSeriesTitle = anime.data?.find((item) => item.id === filteredSeries?.anime_id)?.primary_title ?? filteredSeries?.series_title;
   const displaySeriesTitle = (group: NonNullable<typeof groups.data>[number]) => anime.data?.find((item) => item.id === group.anime_id)?.primary_title ?? group.series_title;
+  const bangumiIdForGroup = (group: NonNullable<typeof groups.data>[number]) => anime.data?.find((item) => item.id === group.anime_id)?.bangumi_id;
   const duplicateGroups = groups.data?.filter((group) => group.candidate_count > 1).length ?? 0;
   const refresh = async () => {
     await Promise.all([
@@ -133,7 +134,7 @@ export function CandidatesPage() {
           {tab === "grouped" && filteredGroups.length === 0 && <EmptyState icon={Layers3} title={groups.data.length ? "没有匹配结果" : "还没有剧集候选"} description={groups.data.length ? "清空搜索条件或尝试其他关键词。" : "刷新包含可识别动画标题的订阅源后，候选会按集数归组。"} />}
           {tab === "grouped" && filteredGroups.length > 0 && <div className="episode-group-list">{filteredGroups.map((group) => (
             <article className="episode-group" key={group.key}>
-              <header className="episode-group__header"><div><span className="episode-number">第 {group.episode_key} 集</span><h2>{displaySeriesTitle(group)}</h2></div><span className="candidate-count">{group.candidate_count} 个候选</span></header>
+              <header className="episode-group__header"><div><span className="episode-number">第 {group.episode_key} 集</span><h2>{displaySeriesTitle(group)}</h2></div><div className="candidate-source-actions"><span className="candidate-count">{group.candidate_count} 个候选</span>{bangumiIdForGroup(group) && <a className="button button--ghost button--icon external-link" href={`https://bgm.tv/subject/${bangumiIdForGroup(group)}`} target="_blank" rel="noreferrer" referrerPolicy="no-referrer" aria-label={`在 Bangumi 查看《${displaySeriesTitle(group)}》`} title="在 Bangumi 查看"><ExternalLink size={16} /></a>}</div></header>
               <div className="candidate-list">{group.candidates.map((candidate) => (
                 <div className="candidate-row" key={candidate.id}>
                   <div className="candidate-group"><strong>{candidate.release_group ?? "未知字幕组"}</strong><small title={candidate.source_title}>{candidate.source_title}</small></div>
@@ -142,6 +143,7 @@ export function CandidatesPage() {
                   <StatusBadge status={candidate.confidence} />
                   <span className={candidate.anime_id && candidate.recognition_eligible ? "eligibility eligibility--yes" : "eligibility"}><CheckCircle2 size={16} />{candidate.anime_id ? `已关联目录 · ${candidate.recognition_eligible ? "可选择" : "需确认"}` : candidate.catalog_match_status === "ambiguous" ? "动画匹配有歧义" : "待绑定动画"}</span>
                   <div className="candidate-actions">
+                    {candidate.source_url && <a className="button button--ghost button--icon external-link" href={candidate.source_url} target="_blank" rel="noreferrer" referrerPolicy="no-referrer" aria-label="打开 RSS 原始条目" title="打开 RSS 原始条目"><Rss size={16} /></a>}
                     {!candidate.recognition_eligible && <Button aria-label="确认候选" title="确认候选" size="icon" variant="ghost" icon={<ShieldCheck size={16} />} disabled={confirm.isPending} onClick={() => confirm.mutate(candidate.id)} />}
                     <Button aria-label="重新解析" title="重新解析" size="icon" variant="ghost" icon={<RefreshCw className={rerun.isPending && rerun.variables === candidate.release_id ? "spin" : ""} size={16} />} disabled={rerun.isPending} onClick={() => rerun.mutate(candidate.release_id)} />
                     <Button aria-label="修正映射" title="修正映射" size="icon" variant="ghost" icon={<PencilLine size={16} />} onClick={() => setRemapTarget(candidate)} />
@@ -152,7 +154,7 @@ export function CandidatesPage() {
           ))}</div>}
 
           {tab === "unmatched" && unmatched.data.length === 0 && <EmptyState icon={CheckCircle2} title="没有待识别条目" description="当前所有可用 Release 都已经获得动画和集数候选。" />}
-          {tab === "unmatched" && unmatched.data.length > 0 && <div className="unmatched-list">{unmatched.data.map((release) => <article key={release.id}><div className="unmatched-copy"><strong>{release.source_title}</strong><small>{formatDate(release.parsed_at)}</small></div><span className="reason-code">{release.reason_code}</span><div className="candidate-actions"><Button aria-label="重新解析" title="重新解析" size="icon" variant="ghost" icon={<RefreshCw className={rerun.isPending && rerun.variables === release.release_id ? "spin" : ""} size={16} />} disabled={rerun.isPending} onClick={() => rerun.mutate(release.release_id)} /><Button size="small" variant="secondary" icon={<PencilLine size={15} />} onClick={() => setRemapTarget(release)}>填写识别结果</Button><Button size="small" variant="ghost" icon={<Trash2 size={15} />} onClick={() => setDismissTarget(release)}>忽略</Button></div></article>)}</div>}
+          {tab === "unmatched" && unmatched.data.length > 0 && <div className="unmatched-list">{unmatched.data.map((release) => <article key={release.id}><div className="unmatched-copy"><strong>{release.source_title}</strong><small>{formatDate(release.parsed_at)}</small></div><span className="reason-code">{release.reason_code}</span><div className="candidate-actions">{release.source_url && <a className="button button--ghost button--icon external-link" href={release.source_url} target="_blank" rel="noreferrer" referrerPolicy="no-referrer" aria-label="打开 RSS 原始条目" title="打开 RSS 原始条目"><Rss size={16} /></a>}<Button aria-label="重新解析" title="重新解析" size="icon" variant="ghost" icon={<RefreshCw className={rerun.isPending && rerun.variables === release.release_id ? "spin" : ""} size={16} />} disabled={rerun.isPending} onClick={() => rerun.mutate(release.release_id)} /><Button size="small" variant="secondary" icon={<PencilLine size={15} />} onClick={() => setRemapTarget(release)}>填写识别结果</Button><Button size="small" variant="ghost" icon={<Trash2 size={15} />} onClick={() => setDismissTarget(release)}>忽略</Button></div></article>)}</div>}
         </>
       )}
       {remapTarget && <RemapDialog release={remapTarget} pending={remap.isPending} onClose={() => setRemapTarget(null)} onSubmit={(payload) => remap.mutate({ releaseId: remapTarget.release_id, payload })} />}

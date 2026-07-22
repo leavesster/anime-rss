@@ -69,6 +69,7 @@ class DownloadTask:
     superseded_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    display_name: str | None = None
 
 
 class DownloadConfigNotFoundError(LookupError):
@@ -397,7 +398,17 @@ class DownloadService:
                 .order_by(DownloadTaskRecord.updated_at.desc(), DownloadTaskRecord.id)
                 .limit(limit)
             ).all()
-            return [self._to_task(record) for record in records]
+            references = self._releases.get_references({record.release_id for record in records})
+            tasks: list[DownloadTask] = []
+            for record in records:
+                reference = references.get(record.release_id)
+                tasks.append(
+                    self._to_task(
+                        record,
+                        display_name=reference.display_name if reference is not None else None,
+                    )
+                )
+            return tasks
 
     def retained_release_ids(self) -> set[str]:
         with self._session_factory() as session:
@@ -408,7 +419,10 @@ class DownloadService:
             record = session.get(DownloadTaskRecord, task_id)
             if record is None:
                 raise DownloadTaskNotFoundError(task_id)
-            return self._to_task(record)
+            reference = self._releases.get_references({record.release_id}).get(record.release_id)
+            return self._to_task(
+                record, display_name=reference.display_name if reference is not None else None
+            )
 
     def retry_task(self, task_id: str) -> DownloadTask:
         now = self._clock()
@@ -503,7 +517,7 @@ class DownloadService:
         )
 
     @staticmethod
-    def _to_task(record: DownloadTaskRecord) -> DownloadTask:
+    def _to_task(record: DownloadTaskRecord, *, display_name: str | None = None) -> DownloadTask:
         return DownloadTask(
             id=record.id,
             origin_kind=record.origin_kind,
@@ -528,6 +542,7 @@ class DownloadService:
             superseded_at=record.superseded_at,
             created_at=record.created_at,
             updated_at=record.updated_at,
+            display_name=display_name,
         )
 
     @staticmethod

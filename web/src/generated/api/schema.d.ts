@@ -1361,6 +1361,8 @@ export interface components {
             superseded_by_candidate_id: string | null;
             /** Superseded At */
             superseded_at: string | null;
+            /** Source Url */
+            source_url?: string | null;
         };
         /** CandidateSelectRequest */
         CandidateSelectRequest: {
@@ -1566,6 +1568,8 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /** Display Name */
+            display_name?: string | null;
         };
         /** EpisodeGroupResponse */
         EpisodeGroupResponse: {
@@ -2325,6 +2329,8 @@ export interface components {
              * Format: date-time
              */
             parsed_at: string;
+            /** Source Url */
+            source_url?: string | null;
         };
     };
     responses: never;

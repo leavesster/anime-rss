@@ -109,7 +109,7 @@ export function DownloadsPage() {
           <div className="section-heading"><div><h2>任务状态</h2><p>{taskItems.length} 个持久化任务</p></div></div>
           {taskItems.length === 0 ? <EmptyState icon={HardDrive} title="还没有下载任务" description="选择引擎形成决定或手动提交发布条目后，任务会在这里等待 qBittorrent。" /> : <div className="download-list">
             {taskItems.map((task) => <article className="download-row" key={task.id}>
-              <div className="download-row__identity"><strong>{truncateHash(task.info_hash)}</strong><small>{task.actual_save_path ?? task.requested_save_path ?? "使用 qBittorrent 默认路径"}</small></div>
+              <div className="download-row__identity"><strong title={task.display_name ?? task.info_hash}>{task.display_name ?? truncateHash(task.info_hash)}</strong><small><span className="download-row__hash">{truncateHash(task.info_hash)}</span> · {task.actual_save_path ?? task.requested_save_path ?? "使用 qBittorrent 默认路径"}</small></div>
               <div className="download-progress"><div><span style={{ width: `${Math.round(task.progress * 100)}%` }} /></div><small>{Math.round(task.progress * 100)}%</small></div>
               <div className="download-row__meta"><small>{task.category || "无分类"}</small><strong>{task.tags.join(", ") || "无标签"}</strong></div>
               <div className="download-row__state"><StatusBadge status={task.state} />{task.stale && <small>状态陈旧</small>}{task.error_code && <small>{errorLabels[task.error_code] ?? task.error_code}</small>}</div>

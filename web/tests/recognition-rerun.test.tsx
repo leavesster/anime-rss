@@ -71,6 +71,7 @@ describe("recognition parser rerun", () => {
         supersedes_candidate_id: null,
         superseded_by_candidate_id: null,
         superseded_at: null,
+        source_url: "https://releases.test/items/parser-anime-1",
       }],
     }]);
     vi.mocked(listUnmatchedReleases).mockResolvedValue([]);
@@ -93,6 +94,10 @@ describe("recognition parser rerun", () => {
       </QueryClientProvider>,
     );
 
+    expect(await screen.findByRole("link", { name: "打开 RSS 原始条目" })).toHaveAttribute(
+      "href",
+      "https://releases.test/items/parser-anime-1",
+    );
     fireEvent.click(await screen.findByRole("button", { name: "重新解析" }));
 
     await waitFor(() => expect(rerunRecognition).toHaveBeenCalled());
@@ -129,6 +134,11 @@ describe("recognition parser rerun", () => {
   });
 
   it("filters grouped candidates from a discovered-series deep link", async () => {
+    vi.mocked(listAnime).mockResolvedValue([{
+      id: "anime-1",
+      bangumi_id: 12345,
+      primary_title: "New Anime",
+    } as never]);
     const candidate = {
       id: "candidate-1",
       release_id: "release-1",
@@ -136,7 +146,7 @@ describe("recognition parser rerun", () => {
       series_title: "New Anime",
       title_variants: ["New Anime"],
       series_key: "newanime",
-      anime_id: null,
+      anime_id: "anime-1",
       catalog_match_status: "unmatched",
       catalog_match_method: null,
       catalog_match_key: "newanime",
@@ -158,19 +168,23 @@ describe("recognition parser rerun", () => {
       superseded_at: null,
     };
     vi.mocked(listEpisodeGroups).mockResolvedValue([
-      { key: "title:newanime:1", series_title: "New Anime", series_key: "newanime", series_identity: "title:newanime", anime_id: null, catalog_match_status: "unmatched", season: 1, episode_key: "1", candidate_count: 1, candidates: [candidate], latest_seen_at: "2026-07-22T00:00:00Z" },
+      { key: "anime:anime-1:1", series_title: "New Anime", series_key: "newanime", series_identity: "anime:anime-1", anime_id: "anime-1", catalog_match_status: "matched", season: 1, episode_key: "1", candidate_count: 1, candidates: [candidate], latest_seen_at: "2026-07-22T00:00:00Z" },
       { key: "title:otheranime:1", series_title: "Other Anime", series_key: "otheranime", series_identity: "title:otheranime", anime_id: null, catalog_match_status: "unmatched", season: 1, episode_key: "1", candidate_count: 1, candidates: [{ ...candidate, id: "candidate-2", series_title: "Other Anime", title_variants: ["Other Anime"], series_key: "otheranime", catalog_match_key: "otheranime" }], latest_seen_at: "2026-07-22T00:00:00Z" },
     ]);
     vi.mocked(listUnmatchedReleases).mockResolvedValue([]);
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
-        <MemoryRouter initialEntries={["/candidates?series=title%3Anewanime"]}><CandidatesPage /></MemoryRouter>
+        <MemoryRouter initialEntries={["/candidates?series=anime%3Aanime-1"]}><CandidatesPage /></MemoryRouter>
       </QueryClientProvider>,
     );
 
     expect(await screen.findByText("正在查看", { exact: false })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "New Anime" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "在 Bangumi 查看《New Anime》" })).toHaveAttribute(
+      "href",
+      "https://bgm.tv/subject/12345",
+    );
     expect(screen.queryByRole("heading", { name: "Other Anime" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "查看全部动画" }));
