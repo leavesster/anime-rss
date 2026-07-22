@@ -63,7 +63,7 @@ h3 { font-size: 15px; letter-spacing: 0; }
 
 .button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid transparent; border-radius: 6px; font-weight: 700; cursor: pointer; transition: border-color 130ms ease, background-color 130ms ease, color 130ms ease, transform 130ms ease; white-space: nowrap; }
 .button:active:not(:disabled) { transform: translateY(1px); }
-.button:focus-visible, input:focus-visible, select:focus-visible, .segmented button:focus-visible, .nav-link:focus-visible, .title-copy-button:focus-visible { outline: 3px solid rgba(40, 113, 167, 0.22); outline-offset: 2px; }
+.button:focus-visible, input:focus-visible, select:focus-visible, .segmented button:focus-visible, .nav-link:focus-visible, .title-copy-button:focus-visible, .bgm-link:focus-visible { outline: 3px solid rgba(40, 113, 167, 0.22); outline-offset: 2px; }
 .button:disabled { opacity: .55; cursor: not-allowed; }
 .button--regular { min-height: 40px; padding: 0 15px; font-size: 13px; }
 .button--small { min-height: 34px; padding: 0 11px; font-size: 12px; }
@@ -76,6 +76,8 @@ h3 { font-size: 15px; letter-spacing: 0; }
 .button--ghost:hover:not(:disabled) { color: var(--ink); background: #e9eeeb; }
 .button--danger { color: #fff; background: var(--red); border-color: var(--red); }
 .button--danger:hover:not(:disabled) { background: #963535; }
+.bgm-link { min-height: 32px; display: inline-flex; align-items: center; justify-content: center; padding: 0 4px; color: var(--blue); font-size: 11px; font-weight: 800; line-height: 1; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+.bgm-link:hover { color: #1f5b87; }
 
 .notice-strip, .error-banner, .success-banner { display: flex; align-items: center; gap: 9px; min-height: 44px; margin-bottom: 20px; padding: 10px 14px; border-radius: 6px; font-size: 13px; line-height: 1.45; }
 .notice-strip { color: #38584c; background: #edf5f1; border: 1px solid #d9e9e1; }

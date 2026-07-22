@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, BookOpen, CalendarClock, Check, Clock3, Copy, ExternalLink, History, ListTree, Plus, Sparkles } from "lucide-react";
+import { Archive, BookOpen, CalendarClock, Check, Clock3, Copy, History, ListTree, Plus, Sparkles } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -93,7 +93,7 @@ export function SubscriptionsPage() {
               <div className="subscription-rule"><small>{subscription.uses_global_rules ? "全局字幕组优先级" : "单独字幕组优先级"}</small><strong>{subscription.rules.preferred_groups?.join(" › ") || "不限制"}</strong></div>
               <div className="subscription-rule"><small>等待首选版本</small><strong>{subscription.rules.fallback_wait_minutes ?? 120} 分钟</strong></div>
               <StatusBadge status={subscription.state} />
-              <div className="feed-actions">{anime.data.find((item) => item.id === subscription.anime_id)?.bangumi_id && <a className="button button--ghost button--icon external-link" href={`https://bgm.tv/subject/${anime.data.find((item) => item.id === subscription.anime_id)?.bangumi_id}`} target="_blank" rel="noreferrer" referrerPolicy="no-referrer" aria-label={`在 Bangumi 查看《${subscription.anime_title}》`} title="在 Bangumi 查看"><ExternalLink size={15} /></a>}<button className="button button--ghost button--small" onClick={() => setEpisodeControl(subscription)}><ListTree size={15} />剧集</button><button className="button button--ghost button--small" onClick={() => setScheduleAnime(anime.data.find((item) => item.id === subscription.anime_id) ?? null)}><CalendarClock size={15} />播出</button><button className="button button--ghost button--small" onClick={() => setBackfill(subscription)}><History size={15} />补番</button><LifecycleMenu state={subscription.state as "following" | "paused" | "completed" | "archived"} disabled={lifecycle.isPending} onChange={(state) => lifecycle.mutate({ subscription, state })} /></div>
+              <div className="feed-actions">{anime.data.find((item) => item.id === subscription.anime_id)?.bangumi_id && <a className="bgm-link" href={`https://bgm.tv/subject/${anime.data.find((item) => item.id === subscription.anime_id)?.bangumi_id}`} target="_blank" rel="noreferrer" referrerPolicy="no-referrer" aria-label={`在 Bangumi 查看《${subscription.anime_title}》`} title="在 Bangumi 查看">bgm.tv</a>}<button className="button button--ghost button--small" onClick={() => setEpisodeControl(subscription)}><ListTree size={15} />剧集</button><button className="button button--ghost button--small" onClick={() => setScheduleAnime(anime.data.find((item) => item.id === subscription.anime_id) ?? null)}><CalendarClock size={15} />播出</button><button className="button button--ghost button--small" onClick={() => setBackfill(subscription)}><History size={15} />补番</button><LifecycleMenu state={subscription.state as "following" | "paused" | "completed" | "archived"} disabled={lifecycle.isPending} onChange={(state) => lifecycle.mutate({ subscription, state })} /></div>
             </article>)}</div>}
           </section>
 

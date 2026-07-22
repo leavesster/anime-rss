@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, CheckCircle2, ExternalLink, Layers3, PencilLine, RefreshCw, Rss, Search, ShieldCheck, Trash2, UsersRound, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Layers3, PencilLine, RefreshCw, Rss, Search, ShieldCheck, Trash2, UsersRound, X } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 
@@ -183,7 +183,7 @@ export function CandidatesPage() {
           {tab === "grouped" && filteredGroups.length === 0 && <EmptyState icon={Layers3} title={groups.data.length ? "没有匹配结果" : "还没有单集版本"} description={groups.data.length ? "清空搜索条件或尝试其他关键词。" : "刷新订阅源后，识别出的版本会按动画和集数显示。"} />}
           {tab === "grouped" && filteredGroups.length > 0 && <div className="series-group-list">{seriesGroups.map((series) => (
             <section className="series-group" key={series.identity}>
-              <header className="series-group__header"><div><h2>{series.title}</h2><span>{series.episodes.length} 集 · {series.candidateCount} 个版本</span></div>{series.bangumiId && <a className="button button--ghost button--icon external-link" href={`https://bgm.tv/subject/${series.bangumiId}`} target="_blank" rel="noreferrer" referrerPolicy="no-referrer" aria-label={`在 Bangumi 查看《${series.title}》`} title="在 Bangumi 查看"><ExternalLink size={16} /></a>}</header>
+              <header className="series-group__header"><div><h2>{series.title}</h2><span>{series.episodes.length} 集 · {series.candidateCount} 个版本</span></div>{series.bangumiId && <a className="bgm-link" href={`https://bgm.tv/subject/${series.bangumiId}`} target="_blank" rel="noreferrer" referrerPolicy="no-referrer" aria-label={`在 Bangumi 查看《${series.title}》`} title="在 Bangumi 查看">bgm.tv</a>}</header>
               <div className="episode-group-list">{series.episodes.map((group) => (
                 <article className="episode-group" key={group.key}>
                   <header className="episode-group__header"><span className="episode-number">第 {group.episode_key} 集</span><span className="candidate-count">{group.candidate_count} 个版本</span></header>
