@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { BookOpenCheck, ChevronRight, RadioTower } from "lucide-react";
+import { BookOpenCheck, ChevronDown, ChevronRight, ChevronUp, RadioTower } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -35,6 +35,7 @@ export function DiscoveredSeriesSection({
   groups: EpisodeGroup[];
 }) {
   const queryClient = useQueryClient();
+  const [isExpanded, setIsExpanded] = useState(true);
   const [matchTarget, setMatchTarget] = useState<DiscoveredSeries | null>(null);
   const [followedTitle, setFollowedTitle] = useState<string | null>(null);
   const discovered = useMemo(() => {
@@ -97,23 +98,25 @@ export function DiscoveredSeriesSection({
 
   return (
     <section className="data-section discovered-series-section">
-      <div className="section-heading"><div><h2>RSS 已发现</h2><p>已识别、尚未建立追番的动画。</p></div><span className="candidate-count">{discovered.length} 部</span></div>
-      {follow.isError && <ErrorBanner message={follow.error.message} />}
-      {follow.isSuccess && followedTitle && <SuccessBanner message={`已合并到《${followedTitle}》并开始追番。`} />}
-      <div className="discovered-series-list">{discovered.map((series) => (
-        <article key={series.seriesIdentity}>
-          <Link className="discovered-series-link" to={`/candidates?series=${encodeURIComponent(series.seriesIdentity)}`} aria-label={`查看 ${series.title} 的识别结果`}>
-            <span className="subscription-mark"><RadioTower size={18} /></span>
-            <div><strong>{series.title}</strong><small>{series.episodeCount} 集 · {series.candidateCount} 个候选 · {series.matchStatus === "matched" ? "已匹配到动画" : "未匹配到动画"}</small></div>
-            <ChevronRight size={17} />
-          </Link>
-          <Button size="small" variant="primary" icon={<BookOpenCheck size={15} />} disabled={follow.isPending} onClick={() => {
-            const animeRecord = series.animeId ? anime.find((item) => item.id === series.animeId) : undefined;
-            if (animeRecord) follow.mutate({ animeRecord });
-            else setMatchTarget(series);
-          }}>{follow.isPending && follow.variables?.animeRecord.id === series.animeId ? "创建中" : series.animeId ? "开始追番" : "匹配并追番"}</Button>
-        </article>
-      ))}</div>
+      <div className="section-heading"><div><h2>RSS 动画</h2><p>已识别、尚未建立追番的动画。“未匹配到动画”表示尚未对应上 Bangumi 动画 ID。</p></div><div className="candidate-source-actions"><span className="candidate-count">{discovered.length} 部</span><button className="button button--ghost button--icon" type="button" aria-expanded={isExpanded} aria-controls="discovered-series-content" aria-label={isExpanded ? "收起 RSS 动画" : "展开 RSS 动画"} title={isExpanded ? "收起" : "展开"} onClick={() => setIsExpanded((current) => !current)}>{isExpanded ? <ChevronUp size={17} /> : <ChevronDown size={17} />}</button></div></div>
+      {isExpanded && <div id="discovered-series-content">
+        {follow.isError && <ErrorBanner message={follow.error.message} />}
+        {follow.isSuccess && followedTitle && <SuccessBanner message={`已合并到《${followedTitle}》并开始追番。`} />}
+        <div className="discovered-series-list">{discovered.map((series) => (
+          <article key={series.seriesIdentity}>
+            <Link className="discovered-series-link" to={`/candidates?series=${encodeURIComponent(series.seriesIdentity)}`} aria-label={`查看 ${series.title} 的识别结果`}>
+              <span className="subscription-mark"><RadioTower size={18} /></span>
+              <div><strong>{series.title}</strong><small>{series.episodeCount} 集 · {series.candidateCount} 个候选 · {series.matchStatus === "matched" ? "已匹配到动画" : "未匹配到动画"}</small></div>
+              <ChevronRight size={17} />
+            </Link>
+            <Button size="small" variant="primary" icon={<BookOpenCheck size={15} />} disabled={follow.isPending} onClick={() => {
+              const animeRecord = series.animeId ? anime.find((item) => item.id === series.animeId) : undefined;
+              if (animeRecord) follow.mutate({ animeRecord });
+              else setMatchTarget(series);
+            }}>{follow.isPending && follow.variables?.animeRecord.id === series.animeId ? "创建中" : series.animeId ? "开始追番" : "匹配并追番"}</Button>
+          </article>
+        ))}</div>
+      </div>}
       {matchTarget && <AddAnimeDialog initialMode="bangumi" initialTitle={matchTarget.title} onClose={() => setMatchTarget(null)} onSelected={async (animeRecord) => { await follow.mutateAsync({ animeRecord, titles: matchTarget.titleVariants }); }} />}
     </section>
   );

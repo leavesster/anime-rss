@@ -52,11 +52,17 @@ describe("RSS discovered series", () => {
       </QueryClientProvider>,
     );
 
+    expect(screen.getByRole("heading", { name: "RSS 动画" })).toBeInTheDocument();
+    expect(screen.getByText("已识别、尚未建立追番的动画。“未匹配到动画”表示尚未对应上 Bangumi 动画 ID。")).toBeInTheDocument();
     expect(screen.getByText("New Anime")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "查看 New Anime 的识别结果" })).toHaveAttribute(
       "href",
       "/candidates?series=anime%3Aanime-1",
     );
+    fireEvent.click(screen.getByRole("button", { name: "收起 RSS 动画" }));
+    expect(screen.queryByText("New Anime")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "展开 RSS 动画" }));
+    expect(screen.getByText("New Anime")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "开始追番" }));
 
     await waitFor(() => expect(createSubscription).toHaveBeenCalled());
@@ -137,7 +143,7 @@ describe("RSS discovered series", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "匹配并追番" }));
-    expect(screen.getByText(/未匹配到动画/)).toBeInTheDocument();
+    expect(screen.getByText("1 集 · 1 个候选 · 未匹配到动画")).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "搜索 Bangumi 动画" })).toHaveValue("New Anime");
     fireEvent.click(screen.getByRole("button", { name: "搜索" }));
     fireEvent.click(await screen.findByRole("button", { name: "导入" }));
