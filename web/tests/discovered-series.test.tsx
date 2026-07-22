@@ -243,9 +243,95 @@ describe("RSS discovered series", () => {
 
     expect(section.getByRole("button", { name: "开始追番" })).toBeInTheDocument();
     expect(section.queryByRole("button", { name: "匹配" })).not.toBeInTheDocument();
+    expect(section.getByRole("checkbox", { name: "选择 RSS 动画 新番" })).toBeInTheDocument();
     fireEvent.click(section.getByRole("button", { name: "展开《新番》的 RSS 标题" }));
     expect(section.getByText("New Anime RSS")).toBeInTheDocument();
     expect(section.getByText("新番动画 RSS")).toBeInTheDocument();
     expect(section.getByText("以下标题均对应《新番》")).toBeInTheDocument();
+  });
+
+  it("continues matching an already grouped RSS anime with another RSS anime", async () => {
+    vi.mocked(searchBangumi).mockResolvedValue({
+      stale: false,
+      items: [{
+        bangumi_id: 123,
+        name: "New Anime",
+        name_cn: "新番",
+        summary: null,
+        air_date: "2026-07-01",
+        episode_count: 12,
+        cover_url: null,
+        aliases: [],
+      }],
+    });
+    vi.mocked(importBangumi).mockResolvedValue({
+      id: "anime-123",
+      primary_title: "新番",
+      bangumi_id: 123,
+    } as never);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <DiscoveredSeriesSection
+            anime={[{ id: "anime-123", primary_title: "新番", bangumi_id: 123 } as never]}
+            subscriptions={[]}
+            groups={[
+              {
+                key: "anime:anime-123:1",
+                series_title: "New Anime RSS",
+                series_key: "new-anime",
+                series_identity: "anime:anime-123",
+                anime_id: "anime-123",
+                catalog_match_status: "matched",
+                season: 1,
+                episode_key: "1",
+                candidate_count: 1,
+                candidates: [{ series_title: "New Anime RSS", title_variants: ["New Anime", "新番"] } as never],
+                latest_seen_at: "2026-07-22T00:00:00Z",
+              },
+              {
+                key: "anime:anime-123:2",
+                series_title: "新番动画 RSS",
+                series_key: "shinban",
+                series_identity: "anime:anime-123",
+                anime_id: "anime-123",
+                catalog_match_status: "matched",
+                season: 1,
+                episode_key: "2",
+                candidate_count: 1,
+                candidates: [{ series_title: "新番动画 RSS", title_variants: ["Shinban 2026"] } as never],
+                latest_seen_at: "2026-07-22T00:01:00Z",
+              },
+              {
+                key: "title:new-anime-extra:3",
+                series_title: "New Anime Extra RSS",
+                series_key: "new-anime-extra",
+                series_identity: "title:new-anime-extra",
+                anime_id: null,
+                catalog_match_status: "unmatched",
+                season: 1,
+                episode_key: "3",
+                candidate_count: 1,
+                candidates: [{ series_title: "New Anime Extra RSS", title_variants: ["New Anime Extra"] } as never],
+                latest_seen_at: "2026-07-22T00:02:00Z",
+              },
+            ]}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    const section = within(view.container);
+
+    fireEvent.click(section.getByRole("checkbox", { name: "选择 RSS 动画 新番" }));
+    fireEvent.click(section.getByRole("checkbox", { name: "选择 RSS 动画 New Anime Extra RSS" }));
+    fireEvent.click(section.getByRole("button", { name: "匹配所选（2）" }));
+    fireEvent.click(section.getByRole("button", { name: "搜索" }));
+    fireEvent.click(await within(section.getByRole("dialog")).findByRole("button", { name: "匹配" }));
+
+    await waitFor(() => expect(bindCatalogTitles).toHaveBeenCalledTimes(3));
+    expect(bindCatalogTitles).toHaveBeenNthCalledWith(1, "anime-123", ["New Anime", "新番"]);
+    expect(bindCatalogTitles).toHaveBeenNthCalledWith(2, "anime-123", ["Shinban 2026"]);
+    expect(bindCatalogTitles).toHaveBeenNthCalledWith(3, "anime-123", ["New Anime Extra"]);
   });
 });

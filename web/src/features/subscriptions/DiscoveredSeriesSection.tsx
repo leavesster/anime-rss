@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { BookOpenCheck, Check, ChevronDown, ChevronRight, ChevronUp, Link2, RadioTower } from "lucide-react";
+import { BookOpenCheck, Check, ChevronDown, ChevronRight, ChevronUp, Link2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -94,7 +94,7 @@ export function DiscoveredSeriesSection({
     return [...bySeries.values()];
   }, [anime, groups, subscriptions]);
   const selectedMatchTargets = discovered.filter((series) =>
-    !series.animeId && selectedSeries.has(series.seriesIdentity)
+    selectedSeries.has(series.seriesIdentity)
   );
   const match = useMutation({
     mutationFn: async ({ animeRecord, targets }: { animeRecord: Anime; targets: DiscoveredSeries[] }) => {
@@ -173,7 +173,7 @@ export function DiscoveredSeriesSection({
         <div className="discovered-series-list">{discovered.map((series) => (
           <article className="discovered-series-item" key={series.seriesIdentity}>
             <div className="discovered-series-row">
-              {series.animeId ? <span className="subscription-mark"><RadioTower size={18} /></span> : <label className="discovered-series-select" title={`选择 ${series.title}`}><input type="checkbox" aria-label={`选择 RSS 动画 ${series.title}`} checked={selectedSeries.has(series.seriesIdentity)} onChange={() => toggleSelected(series.seriesIdentity)} /></label>}
+              <label className="discovered-series-select" title={`选择 ${series.title}`}><input type="checkbox" aria-label={`选择 RSS 动画 ${series.title}`} checked={selectedSeries.has(series.seriesIdentity)} onChange={() => toggleSelected(series.seriesIdentity)} /></label>
               <button className="discovered-series-summary" type="button" aria-expanded={expandedSeries.has(series.seriesIdentity)} aria-controls={`rss-titles-${series.seriesIdentity}`} aria-label={`${expandedSeries.has(series.seriesIdentity) ? "收起" : "展开"}《${series.title}》的 RSS 标题`} onClick={() => toggleSeries(series.seriesIdentity)}>
                 <span><strong>{series.title}</strong><small>{series.episodeCount} 集 · {series.candidateCount} 个候选 · {series.rssTitles.length} 个 RSS 标题 · {matchStatusLabel(series)}</small></span>
                 {expandedSeries.has(series.seriesIdentity) ? <ChevronUp size={17} /> : <ChevronDown size={17} />}
