@@ -5,6 +5,7 @@ import { useState } from "react";
 import {
   listAnime,
   listDecisions,
+  listEpisodeGroups,
   listSelectionSlots,
   listSubscriptions,
   type Subscription,
@@ -19,6 +20,7 @@ import { formatDate } from "../../shared/lib/format";
 import { AddAnimeDialog } from "./AddAnimeDialog";
 import { BackfillDialog } from "./BackfillDialog";
 import { CreateSubscriptionDialog } from "./CreateSubscriptionDialog";
+import { DiscoveredSeriesSection } from "./DiscoveredSeriesSection";
 import { EpisodeControlDialog } from "./EpisodeControlDialog";
 import { GlobalPreferencesPanel } from "./GlobalPreferencesPanel";
 import { LifecycleMenu } from "./LifecycleMenu";
@@ -46,12 +48,13 @@ export function SubscriptionsPage() {
   const subscriptions = useQuery({ queryKey: ["subscriptions"], queryFn: listSubscriptions });
   const slots = useQuery({ queryKey: ["selection-slots"], queryFn: () => listSelectionSlots() });
   const decisions = useQuery({ queryKey: ["decisions"], queryFn: () => listDecisions() });
+  const groups = useQuery({ queryKey: ["episode-groups"], queryFn: listEpisodeGroups });
   const lifecycle = useMutation({
     mutationFn: ({ subscription, state }: { subscription: Subscription; state: "following" | "paused" | "completed" | "archived" }) => updateSubscription(subscription.id, subscription.version, { state }),
     onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["subscriptions"] }); },
   });
-  const loading = anime.isLoading || subscriptions.isLoading || slots.isLoading || decisions.isLoading;
-  const failed = anime.isError || subscriptions.isError || slots.isError || decisions.isError;
+  const loading = anime.isLoading || subscriptions.isLoading || slots.isLoading || decisions.isLoading || groups.isLoading;
+  const failed = anime.isError || subscriptions.isError || slots.isError || decisions.isError || groups.isError;
   const waiting = slots.data?.filter((item) => item.state === "waiting_fallback").length ?? 0;
   const following = subscriptions.data?.filter((item) => item.state === "following").length ?? 0;
   const archived = subscriptions.data?.filter((item) => item.state === "archived").length ?? 0;
@@ -64,12 +67,14 @@ export function SubscriptionsPage() {
       <PageHeader eyebrow="订阅决策" title="追番管理" description="维护动画身份与订阅规则，查看等待窗口和每一次不可变选择。" actions={<><button className="button button--secondary" onClick={() => setShowAnime(true)}><BookOpen size={16} />添加动画</button><button className="button button--primary" onClick={() => setShowSubscription(true)} disabled={!anime.data?.length}><Plus size={16} />新建追番</button></>} />
       {loading && <LoadingState label="正在读取追番状态" />}
       {(failed || lifecycle.isError) && <ErrorBanner message={lifecycle.error?.message ?? "追番和决策状态加载失败。"} />}
-      {anime.data && subscriptions.data && slots.data && decisions.data && <>
+      {anime.data && subscriptions.data && slots.data && decisions.data && groups.data && <>
         <section className="overview-band" aria-label="追番指标">
           <div className="overview-metric"><span className="metric-icon metric-icon--green"><BookOpen size={19} /></span><div><small>正在追番</small><strong>{following}</strong></div></div>
           <div className="overview-metric"><span className="metric-icon metric-icon--blue"><Clock3 size={19} /></span><div><small>等待备选</small><strong>{waiting}</strong></div></div>
           <div className="overview-metric"><span className="metric-icon metric-icon--gray"><Sparkles size={19} /></span><div><small>已形成决策</small><strong>{decisions.data.length}</strong></div></div>
         </section>
+
+        <DiscoveredSeriesSection anime={anime.data} subscriptions={subscriptions.data} groups={groups.data} />
 
         <GlobalPreferencesPanel />
         <SelectionLogicPanel />

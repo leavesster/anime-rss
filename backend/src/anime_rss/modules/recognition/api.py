@@ -22,6 +22,7 @@ from anime_rss.modules.recognition.domain import (
 )
 from anime_rss.modules.recognition.persistence import (
     CandidateRecord,
+    DismissedReleaseRecord,
     ManualActionRecord,
     MatchAttemptRecord,
 )
@@ -100,6 +101,10 @@ class CandidateNotFoundError(LookupError):
 
 
 class ReleaseRemapError(ValueError):
+    pass
+
+
+class ReleaseDismissError(ValueError):
     pass
 
 
@@ -512,12 +517,16 @@ class RecognitionService:
                 CandidateRecord.release_id == MatchAttemptRecord.release_id,
                 CandidateRecord.superseded_by_candidate_id.is_(None),
             )
+            dismissal_exists = select(DismissedReleaseRecord.release_id).where(
+                DismissedReleaseRecord.release_id == MatchAttemptRecord.release_id
+            )
             statement = (
                 select(MatchAttemptRecord)
                 .where(
                     MatchAttemptRecord.confidence == MatchConfidence.LOW.value,
                     MatchAttemptRecord.id == latest_attempt_id,
                     ~active_candidate_exists.exists(),
+                    ~dismissal_exists.exists(),
                 )
                 .order_by(MatchAttemptRecord.parsed_at.desc())
                 .limit(min(max(limit, 1), 500))
@@ -533,6 +542,42 @@ class RecognitionService:
                 )
                 for record in session.scalars(statement)
             ]
+
+    def dismiss_release(self, release_id: str) -> None:
+        now = self._clock()
+        with self._session_factory.begin() as session:
+            attempt = session.scalar(
+                select(MatchAttemptRecord)
+                .where(MatchAttemptRecord.release_id == release_id)
+                .order_by(MatchAttemptRecord.parsed_at.desc(), MatchAttemptRecord.id.desc())
+                .limit(1)
+            )
+            if attempt is None:
+                raise CandidateNotFoundError(release_id)
+            active_candidate = session.scalar(
+                select(CandidateRecord.id).where(
+                    CandidateRecord.release_id == release_id,
+                    CandidateRecord.superseded_by_candidate_id.is_(None),
+                )
+            )
+            if active_candidate is not None or attempt.confidence != MatchConfidence.LOW.value:
+                raise ReleaseDismissError("only unmatched releases can be dismissed")
+            result = cast(
+                CursorResult[object],
+                session.execute(
+                    insert(DismissedReleaseRecord)
+                    .values(release_id=release_id, attempt_id=attempt.id, created_at=now)
+                    .on_conflict_do_nothing(index_elements=["release_id"])
+                ),
+            )
+            if result.rowcount:
+                record_event(
+                    session,
+                    event_type="recognition.release_dismissed",
+                    entity_type="release",
+                    entity_id=release_id,
+                    payload={"attempt_id": attempt.id, "reason_code": attempt.reason_code},
+                )
 
     @staticmethod
     def _attempt_matches_parsed(attempt: MatchAttemptRecord, parsed: ParsedReleaseTitle) -> bool:

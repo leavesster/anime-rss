@@ -110,3 +110,15 @@ class ManualActionRecord(Base):
     action: Mapped[str] = mapped_column(String(32), index=True)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
+
+
+class DismissedReleaseRecord(Base):
+    __tablename__ = "match_dismissed_releases"
+
+    release_id: Mapped[str] = mapped_column(
+        ForeignKey("release_releases.id", ondelete="CASCADE"), primary_key=True
+    )
+    attempt_id: Mapped[str] = mapped_column(
+        ForeignKey("match_attempts.id", ondelete="CASCADE"), index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)

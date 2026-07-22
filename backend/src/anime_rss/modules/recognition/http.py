@@ -15,6 +15,7 @@ from anime_rss.infrastructure.events import EventDispatcher
 from anime_rss.modules.recognition.api import (
     CandidateNotFoundError,
     RecognitionService,
+    ReleaseDismissError,
     ReleaseRemapError,
 )
 
@@ -115,6 +116,17 @@ def list_unmatched(
     releases = services.recognition.list_unmatched(limit=requested_item_count(cursor, limit))
     items = [UnmatchedReleaseResponse.model_validate(asdict(release)) for release in releases]
     return page_response(items, response, cursor=cursor, limit=limit)
+
+
+@router.post("/releases/{release_id}/dismiss", status_code=204)
+def dismiss_release(release_id: str, request: Request) -> None:
+    services = cast(RecognitionHttpServices, request.app.state.services)
+    try:
+        services.recognition.dismiss_release(release_id)
+    except CandidateNotFoundError as error:
+        raise HTTPException(status_code=404, detail="release not found") from error
+    except ReleaseDismissError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
 
 
 @router.post("/candidates/{candidate_id}/confirm", response_model=CandidateResponse)

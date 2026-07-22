@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CandidatesPage } from "../src/features/recognition/CandidatesPage";
 import {
+  dismissRelease,
   listEpisodeGroups,
   listUnmatchedReleases,
   rerunRecognition,
@@ -11,11 +12,17 @@ import {
 
 vi.mock("../src/generated/api/client", () => ({
   confirmCandidate: vi.fn(),
+  dismissRelease: vi.fn(),
   listEpisodeGroups: vi.fn(),
   listUnmatchedReleases: vi.fn(),
   remapRelease: vi.fn(),
   rerunRecognition: vi.fn(),
 }));
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
 
 describe("recognition parser rerun", () => {
   it("runs a release again and reports that unchanged evidence was appended", async () => {
@@ -78,5 +85,31 @@ describe("recognition parser rerun", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(
       "解析结果未变化，已追加 title-rules.v1 的运行证据。",
     );
+  });
+
+  it("dismisses an unmatched release after explicit confirmation", async () => {
+    vi.mocked(listEpisodeGroups).mockResolvedValue([]);
+    vi.mocked(listUnmatchedReleases).mockResolvedValue([{
+      id: "attempt-1",
+      release_id: "release-unmatched",
+      source_title: "Unrecognized weekly package",
+      confidence: "low",
+      reason_code: "episode_not_found",
+      parsed_at: "2026-07-22T00:00:00Z",
+    }]);
+    vi.mocked(dismissRelease).mockResolvedValue();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <CandidatesPage />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("tab", { name: /待识别/ }));
+    fireEvent.click(screen.getByRole("button", { name: "忽略" }));
+    fireEvent.click(screen.getByRole("button", { name: "确认忽略" }));
+
+    await waitFor(() => expect(dismissRelease).toHaveBeenCalled());
+    expect(vi.mocked(dismissRelease).mock.calls[0]?.[0]).toBe("release-unmatched");
   });
 });

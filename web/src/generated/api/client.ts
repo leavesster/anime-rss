@@ -235,6 +235,15 @@ export async function listUnmatchedReleases(): Promise<UnmatchedRelease[]> {
   );
 }
 
+export async function dismissRelease(releaseId: string): Promise<void> {
+  const result = await client.POST("/api/v1/recognition/releases/{release_id}/dismiss", {
+    params: { path: { release_id: releaseId } },
+  });
+  if (result.error !== undefined) {
+    throw new ApiError(errorMessage(result.error), result.response.status);
+  }
+}
+
 export async function confirmCandidate(candidateId: string): Promise<Candidate> {
   return unwrap(
     await client.POST("/api/v1/recognition/candidates/{candidate_id}/confirm", {

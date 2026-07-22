@@ -187,6 +187,39 @@ def test_manual_remap_turns_unmatched_release_into_candidate(tmp_path: Path) -> 
         assert client.get("/api/v1/selection/episodes").json()[0]["state"] == "decided"
 
 
+def test_unmatched_release_can_be_dismissed_without_deleting_evidence(tmp_path: Path) -> None:
+    info_hash = "d" * 40
+    rss = (
+        '<?xml version="1.0"?><rss version="2.0"><channel><item>'
+        "<guid>dismiss-unmatched</guid><title>Unrecognized weekly package</title>"
+        f'<enclosure url="magnet:?xt=urn:btih:{info_hash}" '
+        'type="application/x-bittorrent" /></item></channel></rss>'
+    ).encode()
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, content=rss))
+
+    with TestClient(create_app(_settings(tmp_path), feed_transport=transport)) as client:
+        feed = client.post(
+            "/api/v1/feeds", json={"name": "Dismiss", "url": "https://feed.test/rss"}
+        ).json()
+        client.post(f"/api/v1/feeds/{feed['id']}/refresh")
+        unmatched = client.get("/api/v1/recognition/unmatched").json()[0]
+
+        first = client.post(f"/api/v1/recognition/releases/{unmatched['release_id']}/dismiss")
+        second = client.post(f"/api/v1/recognition/releases/{unmatched['release_id']}/dismiss")
+
+        assert first.status_code == 204
+        assert second.status_code == 204
+        assert client.get("/api/v1/recognition/unmatched").json() == []
+        assert len(client.get("/api/v1/releases").json()) == 1
+
+    database = sqlite3.connect(tmp_path / "recognition.sqlite3")
+    try:
+        assert database.execute("SELECT COUNT(*) FROM match_attempts").fetchone()[0] == 1
+        assert database.execute("SELECT COUNT(*) FROM match_dismissed_releases").fetchone()[0] == 1
+    finally:
+        database.close()
+
+
 def test_remap_supersedes_existing_candidate_without_rewriting_decision(tmp_path: Path) -> None:
     info_hash = "7" * 40
     rss = (
