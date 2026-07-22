@@ -109,6 +109,57 @@ describe("recognition parser rerun", () => {
     );
   });
 
+  it("groups episodes by anime and orders newer episode numbers first", async () => {
+    const candidate = {
+      id: "candidate-12",
+      release_id: "release-12",
+      source_title: "[Group] Grouped Anime - 12 [1080p]",
+      series_title: "Grouped Anime",
+      title_variants: ["Grouped Anime"],
+      series_key: "groupedanime",
+      anime_id: null,
+      catalog_match_status: "unmatched",
+      catalog_match_method: null,
+      catalog_match_key: "groupedanime",
+      season: 1,
+      episode_start: "12",
+      episode_end: null,
+      episode_key: "12",
+      release_group: "Group",
+      resolution: "1080p",
+      video_codec: null,
+      subtitle_language: null,
+      revision: 1,
+      content_kind: "episode",
+      confidence: "high",
+      recognition_eligible: true,
+      first_seen_at: "2026-07-22T00:04:00Z",
+      supersedes_candidate_id: null,
+      superseded_by_candidate_id: null,
+      superseded_at: null,
+    };
+    vi.mocked(listEpisodeGroups).mockResolvedValue([
+      { key: "title:otheranime:1", series_title: "Other Anime", series_key: "otheranime", series_identity: "title:otheranime", anime_id: null, catalog_match_status: "unmatched", season: 1, episode_key: "1", candidate_count: 1, candidates: [{ ...candidate, id: "candidate-other", release_id: "release-other", source_title: "[Group] Other Anime - 01 [1080p]", series_title: "Other Anime", title_variants: ["Other Anime"], series_key: "otheranime", catalog_match_key: "otheranime", episode_start: "1", episode_key: "1" }], latest_seen_at: "2026-07-22T00:03:00Z" },
+      { key: "title:groupedanime:2", series_title: "Grouped Anime", series_key: "groupedanime", series_identity: "title:groupedanime", anime_id: null, catalog_match_status: "unmatched", season: 1, episode_key: "2", candidate_count: 1, candidates: [{ ...candidate, id: "candidate-2", release_id: "release-2", source_title: "[Group] Grouped Anime - 02 [1080p]", episode_start: "2", episode_key: "2", first_seen_at: "2026-07-22T00:02:00Z" }], latest_seen_at: "2026-07-22T00:02:00Z" },
+      { key: "title:groupedanime:12", series_title: "Grouped Anime", series_key: "groupedanime", series_identity: "title:groupedanime", anime_id: null, catalog_match_status: "unmatched", season: 1, episode_key: "12", candidate_count: 1, candidates: [candidate], latest_seen_at: "2026-07-22T00:04:00Z" },
+    ]);
+    vi.mocked(listUnmatchedReleases).mockResolvedValue([]);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter><CandidatesPage /></MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("2 集 · 2 个版本")).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { name: "Grouped Anime" })).toHaveLength(1);
+    expect(screen.getAllByText(/^第 \d+ 集$/).map((element) => element.textContent)).toEqual([
+      "第 12 集",
+      "第 2 集",
+      "第 1 集",
+    ]);
+  });
+
   it("dismisses an unmatched release after explicit confirmation", async () => {
     vi.mocked(listEpisodeGroups).mockResolvedValue([]);
     vi.mocked(listUnmatchedReleases).mockResolvedValue([{

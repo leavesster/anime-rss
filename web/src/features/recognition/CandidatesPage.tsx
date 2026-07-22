@@ -12,6 +12,7 @@ import {
   remapRelease,
   rerunRecognition,
   type Candidate,
+  type EpisodeGroup,
   type RecognitionRerun,
   type ReleaseRemap,
   type UnmatchedRelease,
@@ -25,6 +26,14 @@ import { StatusBadge } from "../../shared/components/StatusBadge";
 import { formatDate } from "../../shared/lib/format";
 
 type CandidateTab = "grouped" | "unmatched";
+type SeriesGroup = {
+  identity: string;
+  title: string;
+  bangumiId: number | null;
+  candidateCount: number;
+  latestSeenAt: string;
+  episodes: EpisodeGroup[];
+};
 type RemapTarget = {
   release_id: string;
   source_title: string;
@@ -34,6 +43,8 @@ type RemapTarget = {
   season?: number | null;
   release_group?: string | null;
 };
+
+const episodeKeyCollator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" });
 
 function mediaSummary(candidate: Candidate): string {
   return [candidate.resolution, candidate.video_codec, candidate.subtitle_language]
@@ -78,20 +89,48 @@ export function CandidatesPage() {
   const groups = useQuery({ queryKey: ["episode-groups"], queryFn: listEpisodeGroups });
   const anime = useQuery({ queryKey: ["anime"], queryFn: listAnime });
   const unmatched = useQuery({ queryKey: ["unmatched-releases"], queryFn: listUnmatchedReleases });
+  const animeById = useMemo(() => new Map((anime.data ?? []).map((item) => [item.id, item])), [anime.data]);
   const filteredGroups = useMemo(() => {
     const query = search.trim().toLowerCase();
     return (groups.data ?? []).filter((group) => {
       if (seriesFilter && group.series_identity !== seriesFilter) return false;
+      const catalogTitle = group.anime_id ? animeById.get(group.anime_id)?.primary_title.toLowerCase() : undefined;
       return !query
+        || catalogTitle?.includes(query)
         || group.series_title.toLowerCase().includes(query)
         || group.episode_key.toLowerCase().includes(query)
         || group.candidates.some((candidate) => candidate.release_group?.toLowerCase().includes(query));
     });
-  }, [groups.data, search, seriesFilter]);
+  }, [animeById, groups.data, search, seriesFilter]);
+  const seriesGroups = useMemo(() => {
+    const grouped = new Map<string, SeriesGroup>();
+    for (const group of filteredGroups) {
+      const catalogAnime = group.anime_id ? animeById.get(group.anime_id) : undefined;
+      const existing = grouped.get(group.series_identity);
+      if (existing) {
+        existing.episodes.push(group);
+        existing.candidateCount += group.candidate_count;
+        if (group.latest_seen_at > existing.latestSeenAt) existing.latestSeenAt = group.latest_seen_at;
+        continue;
+      }
+      grouped.set(group.series_identity, {
+        identity: group.series_identity,
+        title: catalogAnime?.primary_title ?? group.series_title,
+        bangumiId: catalogAnime?.bangumi_id ?? null,
+        candidateCount: group.candidate_count,
+        latestSeenAt: group.latest_seen_at,
+        episodes: [group],
+      });
+    }
+    return [...grouped.values()]
+      .map((series) => ({
+        ...series,
+        episodes: series.episodes.sort((left, right) => episodeKeyCollator.compare(right.episode_key, left.episode_key)),
+      }))
+      .sort((left, right) => right.latestSeenAt.localeCompare(left.latestSeenAt) || episodeKeyCollator.compare(left.title, right.title));
+  }, [animeById, filteredGroups]);
   const filteredSeries = groups.data?.find((group) => group.series_identity === seriesFilter);
-  const filteredSeriesTitle = anime.data?.find((item) => item.id === filteredSeries?.anime_id)?.primary_title ?? filteredSeries?.series_title;
-  const displaySeriesTitle = (group: NonNullable<typeof groups.data>[number]) => anime.data?.find((item) => item.id === group.anime_id)?.primary_title ?? group.series_title;
-  const bangumiIdForGroup = (group: NonNullable<typeof groups.data>[number]) => anime.data?.find((item) => item.id === group.anime_id)?.bangumi_id;
+  const filteredSeriesTitle = (filteredSeries?.anime_id ? animeById.get(filteredSeries.anime_id)?.primary_title : undefined) ?? filteredSeries?.series_title;
   const duplicateGroups = groups.data?.filter((group) => group.candidate_count > 1).length ?? 0;
   const refresh = async () => {
     await Promise.all([
@@ -142,25 +181,30 @@ export function CandidatesPage() {
           {tab === "grouped" && seriesFilter && <div className="candidate-series-filter"><span>正在查看 <strong>{filteredSeriesTitle ?? seriesFilter}</strong> 的识别结果</span><Button size="small" variant="ghost" icon={<X size={15} />} onClick={() => { const next = new URLSearchParams(searchParams); next.delete("series"); setSearchParams(next, { replace: true }); }}>查看全部动画</Button></div>}
 
           {tab === "grouped" && filteredGroups.length === 0 && <EmptyState icon={Layers3} title={groups.data.length ? "没有匹配结果" : "还没有单集版本"} description={groups.data.length ? "清空搜索条件或尝试其他关键词。" : "刷新订阅源后，识别出的版本会按动画和集数显示。"} />}
-          {tab === "grouped" && filteredGroups.length > 0 && <div className="episode-group-list">{filteredGroups.map((group) => (
-            <article className="episode-group" key={group.key}>
-              <header className="episode-group__header"><div><span className="episode-number">第 {group.episode_key} 集</span><h2>{displaySeriesTitle(group)}</h2></div><div className="candidate-source-actions"><span className="candidate-count">{group.candidate_count} 个版本</span>{bangumiIdForGroup(group) && <a className="button button--ghost button--icon external-link" href={`https://bgm.tv/subject/${bangumiIdForGroup(group)}`} target="_blank" rel="noreferrer" referrerPolicy="no-referrer" aria-label={`在 Bangumi 查看《${displaySeriesTitle(group)}》`} title="在 Bangumi 查看"><ExternalLink size={16} /></a>}</div></header>
-              <div className="candidate-list">{group.candidates.map((candidate) => (
-                <div className="candidate-row" key={candidate.id}>
-                  <div className="candidate-group"><strong>{candidate.release_group ?? "未知字幕组"}</strong><small title={candidate.source_title}>{candidate.source_title}</small></div>
-                  <span className="candidate-media">{mediaSummary(candidate)}</span>
-                  <span className="revision-label">V{candidate.revision}</span>
-                  <StatusBadge status={candidate.confidence} />
-                  <span className={candidate.anime_id && candidate.recognition_eligible ? "eligibility eligibility--yes" : "eligibility"}><CheckCircle2 size={16} />{candidate.anime_id ? `已匹配到动画 · ${candidate.recognition_eligible ? "可自动筛选" : "需要确认"}` : candidate.catalog_match_status === "ambiguous" ? "匹配到多部动画" : "未匹配到动画"}</span>
-                  <div className="candidate-actions">
-                    {candidate.source_url && <a className="button button--ghost button--icon external-link" href={candidate.source_url} target="_blank" rel="noreferrer" referrerPolicy="no-referrer" aria-label="打开 RSS 原始条目" title="打开 RSS 原始条目"><Rss size={16} /></a>}
-                    {!candidate.recognition_eligible && <Button aria-label="确认识别结果" title="确认识别结果" size="icon" variant="ghost" icon={<ShieldCheck size={16} />} disabled={confirm.isPending} onClick={() => confirm.mutate(candidate.id)} />}
-                    <Button aria-label="重新识别标题" title="重新识别标题" size="icon" variant="ghost" icon={<RefreshCw className={rerun.isPending && rerun.variables === candidate.release_id ? "spin" : ""} size={16} />} disabled={rerun.isPending} onClick={() => rerun.mutate(candidate.release_id)} />
-                    <Button aria-label="调整动画与集数" title="调整动画与集数" size="icon" variant="ghost" icon={<PencilLine size={16} />} onClick={() => setRemapTarget(candidate)} />
-                  </div>
-                </div>
+          {tab === "grouped" && filteredGroups.length > 0 && <div className="series-group-list">{seriesGroups.map((series) => (
+            <section className="series-group" key={series.identity}>
+              <header className="series-group__header"><div><h2>{series.title}</h2><span>{series.episodes.length} 集 · {series.candidateCount} 个版本</span></div>{series.bangumiId && <a className="button button--ghost button--icon external-link" href={`https://bgm.tv/subject/${series.bangumiId}`} target="_blank" rel="noreferrer" referrerPolicy="no-referrer" aria-label={`在 Bangumi 查看《${series.title}》`} title="在 Bangumi 查看"><ExternalLink size={16} /></a>}</header>
+              <div className="episode-group-list">{series.episodes.map((group) => (
+                <article className="episode-group" key={group.key}>
+                  <header className="episode-group__header"><span className="episode-number">第 {group.episode_key} 集</span><span className="candidate-count">{group.candidate_count} 个版本</span></header>
+                  <div className="candidate-list">{group.candidates.map((candidate) => (
+                    <div className="candidate-row" key={candidate.id}>
+                      <div className="candidate-group"><strong>{candidate.release_group ?? "未知字幕组"}</strong><small title={candidate.source_title}>{candidate.source_title}</small></div>
+                      <span className="candidate-media">{mediaSummary(candidate)}</span>
+                      <span className="revision-label">V{candidate.revision}</span>
+                      <StatusBadge status={candidate.confidence} />
+                      <span className={candidate.anime_id && candidate.recognition_eligible ? "eligibility eligibility--yes" : "eligibility"}><CheckCircle2 size={16} />{candidate.anime_id ? `已匹配到动画 · ${candidate.recognition_eligible ? "可自动筛选" : "需要确认"}` : candidate.catalog_match_status === "ambiguous" ? "匹配到多部动画" : "未匹配到动画"}</span>
+                      <div className="candidate-actions">
+                        {candidate.source_url && <a className="button button--ghost button--icon external-link" href={candidate.source_url} target="_blank" rel="noreferrer" referrerPolicy="no-referrer" aria-label="打开 RSS 原始条目" title="打开 RSS 原始条目"><Rss size={16} /></a>}
+                        {!candidate.recognition_eligible && <Button aria-label="确认识别结果" title="确认识别结果" size="icon" variant="ghost" icon={<ShieldCheck size={16} />} disabled={confirm.isPending} onClick={() => confirm.mutate(candidate.id)} />}
+                        <Button aria-label="重新识别标题" title="重新识别标题" size="icon" variant="ghost" icon={<RefreshCw className={rerun.isPending && rerun.variables === candidate.release_id ? "spin" : ""} size={16} />} disabled={rerun.isPending} onClick={() => rerun.mutate(candidate.release_id)} />
+                        <Button aria-label="调整动画与集数" title="调整动画与集数" size="icon" variant="ghost" icon={<PencilLine size={16} />} onClick={() => setRemapTarget(candidate)} />
+                      </div>
+                    </div>
+                  ))}</div>
+                </article>
               ))}</div>
-            </article>
+            </section>
           ))}</div>}
 
           {tab === "unmatched" && unmatched.data.length === 0 && <EmptyState icon={CheckCircle2} title="没有尚未定位的条目" description="当前 RSS 条目都已经确定了动画和集数。" />}
