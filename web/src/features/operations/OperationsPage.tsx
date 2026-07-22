@@ -39,13 +39,13 @@ export function OperationsPage() {
 
   return (
     <>
-      <PageHeader eyebrow="运行维护" title="系统运行" description="查看后台调度、外部依赖和需要人工介入的工作。" actions={<Button variant="secondary" icon={<RefreshCw className={runNow.isPending ? "spin" : ""} size={16} />} disabled={runNow.isPending} onClick={() => runNow.mutate()}>立即运行</Button>} />
+      <PageHeader eyebrow="运行维护" title="系统运行" description="查看后台任务、外部服务和需要手动处理的问题。" actions={<Button variant="secondary" icon={<RefreshCw className={runNow.isPending ? "spin" : ""} size={16} />} disabled={runNow.isPending} onClick={() => runNow.mutate()}>立即执行待处理任务</Button>} />
       {loading && <LoadingState label="正在读取运行状态" />}
       {failed && <ErrorBanner message="部分运行诊断暂时无法加载。" />}
       {overview.data && jobs.data && runs.data && audit.data && <>
         <section className="overview-band overview-band--four" aria-label="运行指标">
           <div className="overview-metric"><span className="metric-icon metric-icon--green"><Activity size={19} /></span><div><small>调度器</small><strong>{overview.data.scheduler?.state ?? "starting"}</strong></div></div>
-          <div className="overview-metric"><span className="metric-icon metric-icon--blue"><Clock3 size={19} /></span><div><small>持久化作业</small><strong>{overview.data.pending_jobs}</strong></div></div>
+          <div className="overview-metric"><span className="metric-icon metric-icon--blue"><Clock3 size={19} /></span><div><small>已安排任务</small><strong>{overview.data.pending_jobs}</strong></div></div>
           <div className="overview-metric"><span className="metric-icon metric-icon--gray"><CheckCircle2 size={19} /></span><div><small>最近成功</small><strong>{latestRuns.filter((item) => item.status === "success").length}</strong></div></div>
           <div className="overview-metric"><span className={`metric-icon ${overview.data.failed_work.length ? "metric-icon--red" : "metric-icon--gray"}`}><AlertTriangle size={19} /></span><div><small>需要处理</small><strong>{overview.data.failed_work.length}</strong></div></div>
         </section>
@@ -57,17 +57,17 @@ export function OperationsPage() {
 
         <section className="data-section operations-section">
           <div className="section-heading"><div><h2>需要处理</h2><p>聚合抓取、识别、下载和调度失败</p></div></div>
-          {overview.data.failed_work.length === 0 ? <EmptyState icon={CheckCircle2} title="没有待处理异常" description="当前持久化任务和业务状态均无需人工介入。" /> : <div className="failure-list">{overview.data.failed_work.map((item) => <article key={item.key}><span className="failure-kind">{item.kind}</span><div><strong title={item.title}>{item.title}</strong><small>{item.detail}{item.error_code ? ` · ${item.error_code}` : ""}</small></div><time>{formatDate(item.occurred_at)}</time>{item.action_path ? <Link to={item.action_path}>处理</Link> : null}</article>)}</div>}
+          {overview.data.failed_work.length === 0 ? <EmptyState icon={CheckCircle2} title="没有待处理异常" description="当前后台任务和业务状态均正常，无需手动处理。" /> : <div className="failure-list">{overview.data.failed_work.map((item) => <article key={item.key}><span className="failure-kind">{item.kind}</span><div><strong title={item.title}>{item.title}</strong><small>{item.detail}{item.error_code ? ` · ${item.error_code}` : ""}</small></div><time>{formatDate(item.occurred_at)}</time>{item.action_path ? <Link to={item.action_path}>处理</Link> : null}</article>)}</div>}
         </section>
 
         <div className="operations-grid">
           <section className="data-section operations-section">
-            <div className="section-heading"><div><h2>调度作业</h2><p>业务截止时间和租约状态</p></div></div>
+            <div className="section-heading"><div><h2>后台任务</h2><p>计划执行时间和当前状态</p></div></div>
             <div className="runtime-list">{jobs.data.map((job) => <article key={job.id}><div><strong>{job.job_kind}</strong><small>{job.dedupe_key}</small></div><div><small>下次执行</small><strong>{formatDate(job.due_at)}</strong></div><StatusBadge status={job.last_error_code ? "failed" : job.lease_owner ? "running" : "pending"} /></article>)}</div>
           </section>
 
           <section className="data-section operations-section">
-            <div className="section-heading"><div><h2>执行历史</h2><p>每次租约执行均单独留痕</p></div><History size={17} /></div>
+            <div className="section-heading"><div><h2>运行记录</h2><p>记录每次后台任务的运行结果</p></div><History size={17} /></div>
             <div className="runtime-list">{latestRuns.map((run) => <article key={run.id}><div><strong>{run.job_kind}</strong><small>{run.error_code ?? `${run.dedupe_key} · #${run.attempt}`}</small></div><div><small>开始时间</small><strong>{formatDate(run.started_at)}</strong></div><StatusBadge status={run.status} /></article>)}</div>
           </section>
         </div>

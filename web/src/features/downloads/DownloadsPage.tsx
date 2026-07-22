@@ -22,7 +22,9 @@ const errorLabels: Record<string, string> = {
   authentication_failed: "认证失败",
   connection_failed: "连接失败",
   upstream_unavailable: "qBittorrent 暂时不可用",
-  submission_not_observed: "尚未观察到任务",
+  awaiting_observation: "已提交，等待读取状态",
+  submission_not_observed: "已提交，未读取到状态",
+  external_removal_unconfirmed: "暂未读取到任务，将再次确认",
   externally_removed: "任务已在 qBittorrent 中删除",
   operation_interrupted: "上次操作被服务重启中断",
   add_rejected: "qBittorrent 拒绝添加",
@@ -81,7 +83,7 @@ export function DownloadsPage() {
 
   return (
     <>
-      <PageHeader eyebrow="下载执行" title="下载任务" description="连接 qBittorrent，核对提交、进度和外部变更。" actions={<Button variant="secondary" icon={<RefreshCw className={sync.isPending ? "spin" : ""} size={16} />} disabled={!config.data || sync.isPending} onClick={() => sync.mutate()}>立即对账</Button>} />
+      <PageHeader eyebrow="下载执行" title="下载任务" description="连接 qBittorrent，提交下载任务并同步下载进度和状态。" actions={<Button variant="secondary" icon={<RefreshCw className={sync.isPending ? "spin" : ""} size={16} />} disabled={!config.data || sync.isPending} onClick={() => sync.mutate()}>立即同步</Button>} />
       {hasError && <ErrorBanner message="下载操作未完成，请检查连接配置和任务错误状态。" />}
       {(config.isLoading || tasks.isLoading) && <LoadingState label="正在读取下载状态" />}
       {!config.isLoading && !tasks.isLoading && <>
@@ -106,14 +108,14 @@ export function DownloadsPage() {
         </section>
 
         <section className="data-section download-task-section">
-          <div className="section-heading"><div><h2>任务状态</h2><p>{taskItems.length} 个持久化任务</p></div></div>
-          {taskItems.length === 0 ? <EmptyState icon={HardDrive} title="还没有下载任务" description="选择引擎形成决定或手动提交发布条目后，任务会在这里等待 qBittorrent。" /> : <div className="download-list">
+          <div className="section-heading"><div><h2>任务状态</h2><p>共 {taskItems.length} 个下载任务</p></div></div>
+          {taskItems.length === 0 ? <EmptyState icon={HardDrive} title="还没有下载任务" description="自动选择版本或手动提交发布条目后，任务会在这里等待提交到 qBittorrent。" /> : <div className="download-list">
             {taskItems.map((task) => <article className="download-row" key={task.id}>
               <div className="download-row__identity"><strong title={task.display_name ?? task.info_hash}>{task.display_name ?? truncateHash(task.info_hash)}</strong><small><span className="download-row__hash">{truncateHash(task.info_hash)}</span> · {task.actual_save_path ?? task.requested_save_path ?? "使用 qBittorrent 默认路径"}</small></div>
               <div className="download-progress"><div><span style={{ width: `${Math.round(task.progress * 100)}%` }} /></div><small>{Math.round(task.progress * 100)}%</small></div>
               <div className="download-row__meta"><small>{task.category || "无分类"}</small><strong>{task.tags.join(", ") || "无标签"}</strong></div>
-              <div className="download-row__state"><StatusBadge status={task.state} />{task.stale && <small>状态陈旧</small>}{task.error_code && <small>{errorLabels[task.error_code] ?? task.error_code}</small>}</div>
-              <div className="download-row__time"><small>最近观察</small><strong>{formatDate(task.last_observed_at)}</strong></div>
+              <div className="download-row__state"><StatusBadge status={task.state} />{task.stale && <small>未能读取到最新状态</small>}{task.error_code && <small>{errorLabels[task.error_code] ?? task.error_code}</small>}</div>
+              <div className="download-row__time"><small>上次读取到状态</small><strong>{formatDate(task.last_observed_at)}</strong></div>
               {retryableStates.has(task.state) ? <Button aria-label="重试任务" title="重试任务" size="icon" variant="ghost" icon={<RotateCcw size={16} />} disabled={retry.isPending} onClick={() => retry.mutate(task.id)} /> : <span className="download-row__spacer" />}
             </article>)}
           </div>}
