@@ -11,8 +11,8 @@ import {
 const steps = [
   {
     icon: ShieldCheck,
-    title: "硬过滤",
-    detail: "仅接收高置信度单集；默认要求中文字幕、1080p/720p 和 HEVC/AVC/AV1。",
+    title: "直接排除",
+    detail: "只接受识别可信度高的单集版本；默认要求中文字幕、1080p/720p 和 HEVC/AVC/AV1。",
   },
   {
     icon: GitCompareArrows,
@@ -22,12 +22,12 @@ const steps = [
   {
     icon: Clock3,
     title: "等待或决定",
-    detail: "所有第一偏好都命中时立即决定；否则等待，期间只替换更优候选，不延长截止时间。",
+    detail: "所有首选条件都满足时立即选择；否则继续等待，期间只保留更好的版本，等待到期时间不会延后。",
   },
   {
     icon: RefreshCw,
     title: "版本升级",
-    detail: "决定后仅接受同字幕组、更高 revision 的自动升级；其他字幕组不会覆盖已有选择。",
+    detail: "选择后仅接受同字幕组的 V2、V3 等修订版自动升级；其他字幕组不会覆盖已有选择。",
   },
 ];
 
@@ -37,7 +37,7 @@ export function SelectionLogicPanel() {
       <div className="section-heading selection-logic__heading">
         <div>
           <h2 id="selection-logic-title">当前选择逻辑</h2>
-          <p>每一集独立评估；允许列表决定能否参与，偏好顺序决定谁更优。</p>
+          <p>每一集独立选择；可接受范围决定哪些版本能参与，偏好顺序决定优先选择谁。</p>
         </div>
       </div>
 
@@ -57,9 +57,9 @@ export function SelectionLogicPanel() {
       <div className="manual-boundary">
         <span className="manual-boundary__icon"><Hand size={17} /></span>
         <div>
-          <strong>人工处理边界</strong>
-          <p><CheckCircle2 size={14} />已支持标题确认、历史回填和逐集改选。</p>
-          <p>人工替换保留旧决策；重置不会删除 qBittorrent 中已有任务。</p>
+          <strong>手动操作说明</strong>
+          <p><CheckCircle2 size={14} />已支持标题确认、补番和逐集改选。</p>
+          <p>手动替换会保留之前的选择记录；重置不会删除 qBittorrent 中已有任务。</p>
         </div>
       </div>
     </section>

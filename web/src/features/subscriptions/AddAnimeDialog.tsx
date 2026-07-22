@@ -76,7 +76,7 @@ export function AddAnimeDialog({
     <div className="dialog-backdrop" role="presentation">
       <section className="dialog" role="dialog" aria-modal="true" aria-labelledby="anime-dialog-title">
         <header className="dialog__header">
-          <div><h2 id="anime-dialog-title">添加动画</h2><p>从 Bangumi 导入元数据，或建立完全本地的动画身份。</p></div>
+          <div><h2 id="anime-dialog-title">添加动画</h2><p>从 Bangumi 导入动画资料，或直接添加一部本地动画。</p></div>
           <button className="icon-button" type="button" onClick={onClose} aria-label="关闭"><X size={18} /></button>
         </header>
         <div className="segmented" role="tablist" aria-label="动画来源">
@@ -87,7 +87,7 @@ export function AddAnimeDialog({
         {mode === "local" && <form className="form-stack" onSubmit={submitLocal}>
           {create.isError && <ErrorBanner message={create.error.message} />}
           <label className="field"><span>动画名称</span><input required maxLength={300} value={title} onChange={(event) => setTitle(event.target.value)} /></label>
-          <label className="field"><span>匹配别名 <small>逗号分隔</small></span><input value={aliases} onChange={(event) => setAliases(event.target.value)} placeholder="日文名, 罗马字名" /></label>
+          <label className="field"><span>其他名称（别名）<small>逗号分隔</small></span><input value={aliases} onChange={(event) => setAliases(event.target.value)} placeholder="日文名, 罗马字名" /></label>
           <div className="dialog__actions"><button className="button button--secondary" type="button" onClick={onClose}>取消</button><button className="button button--primary" disabled={create.isPending}>创建动画</button></div>
         </form>}
 

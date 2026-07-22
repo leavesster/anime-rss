@@ -22,7 +22,7 @@ export function CandidatePreviewStep({ onComplete }: { onComplete: () => Promise
   const error = subscriptions.error ?? preview.error ?? finish.error;
   const candidateCount = preview.data?.reduce((sum, item) => sum + item.candidates.length, 0) ?? 0;
   return (
-    <StepFrame icon={Eye} title="预览现有候选" summary="只读检查历史候选，不执行回填">
+    <StepFrame icon={Eye} title="预览现有候选" summary="只读检查历史候选，不执行补番">
       {subscriptions.isLoading && <LoadingState label="正在读取追番" />}
       {error && <ErrorBanner message={error.message} />}
       {subscription && !preview.data && <div className="setup-preview setup-preview--empty">

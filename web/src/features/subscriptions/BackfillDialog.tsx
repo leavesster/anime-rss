@@ -12,7 +12,7 @@ interface Props {
 
 function coverageMessage(candidate: BackfillPreview["candidates"][number]): string | null {
   if (candidate.coverage_status === "partial") {
-    return `已获取第 ${candidate.already_covered_episode_keys.join("、")} 集，需在剧集控制中人工确认`;
+    return `已获取第 ${candidate.already_covered_episode_keys.join("、")} 集，需在剧集控制中手动确认`;
   }
   if (candidate.coverage_status === "full") {
     return `覆盖的第 ${candidate.covered_episode_keys.join("、")} 集均已获取`;
@@ -42,11 +42,11 @@ export function BackfillDialog({ subscription, onClose }: Props) {
     <div className="dialog-backdrop" role="presentation">
       <section className="dialog dialog--wide" role="dialog" aria-modal="true" aria-labelledby="backfill-dialog-title">
         <header className="dialog__header">
-          <div><h2 id="backfill-dialog-title">历史回填</h2><p>{subscription.anime_title} · 当前规则直接选择每集最佳候选，不启动等待窗口。</p></div>
+          <div><h2 id="backfill-dialog-title">补番</h2><p>{subscription.anime_title} · 按当前规则直接选择每集最佳版本，不等待首选版本。</p></div>
           <button className="icon-button" type="button" onClick={onClose} aria-label="关闭"><X size={18} /></button>
         </header>
-        {preview.isLoading && <LoadingState label="正在生成回填预览" />}
-        {(preview.isError || commit.isError) && <ErrorBanner message={(preview.error ?? commit.error)?.message ?? "回填请求失败"} />}
+        {preview.isLoading && <LoadingState label="正在生成补番预览" />}
+        {(preview.isError || commit.isError) && <ErrorBanner message={(preview.error ?? commit.error)?.message ?? "补番请求失败"} />}
         <div className="backfill-list">{preview.data?.map((item) => {
           const winner = item.candidates.find((candidate) => candidate.candidate_id === item.selected_candidate_id);
           const blockedCandidate = item.candidates.find((candidate) => candidate.coverage_status !== "none");

@@ -137,6 +137,7 @@ describe("RSS discovered series", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "匹配并追番" }));
+    expect(screen.getByText(/未匹配到动画/)).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "搜索 Bangumi 动画" })).toHaveValue("New Anime");
     fireEvent.click(screen.getByRole("button", { name: "搜索" }));
     fireEvent.click(await screen.findByRole("button", { name: "导入" }));

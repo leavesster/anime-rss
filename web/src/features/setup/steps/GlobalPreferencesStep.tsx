@@ -46,7 +46,7 @@ export function GlobalPreferencesStep({ onComplete }: { onComplete: () => Promis
   });
   const submit = (event: FormEvent) => { event.preventDefault(); save.mutate(); };
   return (
-    <StepFrame icon={SlidersHorizontal} title="全局版本偏好" summary="候选过滤、优先顺序与备选等待">
+    <StepFrame icon={SlidersHorizontal} title="全局版本偏好" summary="版本筛选、优先顺序和等待首选版本">
       {profile.isLoading && <LoadingState label="正在读取全局偏好" />}
       {(profile.isError || save.isError) && <ErrorBanner message={save.error?.message ?? "全局偏好读取失败"} />}
       {profile.data && <form className="setup-form" onSubmit={submit}>
@@ -55,7 +55,7 @@ export function GlobalPreferencesStep({ onComplete }: { onComplete: () => Promis
           <label className="field"><span>字幕顺序</span><input value={subtitles} onChange={(event) => setSubtitles(event.target.value)} /></label>
           <label className="field"><span>分辨率顺序</span><input value={resolutions} onChange={(event) => setResolutions(event.target.value)} /></label>
           <label className="field"><span>编码顺序</span><input value={codecs} onChange={(event) => setCodecs(event.target.value)} /></label>
-          <label className="field"><span>备选等待（分钟）</span><input type="number" min={0} max={10080} value={waitMinutes} onChange={(event) => setWaitMinutes(Number(event.target.value))} /></label>
+          <label className="field"><span>等待首选版本（分钟）</span><input type="number" min={0} max={10080} value={waitMinutes} onChange={(event) => setWaitMinutes(Number(event.target.value))} /></label>
         </div>
         <div className="setup-form__actions"><Button type="submit" variant="primary" icon={<Save size={16} />} disabled={save.isPending}>保存并继续</Button></div>
       </form>}

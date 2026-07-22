@@ -82,7 +82,7 @@ export function EpisodeControlDialog({ subscription, onClose }: { subscription: 
             </section>;
           })}
         </div>
-        {actions.data && actions.data.length > 0 && <section className="manual-action-log"><h3>人工操作</h3>{actions.data.slice(0, 8).map((action) => <div key={action.id}><strong>{action.episode_key}</strong><span>{action.action}</span><small>{formatDate(action.created_at)}</small></div>)}</section>}
+        {actions.data && actions.data.length > 0 && <section className="manual-action-log"><h3>手动操作</h3>{actions.data.slice(0, 8).map((action) => <div key={action.id}><strong>{action.episode_key}</strong><span>{action.action}</span><small>{formatDate(action.created_at)}</small></div>)}</section>}
       </section>
     </div>
   );

@@ -9,7 +9,7 @@ const navigation = [
   { to: "/feeds", label: "订阅源", icon: Rss },
   { to: "/subscriptions", label: "追番", icon: BookOpenCheck },
   { to: "/downloads", label: "下载", icon: Download },
-  { to: "/candidates", label: "剧集候选", icon: Layers3 },
+  { to: "/candidates", label: "单集版本", icon: Layers3 },
   { to: "/releases", label: "发布条目", icon: Database },
   { to: "/operations", label: "运行", icon: ServerCog },
   { to: "/system", label: "系统", icon: Settings2 },

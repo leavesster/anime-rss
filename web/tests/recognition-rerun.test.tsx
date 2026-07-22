@@ -98,12 +98,14 @@ describe("recognition parser rerun", () => {
       "href",
       "https://releases.test/items/parser-anime-1",
     );
-    fireEvent.click(await screen.findByRole("button", { name: "重新解析" }));
+    expect(screen.getByRole("heading", { name: "单集版本" })).toBeInTheDocument();
+    expect(screen.getByText("已定位集数")).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "重新识别标题" }));
 
     await waitFor(() => expect(rerunRecognition).toHaveBeenCalled());
     expect(vi.mocked(rerunRecognition).mock.calls[0]?.[0]).toBe("release-1");
     expect(await screen.findByRole("status")).toHaveTextContent(
-      "解析结果未变化，已追加 title-rules.v1 的运行证据。",
+      "识别结果没有变化，已保留本次识别依据。",
     );
   });
 
@@ -125,7 +127,8 @@ describe("recognition parser rerun", () => {
       </QueryClientProvider>,
     );
 
-    fireEvent.click(await screen.findByRole("tab", { name: /待识别/ }));
+    fireEvent.click(await screen.findByRole("tab", { name: /尚未定位/ }));
+    expect(screen.getByText("未识别出集数")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "忽略" }));
     fireEvent.click(screen.getByRole("button", { name: "确认忽略" }));
 

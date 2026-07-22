@@ -104,7 +104,7 @@ export function DiscoveredSeriesSection({
         <article key={series.seriesIdentity}>
           <Link className="discovered-series-link" to={`/candidates?series=${encodeURIComponent(series.seriesIdentity)}`} aria-label={`查看 ${series.title} 的识别结果`}>
             <span className="subscription-mark"><RadioTower size={18} /></span>
-            <div><strong>{series.title}</strong><small>{series.episodeCount} 集 · {series.candidateCount} 个候选 · {series.matchStatus === "matched" ? "已关联动画目录" : "待匹配动画"}</small></div>
+            <div><strong>{series.title}</strong><small>{series.episodeCount} 集 · {series.candidateCount} 个候选 · {series.matchStatus === "matched" ? "已匹配到动画" : "未匹配到动画"}</small></div>
             <ChevronRight size={17} />
           </Link>
           <Button size="small" variant="primary" icon={<BookOpenCheck size={15} />} disabled={follow.isPending} onClick={() => {

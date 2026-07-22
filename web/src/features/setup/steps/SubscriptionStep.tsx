@@ -46,7 +46,7 @@ export function SubscriptionStep({ onComplete }: { onComplete: () => Promise<voi
   const error = subscriptions.error ?? search.error ?? importAnime.error ?? subscribe.error ?? continueExisting.error;
 
   return (
-    <StepFrame icon={Radio} title="订阅第一部动画" summary="从 Bangumi 建立动画身份和追番规则">
+    <StepFrame icon={Radio} title="订阅第一部动画" summary="从 Bangumi 添加动画并设置追番规则">
       {subscriptions.isLoading && <LoadingState label="正在读取追番" />}
       {error && <ErrorBanner message={error.message} />}
       {existing ? <div className="setup-preview">
@@ -65,7 +65,7 @@ export function SubscriptionStep({ onComplete }: { onComplete: () => Promise<voi
         </div>
         {imported && <form className="setup-imported" onSubmit={(event) => { event.preventDefault(); subscribe.mutate(); }}>
           <div className="setup-preview__heading"><CheckCircle2 size={17} /><strong>{imported.primary_title}</strong><span>已导入</span></div>
-          <label className="field"><span>附加匹配别名 <small>逗号分隔</small></span><input value={aliases} onChange={(event) => setAliases(event.target.value)} /></label>
+          <label className="field"><span>其他名称（别名）<small>逗号分隔</small></span><input value={aliases} onChange={(event) => setAliases(event.target.value)} /></label>
           <div className="setup-form__actions"><Button type="submit" variant="primary" icon={<Radio size={16} />} disabled={subscribe.isPending}>开始追番</Button></div>
         </form>}
       </div>}

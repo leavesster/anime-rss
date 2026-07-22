@@ -70,7 +70,7 @@ export function GlobalPreferencesPanel() {
           <label className="field"><span>字幕顺序</span><input value={subtitles} onChange={(event) => setSubtitles(event.target.value)} /></label>
           <label className="field"><span>分辨率顺序</span><input value={resolutions} onChange={(event) => setResolutions(event.target.value)} /></label>
           <label className="field"><span>编码顺序</span><input value={codecs} onChange={(event) => setCodecs(event.target.value)} /></label>
-          <label className="field preference-form__wait"><span>备选等待（分钟）</span><input type="number" min={0} max={10080} value={waitMinutes} onChange={(event) => setWaitMinutes(Number(event.target.value))} /></label>
+          <label className="field preference-form__wait"><span>等待首选版本（分钟）</span><input type="number" min={0} max={10080} value={waitMinutes} onChange={(event) => setWaitMinutes(Number(event.target.value))} /></label>
           <Button type="submit" variant="primary" icon={<Save size={16} />} disabled={save.isPending}>{save.isPending ? "保存中" : "保存"}</Button>
         </form>
       )}
