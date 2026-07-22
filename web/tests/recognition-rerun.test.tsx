@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 
 import { CandidatesPage } from "../src/features/recognition/CandidatesPage";
 import {
@@ -74,7 +75,7 @@ describe("recognition parser rerun", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
-        <CandidatesPage />
+        <MemoryRouter><CandidatesPage /></MemoryRouter>
       </QueryClientProvider>,
     );
 
@@ -101,7 +102,7 @@ describe("recognition parser rerun", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
-        <CandidatesPage />
+        <MemoryRouter><CandidatesPage /></MemoryRouter>
       </QueryClientProvider>,
     );
 
@@ -111,5 +112,49 @@ describe("recognition parser rerun", () => {
 
     await waitFor(() => expect(dismissRelease).toHaveBeenCalled());
     expect(vi.mocked(dismissRelease).mock.calls[0]?.[0]).toBe("release-unmatched");
+  });
+
+  it("filters grouped candidates from a discovered-series deep link", async () => {
+    const candidate = {
+      id: "candidate-1",
+      release_id: "release-1",
+      source_title: "[Group] New Anime - 01 [1080p]",
+      series_title: "New Anime",
+      series_key: "newanime",
+      season: 1,
+      episode_start: "1",
+      episode_end: null,
+      episode_key: "1",
+      release_group: "Group",
+      resolution: "1080p",
+      video_codec: null,
+      subtitle_language: null,
+      revision: 1,
+      content_kind: "episode",
+      confidence: "high",
+      recognition_eligible: true,
+      first_seen_at: "2026-07-22T00:00:00Z",
+      supersedes_candidate_id: null,
+      superseded_by_candidate_id: null,
+      superseded_at: null,
+    };
+    vi.mocked(listEpisodeGroups).mockResolvedValue([
+      { key: "newanime:1", series_title: "New Anime", series_key: "newanime", season: 1, episode_key: "1", candidate_count: 1, candidates: [candidate], latest_seen_at: "2026-07-22T00:00:00Z" },
+      { key: "otheranime:1", series_title: "Other Anime", series_key: "otheranime", season: 1, episode_key: "1", candidate_count: 1, candidates: [{ ...candidate, id: "candidate-2", series_title: "Other Anime", series_key: "otheranime" }], latest_seen_at: "2026-07-22T00:00:00Z" },
+    ]);
+    vi.mocked(listUnmatchedReleases).mockResolvedValue([]);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={["/candidates?series=newanime"]}><CandidatesPage /></MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("正在查看", { exact: false })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "New Anime" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Other Anime" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "查看全部动画" }));
+    expect(await screen.findByRole("heading", { name: "Other Anime" })).toBeInTheDocument();
   });
 });

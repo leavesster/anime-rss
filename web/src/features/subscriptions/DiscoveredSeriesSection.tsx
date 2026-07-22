@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { BookOpenCheck, RadioTower } from "lucide-react";
+import { BookOpenCheck, ChevronRight, RadioTower } from "lucide-react";
 import { useMemo } from "react";
+import { Link } from "react-router-dom";
 
 import {
   createLocalAnime,
@@ -83,8 +84,11 @@ export function DiscoveredSeriesSection({
       {follow.isError && <ErrorBanner message={follow.error.message} />}
       <div className="discovered-series-list">{discovered.map((series) => (
         <article key={series.seriesKey}>
-          <span className="subscription-mark"><RadioTower size={18} /></span>
-          <div><strong>{series.title}</strong><small>{series.episodeCount} 集 · {series.candidateCount} 个候选</small></div>
+          <Link className="discovered-series-link" to={`/candidates?series=${encodeURIComponent(series.seriesKey)}`} aria-label={`查看 ${series.title} 的识别结果`}>
+            <span className="subscription-mark"><RadioTower size={18} /></span>
+            <div><strong>{series.title}</strong><small>{series.episodeCount} 集 · {series.candidateCount} 个候选</small></div>
+            <ChevronRight size={17} />
+          </Link>
           <Button size="small" variant="primary" icon={<BookOpenCheck size={15} />} disabled={follow.isPending} onClick={() => follow.mutate(series)}>{follow.isPending && follow.variables?.seriesKey === series.seriesKey ? "创建中" : "开始追番"}</Button>
         </article>
       ))}</div>

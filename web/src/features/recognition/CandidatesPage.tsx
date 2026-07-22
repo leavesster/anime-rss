@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, CheckCircle2, Layers3, PencilLine, RefreshCw, Search, ShieldCheck, Trash2, UsersRound, X } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import {
   confirmCandidate,
@@ -56,6 +57,8 @@ function rerunMessage(result: RecognitionRerun): string {
 
 export function CandidatesPage() {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const seriesFilter = searchParams.get("series");
   const [tab, setTab] = useState<CandidateTab>("grouped");
   const [search, setSearch] = useState("");
   const [remapTarget, setRemapTarget] = useState<RemapTarget | null>(null);
@@ -65,13 +68,17 @@ export function CandidatesPage() {
   const unmatched = useQuery({ queryKey: ["unmatched-releases"], queryFn: listUnmatchedReleases });
   const filteredGroups = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return groups.data ?? [];
-    return (groups.data ?? []).filter((group) =>
-      group.series_title.toLowerCase().includes(query)
-      || group.episode_key.toLowerCase().includes(query)
-      || group.candidates.some((candidate) => candidate.release_group?.toLowerCase().includes(query)),
-    );
-  }, [groups.data, search]);
+    return (groups.data ?? []).filter((group) => {
+      if (seriesFilter && group.series_key !== seriesFilter) return false;
+      return !query
+        || group.series_title.toLowerCase().includes(query)
+        || group.episode_key.toLowerCase().includes(query)
+        || group.candidates.some((candidate) => candidate.release_group?.toLowerCase().includes(query));
+    });
+  }, [groups.data, search, seriesFilter]);
+  const filteredSeriesTitle = groups.data?.find(
+    (group) => group.series_key === seriesFilter,
+  )?.series_title;
   const duplicateGroups = groups.data?.filter((group) => group.candidate_count > 1).length ?? 0;
   const refresh = async () => {
     await Promise.all([
@@ -118,6 +125,8 @@ export function CandidatesPage() {
             </div>
             {tab === "grouped" && <label className="search-field candidate-search"><Search size={17} /><input aria-label="搜索剧集候选" placeholder="搜索动画、集数或字幕组" value={search} onChange={(event) => setSearch(event.target.value)} /></label>}
           </div>
+
+          {tab === "grouped" && seriesFilter && <div className="candidate-series-filter"><span>正在查看 <strong>{filteredSeriesTitle ?? seriesFilter}</strong> 的识别结果</span><Button size="small" variant="ghost" icon={<X size={15} />} onClick={() => { const next = new URLSearchParams(searchParams); next.delete("series"); setSearchParams(next, { replace: true }); }}>查看全部动画</Button></div>}
 
           {tab === "grouped" && filteredGroups.length === 0 && <EmptyState icon={Layers3} title={groups.data.length ? "没有匹配结果" : "还没有剧集候选"} description={groups.data.length ? "清空搜索条件或尝试其他关键词。" : "刷新包含可识别动画标题的订阅源后，候选会按集数归组。"} />}
           {tab === "grouped" && filteredGroups.length > 0 && <div className="episode-group-list">{filteredGroups.map((group) => (

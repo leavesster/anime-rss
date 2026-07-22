@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 
 import { DiscoveredSeriesSection } from "../src/features/subscriptions/DiscoveredSeriesSection";
 import { createLocalAnime, createSubscription } from "../src/generated/api/client";
@@ -17,24 +18,30 @@ describe("RSS discovered series", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
-        <DiscoveredSeriesSection
-          anime={[]}
-          subscriptions={[]}
-          groups={[{
-            key: "newanime:1",
-            series_title: "New Anime",
-            series_key: "newanime",
-            season: 1,
-            episode_key: "1",
-            candidate_count: 2,
-            candidates: [],
-            latest_seen_at: "2026-07-22T00:00:00Z",
-          }]}
-        />
+        <MemoryRouter>
+          <DiscoveredSeriesSection
+            anime={[]}
+            subscriptions={[]}
+            groups={[{
+              key: "newanime:1",
+              series_title: "New Anime",
+              series_key: "newanime",
+              season: 1,
+              episode_key: "1",
+              candidate_count: 2,
+              candidates: [],
+              latest_seen_at: "2026-07-22T00:00:00Z",
+            }]}
+          />
+        </MemoryRouter>
       </QueryClientProvider>,
     );
 
     expect(screen.getByText("New Anime")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "查看 New Anime 的识别结果" })).toHaveAttribute(
+      "href",
+      "/candidates?series=newanime",
+    );
     fireEvent.click(screen.getByRole("button", { name: "开始追番" }));
 
     await waitFor(() => expect(createSubscription).toHaveBeenCalled());
@@ -49,20 +56,22 @@ describe("RSS discovered series", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { container } = render(
       <QueryClientProvider client={client}>
-        <DiscoveredSeriesSection
-          anime={[]}
-          subscriptions={[{ match_keys: ["newanime"] } as never]}
-          groups={[{
-            key: "newanime:1",
-            series_title: "New Anime",
-            series_key: "newanime",
-            season: 1,
-            episode_key: "1",
-            candidate_count: 1,
-            candidates: [],
-            latest_seen_at: "2026-07-22T00:00:00Z",
-          }]}
-        />
+        <MemoryRouter>
+          <DiscoveredSeriesSection
+            anime={[]}
+            subscriptions={[{ match_keys: ["newanime"] } as never]}
+            groups={[{
+              key: "newanime:1",
+              series_title: "New Anime",
+              series_key: "newanime",
+              season: 1,
+              episode_key: "1",
+              candidate_count: 1,
+              candidates: [],
+              latest_seen_at: "2026-07-22T00:00:00Z",
+            }]}
+          />
+        </MemoryRouter>
       </QueryClientProvider>,
     );
 

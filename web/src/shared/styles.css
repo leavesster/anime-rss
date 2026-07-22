@@ -242,11 +242,15 @@ a.compact-row:hover { background: var(--surface-soft); }
 .subscription-list { overflow: visible; }
 .discovered-series-section { margin: 28px 0; }
 .discovered-series-list { display: grid; overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
-.discovered-series-list article { min-height: 68px; display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 11px 14px; border-bottom: 1px solid var(--soft-line); }
+.discovered-series-list article { min-height: 68px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; padding-right: 14px; border-bottom: 1px solid var(--soft-line); }
 .discovered-series-list article:last-child { border-bottom: 0; }
-.discovered-series-list article > div { min-width: 0; display: grid; gap: 4px; }
+.discovered-series-link { min-width: 0; min-height: 67px; display: grid; grid-template-columns: 34px minmax(0, 1fr) 20px; align-items: center; gap: 12px; padding: 11px 8px 11px 14px; color: inherit; }
+.discovered-series-link:hover { background: var(--surface-soft); }
+.discovered-series-link > div { min-width: 0; display: grid; gap: 4px; }
+.discovered-series-link > svg { color: var(--muted); }
 .discovered-series-list strong, .discovered-series-list small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .discovered-series-list small { color: var(--muted); font-size: 9px; }
+.candidate-series-filter { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -4px 0 14px; padding: 7px 10px 7px 13px; color: #42504b; background: var(--accent-soft); border: 1px solid #cfe0d8; border-radius: 6px; font-size: 11px; }
 .subscription-row { min-height: 82px; display: grid; grid-template-columns: minmax(220px, 1fr) minmax(130px, .6fr) 92px 76px auto; align-items: center; gap: 14px; padding: 13px 15px; border-bottom: 1px solid var(--soft-line); }
 .subscription-row:last-child, .decision-list article:last-child, .catalog-results article:last-child, .backfill-row:last-child { border-bottom: 0; }
 .subscription-row__main { min-width: 0; display: flex; align-items: center; gap: 11px; }
