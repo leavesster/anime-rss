@@ -62,6 +62,7 @@ describe("manual release download", () => {
     );
 
     expect(await screen.findByText("[Group] Anime - 01.mkv")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "种子列表" })).toBeInTheDocument();
     expect(screen.getByText("去重后列表")).toBeInTheDocument();
     expect(screen.getByText("种子名称 / 种子哈希")).toBeInTheDocument();
     expect(screen.getByText("BT 标识")).toBeInTheDocument();
