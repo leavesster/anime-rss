@@ -1,197 +1,61 @@
 # Anime RSS Service
 
-面向单用户、自托管场景的动画 RSS 获取与下载自动化服务。产品需求见 `DESIGN.md`；模块边界和依赖规则见 `ARCHITECTURE.md`；已实现行为和具体选择记录在 `IMPLEMENTATION.md`；首个版本的验收证据记录在 `ACCEPTANCE.md`。
+Anime RSS Service 是一个面向单用户的自托管追番下载服务。它持续读取你订阅的 RSS/Atom，识别其中的动画、集数、字幕组、分辨率和编码，根据你的偏好挑出合适版本，并把最终结果提交给 qBittorrent。
 
-## 当前实现状态
+它解决的不是“如何订阅一个 RSS”，而是 RSS 之后那段容易出错的工作：同一集可能同时出现在多个订阅源里，也可能先来一个能看的版本，稍后才出现你真正想要的字幕组。服务会把这些发布资源归到同一集下，过滤不接受的版本，必要时等待更好的候选，最后只创建一次可解释、可追踪的下载。
 
-从订阅源到 qBittorrent 的产品链路和自托管交付层已经实现：
+## 它是怎样工作的
 
-- FastAPI 应用及 SQLite/Alembic 运行时
-- 加密存储订阅源 URL、请求头、magnet 链接和 torrent 载荷
-- 有界 RSS/Atom 抓取、安全重定向处理和缓存验证器
-- 持久化订阅源健康状态、重试状态、抓取历史和标准化条目
-- 对 v1、混合型和纯 v2 种子的原始 bencode `info` 精确计算哈希
-- 通过持久化集成事件实现跨订阅源发布资源去重
-- 持久化调度器租约、执行历史、恢复和自动订阅源刷新
-- 响应式 React 仪表盘、订阅源管理、抓取历史和发布资源库
-- 生成 TypeScript API 类型并在生产环境提供静态资源
-- 确定性标题识别和同集候选项分组
-- 本地/Bangumi 动画目录及感知生命周期的订阅
-- 确定性硬性过滤、有序偏好、备选等待和历史补全决策
-- 加密的 qBittorrent 配置和连通性验证
-- 幂等的 magnet/torrent 提交、任务对账同步和显式重试
-- qBittorrent 4.6/5.x Web API 兼容性检查及两阶段删除确认
-- 取消 V2/V3 任务时不删除已完成文件
-- 依赖健康状态、失败工作汇总和仅追加审计历史
-- 手动确认候选项及未匹配发布资源映射
-- 首次运行管理员设置、Session Cookie 和受 CSRF 保护的修改操作
-- 应用内通知，以及带持久化重试的加密 Webhook 投递
-- 可移植的 SQLite 与主密钥备份、保留策略和重启安全的恢复暂存
-- 串行化启动迁移，并在迁移前自动创建一致性备份
-- 生产镜像、Compose 数据卷、就绪健康检查和非 root 运行时
-- 带版本的实现决策记录，便于交接和审核
-- 参考性播出日历、带版本的单集覆盖项、分集历史和一次性缺集警告
-
-应用按单管理员、单进程设计。若要暴露到可信网络以外，请置于 HTTPS 后方；当 TLS 在服务源站终止时，设置 `ANIME_RSS_AUTH_COOKIE_SECURE=true`。默认支持使用 IP 地址和 `localhost` 访问。使用主机名或反向代理时，还必须声明浏览器信任边界：
-
-```bash
-ANIME_RSS_BROWSER_TRUSTED_HOSTS="anime.home,anime.example" \
-ANIME_RSS_BROWSER_TRUSTED_ORIGINS="https://anime.example" \
-ANIME_RSS_AUTH_COOKIE_SECURE=true \
-docker compose up -d
+```mermaid
+flowchart LR
+    Feeds["RSS / Atom 订阅源"] --> Fetch["抓取、规范化与去重"]
+    Fetch --> Recognize["识别动画、集数和版本属性"]
+    Bangumi["Bangumi 元数据"] -. "补充标题、别名与播出日历" .-> Recognize
+    Recognize --> Select["按追番规则过滤、比较和等待"]
+    Select --> Decision["保存选择理由与下载意图"]
+    Decision --> QB["提交到 qBittorrent"]
+    QB --> Sync["同步进度、失败和外部变更"]
 ```
 
-可信主机是以逗号分隔的主机名，可以使用前置 `*.` 通配符。可信源是以逗号分隔的精确 HTTP(S) 源，非默认端口也必须包含在内。代理应保留原始 `Host` 请求头。业务命令执行前，服务会拒绝不可信 Host、跨源写入和跨站 Fetch Metadata。初始设置和登录按客户端地址限制为每 5 分钟 5 次；订阅源、qBittorrent 和 Webhook 连接测试限制为每分钟 10 次。由于服务不信任转发的客户端 IP 请求头，处于同一代理后的客户端会有意共享该代理对应的保守限流桶。
+假设某部动画的第 7 集先出现了一个 720p 的可接受版本，而你的首选是某字幕组发布的 1080p HEVC。Anime RSS Service 不会简单下载最先出现的条目。它会为这个备选版本开启等待窗口；如果首选版本及时出现，就立即选择首选，否则在窗口结束后下载当前最好的可接受版本。这个等待状态会持久化，服务重启也不会丢失。
 
-## Docker Compose
+一次自动下载始终从 RSS 中实际出现的发布资源开始。Bangumi 只负责补充动画身份、别名和播出日历，不会因为“今天应该更新”就凭空创建下载任务。最终选择、等待过程、手动覆盖和 qBittorrent 提交结果都会留下记录，因此你可以回头看到某个版本为什么被接受、拒绝或取代。
 
-```bash
-docker compose up -d --build
-```
+## 你可以用它做什么
 
-打开 `http://127.0.0.1:8080`，完成管理员设置。Compose 会把数据库、加密密钥、7 份滚动备份归档和 14 天的 JSONL 应用日志存储在 `anime-rss-data` 数据卷中。升级镜像时不要删除或重建该数据卷。
+### 把多个订阅源整理成一个发布资源库
 
-若要直接运行已发布镜像而不是在本地构建，请设置 `ANIME_RSS_IMAGE`：
+你可以添加多个 RSS 或 Atom 地址，并查看每个来源的抓取状态、重试情况和历史记录。来自不同订阅源的同一个 torrent 会按 BitTorrent info hash 合并，不会因为标题或来源不同而重复下载。订阅地址、自定义请求头、magnet 链接和 torrent 载荷会加密保存在本地数据库中。
 
-```bash
-ANIME_RSS_IMAGE=ghcr.io/OWNER/anime-rss-service:VERSION docker compose up -d
-```
+### 为每部动画定义清晰的选择规则
 
-升级前，请通过系统页面或以下命令创建运维备份：
+动画可以从 Bangumi 搜索导入，也可以完全在本地创建。创建追番后，可以设置拒绝 RAW、4K、特定字幕语言、合集或字幕组等硬性条件，再按字幕组、字幕语言、分辨率、编码、修订版和发布时间排列偏好。
 
-```bash
-docker compose exec anime-rss anime-rss backup --data-dir /data
-docker compose build --pull
-docker compose up -d
-docker compose ps
-```
+偏好是有顺序的明确比较，不是无法解释的综合评分。候选页面会展示标题解析结果、匹配置信度、拒绝原因，以及一个版本在哪个偏好字段上输给另一个版本。识别结果有歧义时，自动化会停下来等待确认，而不是猜测后继续下载。
 
-迁移会在 HTTP 服务和调度工作启动前运行。恢复和迁移操作通过操作系统文件锁串行化；Alembic 修改已有版本的数据库之前，会先创建一份 `pre-migration` 归档。全新安装和已使用当前 schema 的重启不会创建该归档。获取锁默认最多等待 60 秒，可以通过 `ANIME_RSS_MIGRATION_LOCK_TIMEOUT_SECONDS` 限制等待时间。
+### 自动下载，也允许人工接管
 
-若要回滚应用数据，请在系统页面上传 `.backup` 归档并重启容器：
+满足全部首选条件的发布资源会立即进入下载流程；可接受的备选版本则按照订阅设置等待。对于旧番或刚建立的订阅，可以先预览历史补全会选择哪些版本，再确认提交。剧场版、OVA、特别篇和季度合集不会自动选择，但仍会保留在发布资源库中供手动提交。
 
-```bash
-docker compose restart anime-rss
-```
+同字幕组发布 V2、V3 修订版时，服务可以替换尚未完成的旧任务；已经完成的文件不会被自动删除。你也可以手动确认中等置信度候选、修正未匹配条目、替换单集选择、标记已从其他渠道获取，或显式重试失败任务。
 
-恢复归档包含主加密密钥，必须像凭据一样妥善保护。应用已暂存的恢复前，会先创建一份 `pre-restore` 归档。
+### 看见自动化正在做什么
 
-## 开发
+首页汇总订阅源健康、近期发布、播出日历和缺集提醒。下载页面以 qBittorrent 的实际状态为准，对账同步排队、下载、完成、失败和外部删除；系统页面集中显示调度器、外部依赖和需要人工处理的异常。
 
-需要 Python 3.13。
-前端开发需要 Node.js 22。
+应用内通知会提示需要确认或处理的事件，也可以把结构化 JSON 通知投递到 Webhook。审计历史只追加不改写，下载决策和下载器当前状态彼此独立，所以外部删除一个任务不会抹掉当时为什么下载它。
 
-```bash
-python3 -m venv .venv
-make bootstrap
-make bootstrap-web
-make verify
-make migrate
-make run
-```
+## 适用边界
 
-使用 `make build-web` 构建 Web 应用。之后，后端会在 `http://127.0.0.1:8080` 同时提供界面和 API；OpenAPI 仍可通过 `/docs` 访问。前端开发期间，在第二个终端中运行 `make run-web` 并打开 `http://127.0.0.1:5173`；Vite 会把 API 调用代理到后端。运行时数据默认存放在 `./data`，并被 Git 忽略。
+| 适合 | 不属于本项目 |
+| --- | --- |
+| 单一管理员在 NAS 或 Linux 设备上自托管 | 多用户、共享订阅和公共托管 |
+| 自动追踪当季电视动画的单集发布 | 媒体播放、转码、刮削和观看进度 |
+| qBittorrent 4.6/5.x 下载任务提交与状态同步 | 替代 Jellyfin、Emby、Plex 或 qBittorrent |
+| 整数集、小数集、集数范围和同组 V2/V3 | 自动选择剧场版、OVA、特别篇或整季合集 |
 
-稳定的工程门禁通过 Makefile 对外提供，而不是隐藏在 CI 中：
+应用按单管理员、单进程设计。自动化的边界止于下载任务已提交、持续对账并确认完成；媒体库后续处理交给现有媒体系统。
 
-```bash
-make doctor
-make openapi-check
-make security-scan
-make clean-room-acceptance
-```
+## 部署与开发
 
-`doctor` 是只读安装检查，涵盖数据目录访问、SQLite 完整性和迁移 head、32 字节且权限为 `0600` 的主密钥、已暂存恢复状态，以及构建后的 Web 资源。`openapi-check` 会在临时目录中重新生成文件，只要任一受检生成物已过期就会失败。`security-scan` 审计已锁定的 Python 和 npm 依赖，并拒绝 Bandit 中等级别及以上的发现；它需要联网访问漏洞数据库。`clean-room-acceptance` 要求当前提交无未提交改动，然后创建分离的 worktree，重新安装 Python 和 npm 依赖，再执行验证、安全检查、Compose 生命周期测试和两个受支持的 qBittorrent 契约测试。
-
-候选发布版本使用不可变的证据目录：
-
-```bash
-cp scripts/release-review-template.md release-review.md
-# 完成七天浸泡测试后的三个审核项。
-make release-evidence VERSION=0.1.0
-make release-evidence-check VERSION=0.1.0
-```
-
-第一条命令会记录精确提交和自动化无污染环境日志，捕获已完成且脱敏的真实订阅源浸泡测试报告，并将已完成的手动审核封存在 `release-evidence/<version>/` 下。它拒绝生成不完整证据。检查器会拒绝校验和漂移、提交不一致、七天浸泡测试未完成、前置条件待处理、审核项未勾选或工作区不干净等情况。证据目录会被 Git 有意忽略，应随发布版本归档，而不能原地编辑。
-
-修改镜像打包、迁移或备份行为前，请运行 `make acceptance-compose`。它会构建历史基线和当前镜像，然后使用一次性 Compose 项目验证全新设置、备份、原地升级、空数据卷恢复和基于备份的回滚。
-
-修改下载器适配器后，请运行 `make acceptance-qbittorrent`。它使用按摘要固定的 qBittorrent 4.6.7 和 5.0.4 容器验证真实 Web API 契约。
-
-容器发布受 amd64 和 arm64 两套独立镜像构建门禁约束。每个架构都必须从空数据卷启动，提供 SPA 和就绪端点，以非 root 用户通过容器内 doctor 检查，达到 Docker `healthy` 健康状态，并通过 Trivy 高危/严重漏洞扫描，之后才会推送多架构 manifest。已发布的摘要会附带 SBOM、来源证明和无密钥 Cosign 签名。Dependabot 每周提出 Python、npm、Docker 和 Actions 锁定版本更新。Dockerfile 和 qBittorrent 契约矩阵会保留可读的版本标签，同时按摘要固定多架构镜像索引。
-
-真实订阅源发布验收使用 `make acceptance-soak-preflight`。当它报告两个健康订阅源、两个正在追踪的 Bangumi 动画、已验证的 qBittorrent 连接和健康调度器后，只运行一次 `make acceptance-soak-start`。`make acceptance-soak-status` 和 `make acceptance-soak-report` 可检查不可变的七天窗口，且不会暴露订阅源 URL 或下载器凭据。
-
-## 已实现 API
-
-```text
-GET    /api/v1/health/live
-GET    /api/v1/health/ready
-GET    /api/v1/auth/status
-POST   /api/v1/auth/setup
-POST   /api/v1/auth/login
-POST   /api/v1/auth/logout
-POST   /api/v1/feeds
-GET    /api/v1/feeds
-PATCH  /api/v1/feeds/{feed_id}
-DELETE /api/v1/feeds/{feed_id}
-POST   /api/v1/feeds/test
-POST   /api/v1/feeds/{feed_id}/refresh
-GET    /api/v1/feeds/{feed_id}/entries
-GET    /api/v1/feeds/{feed_id}/fetches
-GET    /api/v1/releases
-GET    /api/v1/recognition/episode-groups
-GET    /api/v1/recognition/unmatched
-POST   /api/v1/recognition/candidates/{candidate_id}/confirm
-POST   /api/v1/recognition/releases/{release_id}/remap
-POST   /api/v1/recognition/releases/{release_id}/rerun
-GET    /api/v1/catalog/anime
-POST   /api/v1/catalog/anime
-GET    /api/v1/catalog/bangumi/search
-POST   /api/v1/catalog/bangumi/{bangumi_id}/import
-PUT    /api/v1/catalog/anime/{anime_id}/schedule
-GET    /api/v1/subscriptions
-POST   /api/v1/subscriptions
-PATCH  /api/v1/subscriptions/{subscription_id}
-GET    /api/v1/subscriptions/preferences/global
-PUT    /api/v1/subscriptions/preferences/global
-GET    /api/v1/selection/episodes
-GET    /api/v1/selection/decisions
-POST   /api/v1/selection/process-due
-GET    /api/v1/selection/subscriptions/{subscription_id}/backfill-preview
-POST   /api/v1/selection/subscriptions/{subscription_id}/backfill-commit
-POST   /api/v1/selection/subscriptions/{subscription_id}/candidates/{candidate_id}/select
-POST   /api/v1/selection/subscriptions/{subscription_id}/candidates/{candidate_id}/reject
-POST   /api/v1/selection/subscriptions/{subscription_id}/episodes/{episode_key}/reset
-POST   /api/v1/selection/subscriptions/{subscription_id}/episodes/{episode_key}/acquired-elsewhere
-GET    /api/v1/selection/manual-actions
-GET    /api/v1/downloads/config
-PUT    /api/v1/downloads/config
-POST   /api/v1/downloads/config/test
-GET    /api/v1/downloads/tasks
-POST   /api/v1/downloads/tasks/{task_id}/retry
-POST   /api/v1/downloads/process
-GET    /api/v1/schedule/calendar
-GET    /api/v1/schedule/missing
-GET    /api/v1/schedule/anime/{anime_id}/episodes
-GET    /api/v1/schedule/anime/{anime_id}/overrides
-PUT    /api/v1/schedule/anime/{anime_id}/overrides/{episode_key}
-DELETE /api/v1/schedule/anime/{anime_id}/overrides/{episode_key}
-POST   /api/v1/schedule/sync
-GET    /api/v1/operations/overview
-GET    /api/v1/operations/jobs
-GET    /api/v1/operations/runs
-POST   /api/v1/operations/run-now
-GET    /api/v1/notifications
-POST   /api/v1/notifications/{notification_id}/read
-GET    /api/v1/notifications/config
-PUT    /api/v1/notifications/config
-POST   /api/v1/notifications/config/test
-GET    /api/v1/system/backups
-POST   /api/v1/system/backups
-GET    /api/v1/system/backups/{filename}
-POST   /api/v1/system/backups/restore/stage
-GET    /api/v1/system/settings
-PUT    /api/v1/system/settings
-GET    /api/v1/audit/events
-```
+安装、升级、备份恢复、反向代理和本地开发说明见[部署与开发文档](docs/deployment.md)。
