@@ -84,6 +84,7 @@ flowchart LR
 | `feeds` | 订阅源配置、来源类型、抓取状态、订阅源条目、抓取尝试 | 安全抓取、RSS/Atom 标准化、单一动画源的声明身份、缓存验证器、重试健康状态 | torrent 标识、集数解析或标题猜测 |
 | `releases` | 发布资源、来源观测、torrent 元数据和载荷引用 | magnet 标准化、torrent 验证、info-hash 标识、分层去重 | 动画匹配或筛选决策 |
 | `catalog` | 动画、外部 ID、标题、别名、元数据和播出快照 | Bangumi 搜索/缓存、本地动画创建、用户元数据和播出覆盖项 | 自动下载决策 |
+| `seasonal` | 用户明确标记的“不追”和“已看完”决定 | 按季度组合 Bangumi 新番与订阅状态、创建/恢复/归档追番 | 复制订阅生命周期或自动下载决策 |
 | `recognition` | 标题解析结果、匹配尝试、候选项、置信度、修正 | 确定性解析、动画/集数匹配、解释 | 偏好或下载器任务 |
 | `subscriptions` | 订阅、规则配置、激活截止时间、生命周期 | 与订阅关联的有效规则和别名 | 候选项排序或播出计划状态 |
 | `selection` | 等待状态、决策、手动覆盖、拒绝、升级计划 | 硬性过滤、字典序比较、备选计时器、历史补全预览、V2/V3 策略 | 外部下载器调用 |
@@ -99,6 +100,7 @@ flowchart LR
 - `recognition` 负责证明某个发布资源对应某部动画的某一集。`selection` 使用这些证据，但绝不重新解析标题。
 - 单一动画源把 Feed 名称作为明确的动画身份输入；`recognition` 仍负责从每个条目解析集数和版本属性。聚合 RSS 不提供声明身份，继续逐条匹配目录标题。
 - `subscriptions` 负责规则配置；`selection` 为每个产生后果的决策存储当时有效规则的不可变快照。
+- `seasonal` 只保存明确的“不追”和“已看完”决定。“正在追”“暂停”和“已完结”始终从 `subscriptions` 的公共 DTO 实时推导；追番操作通过公共 API 创建或恢复订阅。
 - 在 `downloads` 联系 qBittorrent 前，`selection` 先提交自动下载请求。`downloads` 也可以负责显式的手动 Release 请求，但绝不会为此伪造 Candidate 或 Decision。下载器结果无法改写任一来源。
 - `downloads` 镜像外部任务状态。外部删除会更新任务状态，但不能重新打开或清除原始决策。
 - `audit` 接收来自各模块的脱敏事实。业务模块绝不查询审计记录来作出决策。
@@ -112,6 +114,8 @@ flowchart LR
     Releases --> Recognition["recognition"]
     Catalog["catalog"] --> Recognition
     Catalog --> Subscriptions["subscriptions"]
+    Catalog --> Seasonal["seasonal"]
+    Subscriptions --> Seasonal
     Recognition --> Selection["selection"]
     Subscriptions --> Selection
     Selection --> Downloads["downloads"]
@@ -132,6 +136,7 @@ flowchart LR
     Feeds -. "脱敏事件" .-> Audit["audit"]
     Selection -.-> Audit
     Downloads -.-> Audit
+    Seasonal -.-> Audit
 ```
 
 箭头表示使用公共契约，而不是访问另一模块的数据表。禁止循环依赖。尤其是，下载器状态绝不能成为标题匹配的输入，通知投递也绝不能控制业务状态转换。
@@ -247,8 +252,8 @@ stateDiagram-v2
 
 ```text
 sys_*        feed_*       release_*     catalog_*
-match_*      sub_*        select_*      download_*
-notify_*     audit_*      runtime_*
+seasonal_*   match_*      sub_*         select_*
+download_*   notify_*     audit_*       runtime_*
 ```
 
 持久化边界规则：
@@ -372,6 +377,7 @@ anime-rss-service/
         feeds/
         releases/
         catalog/
+        seasonal/
         recognition/
         subscriptions/
         selection/

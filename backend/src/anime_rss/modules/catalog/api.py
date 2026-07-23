@@ -20,11 +20,15 @@ from anime_rss.modules.catalog.persistence import (
     MetadataCacheRecord,
 )
 
+__all__ = ["CatalogProviderError", "CatalogService"]
+
 
 class CatalogProvider(Protocol):
     def search(self, query: str, *, limit: int = 12) -> list[BangumiAnime]: ...
 
     def get(self, bangumi_id: int) -> BangumiAnime: ...
+
+    def list_season(self, start_date: str, end_date: str) -> list[BangumiAnime]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +66,13 @@ class Anime:
 @dataclass(frozen=True, slots=True)
 class CatalogSearchResult:
     items: list[BangumiAnime]
+    stale: bool
+
+
+@dataclass(frozen=True, slots=True)
+class CatalogSeasonResult:
+    items: list[BangumiAnime]
+    fetched_at: datetime
     stale: bool
 
 
@@ -572,6 +583,58 @@ class CatalogService:
             )
         return CatalogSearchResult(items=items, stale=False)
 
+    def list_season(
+        self,
+        start_date: str,
+        end_date: str,
+        *,
+        force_refresh: bool = False,
+    ) -> CatalogSeasonResult:
+        request_key = f"bangumi:season:v2:{start_date}:{end_date}"
+        now = self._clock()
+        with self._session_factory() as session:
+            cached = session.scalar(
+                select(MetadataCacheRecord).where(MetadataCacheRecord.request_key == request_key)
+            )
+            if cached is not None and cached.expires_at > now and not force_refresh:
+                return CatalogSeasonResult(
+                    items=[BangumiAnime(**item) for item in cached.payload],
+                    fetched_at=cached.fetched_at,
+                    stale=False,
+                )
+        try:
+            items = self._provider.list_season(start_date, end_date)
+        except CatalogProviderError:
+            if cached is None:
+                raise
+            return CatalogSeasonResult(
+                items=[BangumiAnime(**item) for item in cached.payload],
+                fetched_at=cached.fetched_at,
+                stale=True,
+            )
+        payload = [asdict(item) for item in items]
+        with self._session_factory.begin() as session:
+            session.execute(
+                insert(MetadataCacheRecord)
+                .values(
+                    id=new_id(),
+                    provider="bangumi",
+                    request_key=request_key,
+                    payload=payload,
+                    fetched_at=now,
+                    expires_at=now + timedelta(hours=24),
+                )
+                .on_conflict_do_update(
+                    index_elements=["request_key"],
+                    set_={
+                        "payload": payload,
+                        "fetched_at": now,
+                        "expires_at": now + timedelta(hours=24),
+                    },
+                )
+            )
+        return CatalogSeasonResult(items=items, fetched_at=now, stale=False)
+
     def list_anime(self) -> list[Anime]:
         with self._session_factory() as session:
             ids = list(
@@ -623,6 +686,13 @@ class CatalogService:
                 created_at=record.created_at,
                 updated_at=record.updated_at,
             )
+
+    def get_by_bangumi_id(self, bangumi_id: int) -> Anime | None:
+        with self._session_factory() as session:
+            anime_id = session.scalar(
+                select(AnimeRecord.id).where(AnimeRecord.bangumi_id == bangumi_id)
+            )
+        return self.get_anime(anime_id) if anime_id is not None else None
 
     @staticmethod
     def _replace_titles(

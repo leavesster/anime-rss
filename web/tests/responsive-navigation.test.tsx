@@ -37,7 +37,7 @@ describe("responsive navigation", () => {
     const mobileNav = screen.getByRole("navigation", { name: "移动端导航" });
     expect(within(mobileNav).getAllByRole("link")).toHaveLength(4);
     expect(within(mobileNav).getByRole("button", { name: /更多/ })).toHaveAttribute("aria-expanded", "false");
-    expect(within(mobileNav).getAllByRole("link").map((item) => item.textContent)).toEqual(["概览", "追番", "版本", "下载"]);
+    expect(within(mobileNav).getAllByRole("link").map((item) => item.textContent)).toEqual(["首页", "追番", "版本", "下载"]);
     expect(await within(mobileNav).findByTitle("当前载入消息中 1 条未读")).toHaveTextContent("1");
 
     fireEvent.click(within(mobileNav).getByRole("button", { name: /更多/ }));

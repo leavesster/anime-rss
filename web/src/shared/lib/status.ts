@@ -18,6 +18,9 @@ const labels: Record<string, string> = {
   medium: "识别可信度中",
   low: "识别可信度低",
   following: "追番中",
+  undecided: "待决定",
+  watched: "已看完",
+  dismissed: "不追",
   paused: "已暂停",
   completed: "已完结",
   archived: "已归档",
@@ -57,10 +60,10 @@ export function statusLabel(status: string): string {
 }
 
 export function statusTone(status: string): StatusTone {
-  if (["healthy", "success", "ready", "resolved", "strong", "following", "decided", "completed", "connected", "idle", "recovered", "acquired"].includes(status)) return "positive";
+  if (["healthy", "success", "ready", "resolved", "strong", "following", "watched", "decided", "completed", "connected", "idle", "recovered", "acquired"].includes(status)) return "positive";
   if (status === "high") return "positive";
   if (["auth_failed", "failed", "failing", "externally_removed", "degraded", "error", "missing"].includes(status)) return "danger";
-  if (["never_fetched", "pending", "weak", "medium", "low", "waiting_fallback", "needs_confirmation", "retrying", "submitting", "submitted", "canceling", "starting", "unknown", "warning", "unread"].includes(status)) return "warning";
+  if (["never_fetched", "pending", "weak", "medium", "low", "waiting_fallback", "needs_confirmation", "retrying", "submitting", "submitted", "canceling", "starting", "unknown", "warning", "unread", "undecided"].includes(status)) return "warning";
   if (["not_modified", "planned", "downloading", "running", "on_demand", "not_configured", "info"].includes(status)) return "info";
   return "neutral";
 }

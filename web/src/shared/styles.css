@@ -131,6 +131,30 @@ h3 { font-size: 15px; letter-spacing: 0; }
 .manual-boundary p svg { flex: 0 0 auto; }
 .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; }
 .dashboard-section, .data-section { min-width: 0; }
+.seasonal-section { margin-bottom: 40px; }
+.seasonal-toolbar { min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
+.period-switcher { display: flex; align-items: center; gap: 10px; }
+.period-switcher h2 { min-width: 148px; font-size: 17px; text-align: center; }
+.seasonal-filters.segmented { margin-bottom: 18px; }
+.seasonal-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.seasonal-card { min-width: 0; overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.seasonal-card:hover { border-color: #c3d0ca; }
+.seasonal-cover { aspect-ratio: 3 / 4; display: block; overflow: hidden; background: #e7ece9; }
+.seasonal-cover img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.seasonal-cover > span { width: 100%; height: 100%; display: grid; place-items: center; color: #87938e; }
+.seasonal-card__body { min-width: 0; display: flex; flex-direction: column; min-height: 190px; padding: 12px; }
+.seasonal-card__status { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.seasonal-card__facts { min-width: 0; display: flex; align-items: center; gap: 7px; }
+.seasonal-card__facts small { color: var(--muted); font-size: 9px; font-weight: 750; }
+.seasonal-rating { display: inline-flex; align-items: center; gap: 3px; color: #9a6900; font-size: 10px; font-weight: 800; }
+.seasonal-card__titles { min-width: 0; min-height: 54px; margin-top: 10px; }
+.seasonal-card__titles h3 { display: -webkit-box; overflow: hidden; font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.seasonal-card__titles small { display: block; overflow: hidden; margin-top: 3px; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.seasonal-card__body > p { margin-top: 5px; color: #52605b; font-size: 10px; }
+.seasonal-card__actions { min-height: 75px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: end; gap: 7px; margin-top: auto; padding-top: 14px; }
+.seasonal-card__actions .button { min-width: 0; padding-right: 8px; padding-left: 8px; }
+.seasonal-card__actions .button:only-child { grid-column: 1 / -1; }
+.seasonal-card__actions .button:nth-child(3):last-child { grid-column: 1 / -1; }
 .schedule-section { margin-bottom: 34px; }
 .schedule-calendar { display: grid; grid-template-columns: repeat(8, minmax(138px, 1fr)); overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
 .schedule-day { min-width: 138px; min-height: 168px; border-right: 1px solid var(--soft-line); }
@@ -592,6 +616,8 @@ a.compact-row:hover { background: var(--surface-soft); }
   .overview-metric { min-height: 78px; border-right: 0; border-bottom: 1px solid var(--soft-line); }
   .overview-metric:last-child { border-bottom: 0; }
   .dashboard-grid { grid-template-columns: 1fr; gap: 34px; }
+  .seasonal-section { margin-bottom: 34px; }
+  .seasonal-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .system-layout { grid-template-columns: 1fr; }
   .system-section--wide { grid-column: 1; }
   .setup-header { height: 62px; padding: 0 18px; }
@@ -651,6 +677,13 @@ a.compact-row:hover { background: var(--surface-soft); }
   .stat-band > div { padding: 12px; }
   .segmented { width: 100%; }
   .segmented button { flex: 1; justify-content: center; }
+  .seasonal-toolbar { align-items: flex-start; }
+  .period-switcher { gap: 6px; }
+  .period-switcher h2 { min-width: 126px; font-size: 14px; }
+  .seasonal-filters.segmented button { gap: 3px; padding: 0 6px; font-size: 11px; white-space: nowrap; }
+  .seasonal-card__body { min-height: 184px; padding: 10px; }
+  .seasonal-card__actions { gap: 5px; }
+  .seasonal-card__actions .button { gap: 4px; padding-right: 5px; padding-left: 5px; font-size: 11px; }
   .data-table { overflow-x: auto; }
   .data-table__head, .data-table__row { min-width: 560px; }
   .releases-table .data-table__head, .releases-table .data-table__row { min-width: 0; }

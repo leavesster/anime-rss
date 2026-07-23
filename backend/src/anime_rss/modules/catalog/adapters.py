@@ -21,6 +21,10 @@ class BangumiAnime:
     aliases: tuple[str, ...] = ()
     airing_weekday: int | None = None
     airing_time: str | None = None
+    platform: str | None = None
+    popularity: int = 0
+    rating_score: float | None = None
+    rating_total: int = 0
 
 
 class BangumiClient:
@@ -73,6 +77,51 @@ class BangumiClient:
             raise CatalogProviderError("bangumi_invalid_response")
         return self._from_payload(cast(dict[str, Any], raw_payload))
 
+    def list_season(self, start_date: str, end_date: str) -> list[BangumiAnime]:
+        items: list[BangumiAnime] = []
+        offset = 0
+        limit = 50
+        while offset < 200:
+            try:
+                response = self._client.post(
+                    "/v0/search/subjects",
+                    params={"limit": limit, "offset": offset},
+                    json={
+                        "keyword": "",
+                        "sort": "rank",
+                        "filter": {
+                            "type": [2],
+                            "air_date": [f">={start_date}", f"<{end_date}"],
+                        },
+                    },
+                )
+                response.raise_for_status()
+                raw_payload: object = response.json()
+            except (httpx.HTTPError, ValueError) as error:
+                raise CatalogProviderError("bangumi_unavailable") from error
+            if not isinstance(raw_payload, dict):
+                raise CatalogProviderError("bangumi_invalid_response")
+            payload = cast(dict[str, object], raw_payload)
+            raw_data = payload.get("data")
+            if not isinstance(raw_data, list):
+                raise CatalogProviderError("bangumi_invalid_response")
+            typed_data = cast(list[object], raw_data)
+            page = [
+                self._from_payload(cast(dict[str, Any], item))
+                for item in typed_data
+                if isinstance(item, dict)
+            ]
+            items.extend(item for item in page if item.platform in {"TV", "WEB"})
+            total = payload.get("total")
+            offset += len(typed_data)
+            if not typed_data or not isinstance(total, int) or offset >= total:
+                break
+        unique = {item.bangumi_id: item for item in items}
+        return sorted(
+            unique.values(),
+            key=lambda item: (-item.popularity, item.air_date or "9999-99-99", item.name),
+        )
+
     @staticmethod
     def _from_payload(payload: dict[str, Any]) -> BangumiAnime:
         bangumi_id = payload.get("id")
@@ -110,6 +159,27 @@ class BangumiClient:
                         alias = cast(dict[str, object], alias).get("v")
                     if isinstance(alias, str) and alias.strip():
                         aliases.append(alias.strip())
+        collection_value: object = payload.get("collection")
+        collection = (
+            cast(dict[str, object], collection_value) if isinstance(collection_value, dict) else {}
+        )
+        wish = collection.get("wish")
+        doing = collection.get("doing")
+        popularity = (wish if isinstance(wish, int) else 0) + (
+            doing if isinstance(doing, int) else 0
+        )
+        rating_value: object = payload.get("rating")
+        rating = cast(dict[str, object], rating_value) if isinstance(rating_value, dict) else {}
+        score = rating.get("score")
+        total = rating.get("total")
+        rating_score = (
+            float(score)
+            if isinstance(score, int | float) and not isinstance(score, bool) and 0 < score <= 10
+            else None
+        )
+        rating_total = (
+            total if isinstance(total, int) and not isinstance(total, bool) and total >= 0 else 0
+        )
         return BangumiAnime(
             bangumi_id=bangumi_id,
             name=name.strip(),
@@ -121,6 +191,14 @@ class BangumiClient:
             aliases=tuple(dict.fromkeys(aliases)),
             airing_weekday=airing_weekday,
             airing_time=airing_time,
+            platform=(
+                str(payload["platform"])[:24]
+                if isinstance(payload.get("platform"), str) and payload["platform"]
+                else None
+            ),
+            popularity=popularity,
+            rating_score=rating_score,
+            rating_total=rating_total,
         )
 
     @staticmethod

@@ -21,6 +21,7 @@ import { PageHeader } from "../../shared/components/PageHeader";
 import { StatusBadge } from "../../shared/components/StatusBadge";
 import { formatRelative, truncateHash } from "../../shared/lib/format";
 import { feedsQuery } from "../feeds/queries";
+import { SeasonalAnimeSection } from "./SeasonalAnimeSection";
 
 export function DashboardPage() {
   const queryClient = useQueryClient();
@@ -42,18 +43,12 @@ export function DashboardPage() {
 
   return (
     <>
-      <PageHeader eyebrow="运行概览" title="今天的追番状态" description="从异常开始处理，正常运行的订阅源保持安静。" actions={<Link className="button button--primary button--regular" to="/feeds"><Plus size={17} />添加订阅源</Link>} />
+      <PageHeader eyebrow="首页" title="本季新番" description="整理这一季的动画和追番决定。" actions={<Link className="button button--primary button--regular" to="/feeds"><Plus size={17} />添加订阅源</Link>} />
+      <SeasonalAnimeSection />
       {isLoading && <LoadingState label="正在汇总运行状态" />}
       {hasError && <ErrorBanner message="部分运行数据暂时无法加载。" />}
       {!isLoading && !hasError && (
         <>
-          <section className="overview-band overview-band--four" aria-label="运行指标">
-            <div className="overview-metric"><span className="metric-icon metric-icon--green"><CheckCircle2 size={19} /></span><div><small>健康订阅源</small><strong>{healthyFeeds}<span> / {feeds.data?.length ?? 0}</span></strong></div></div>
-            <div className="overview-metric"><span className="metric-icon metric-icon--blue"><Database size={19} /></span><div><small>唯一发布</small><strong>{releases.data?.length ?? 0}</strong></div></div>
-            <div className="overview-metric"><span className={`metric-icon ${hasFailure ? "metric-icon--red" : needsAttention ? "metric-icon--amber" : "metric-icon--gray"}`}><AlertTriangle size={19} /></span><div><small>需要处理</small><strong>{operations.data ? needsAttention : attentionFeeds.length + (schedule.data?.missing.length ?? 0)}</strong></div></div>
-            <div className="overview-metric"><span className="metric-icon metric-icon--gray"><ServerCog size={19} /></span><div><small>后台调度</small><strong>{operations.data?.scheduler?.state ?? "启动中"}</strong></div></div>
-          </section>
-
           {schedule.data && (
             <section className="dashboard-section schedule-section">
               <div className="section-heading">
@@ -101,6 +96,13 @@ export function DashboardPage() {
           )}
 
           {operations.data && operations.data.failed_work.length > 0 && <section className="dashboard-section dashboard-attention"><div className="section-heading"><div><h2>需要处理</h2><p>失败任务和需要你确认的单集</p></div><Link to="/operations">查看运行中心<ArrowRight size={15} /></Link></div><div className="compact-list">{operations.data.failed_work.slice(0, 5).map((item) => <Link className="compact-row" to={item.action_path ?? "/operations"} key={item.key}><span className={`compact-row__icon ${item.attention_kind === "failure" ? "compact-row__icon--danger" : "compact-row__icon--warning"}`}><AlertTriangle size={17} /></span><div><strong>{item.title}</strong><small>{item.detail}{item.error_code ? ` · ${item.error_code}` : ""}</small></div><StatusBadge status={item.attention_kind === "failure" ? "failed" : "needs_confirmation"} /><ArrowRight className="compact-row__arrow" size={16} /></Link>)}</div></section>}
+
+          <section className="overview-band overview-band--four" aria-label="运行指标">
+            <div className="overview-metric"><span className="metric-icon metric-icon--green"><CheckCircle2 size={19} /></span><div><small>健康订阅源</small><strong>{healthyFeeds}<span> / {feeds.data?.length ?? 0}</span></strong></div></div>
+            <div className="overview-metric"><span className="metric-icon metric-icon--blue"><Database size={19} /></span><div><small>唯一发布</small><strong>{releases.data?.length ?? 0}</strong></div></div>
+            <div className="overview-metric"><span className={`metric-icon ${hasFailure ? "metric-icon--red" : needsAttention ? "metric-icon--amber" : "metric-icon--gray"}`}><AlertTriangle size={19} /></span><div><small>需要处理</small><strong>{operations.data ? needsAttention : attentionFeeds.length + (schedule.data?.missing.length ?? 0)}</strong></div></div>
+            <div className="overview-metric"><span className="metric-icon metric-icon--gray"><ServerCog size={19} /></span><div><small>后台调度</small><strong>{operations.data?.scheduler?.state ?? "启动中"}</strong></div></div>
+          </section>
 
           <div className="dashboard-grid">
             <section className="dashboard-section">

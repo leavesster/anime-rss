@@ -53,6 +53,9 @@ export type EpisodeScheduleOverride =
   components["schemas"]["EpisodeScheduleOverrideResponse"];
 export type EpisodeScheduleOverrideRequest =
   components["schemas"]["EpisodeScheduleOverrideRequest"];
+export type SeasonalOverview = components["schemas"]["SeasonalOverviewResponse"];
+export type SeasonalAnime = components["schemas"]["SeasonalAnimeResponse"];
+export type SeasonalAction = components["schemas"]["SeasonalActionResponse"];
 
 const client = createClient<paths>({ baseUrl: "" });
 
@@ -271,6 +274,52 @@ export async function rerunRecognition(releaseId: string): Promise<RecognitionRe
 
 export async function listAnime(): Promise<Anime[]> {
   return unwrap(await client.GET("/api/v1/catalog/anime"));
+}
+
+export async function getSeasonalOverview(
+  year: number,
+  quarter: number,
+): Promise<SeasonalOverview> {
+  return unwrap(
+    await client.GET("/api/v1/seasonal", {
+      params: { query: { year, quarter } },
+    }),
+  );
+}
+
+export async function refreshSeasonalOverview(
+  year: number,
+  quarter: number,
+): Promise<SeasonalOverview> {
+  return unwrap(
+    await client.POST("/api/v1/seasonal/refresh", {
+      params: { query: { year, quarter } },
+    }),
+  );
+}
+
+export async function followSeasonalAnime(bangumiId: number): Promise<SeasonalAction> {
+  return unwrap(
+    await client.POST("/api/v1/seasonal/{bangumi_id}/follow", {
+      params: { path: { bangumi_id: bangumiId } },
+    }),
+  );
+}
+
+export async function markSeasonalAnimeWatched(bangumiId: number): Promise<SeasonalAction> {
+  return unwrap(
+    await client.POST("/api/v1/seasonal/{bangumi_id}/watched", {
+      params: { path: { bangumi_id: bangumiId } },
+    }),
+  );
+}
+
+export async function dismissSeasonalAnime(bangumiId: number): Promise<SeasonalAction> {
+  return unwrap(
+    await client.POST("/api/v1/seasonal/{bangumi_id}/dismiss", {
+      params: { path: { bangumi_id: bangumiId } },
+    }),
+  );
 }
 
 export async function createLocalAnime(title: string, aliases: string[]): Promise<Anime> {

@@ -64,6 +64,8 @@ from anime_rss.modules.releases.api import ReleaseService
 from anime_rss.modules.releases.http import router as releases_router
 from anime_rss.modules.schedule.api import ScheduleService
 from anime_rss.modules.schedule.http import router as schedule_router
+from anime_rss.modules.seasonal.api import SeasonalService
+from anime_rss.modules.seasonal.http import router as seasonal_router
 from anime_rss.modules.selection.api import SelectionService
 from anime_rss.modules.selection.http import router as selection_router
 from anime_rss.modules.subscriptions.api import SubscriptionService
@@ -176,6 +178,7 @@ def create_app(
         catalog = CatalogService(session_factory, bangumi_client, clock=clock)
         recognition = RecognitionService(session_factory, releases, catalog, clock=clock)
         subscriptions = SubscriptionService(session_factory, catalog, clock=clock)
+        seasonal = SeasonalService(session_factory, catalog, subscriptions, clock=clock)
         selection = SelectionService(session_factory, recognition, subscriptions, clock=clock)
         instance_settings = InstanceSettingsService(session_factory, clock=clock)
         schedule = ScheduleService(
@@ -320,6 +323,7 @@ def create_app(
             recognition=recognition,
             catalog=catalog,
             subscriptions=subscriptions,
+            seasonal=seasonal,
             selection=selection,
             downloads=downloads,
             jobs=jobs,
@@ -701,6 +705,7 @@ def create_app(
     api.include_router(selection_router)
     api.include_router(downloads_router)
     api.include_router(schedule_router)
+    api.include_router(seasonal_router)
     api.include_router(operations_router)
     api.include_router(notifications_router)
     api.include_router(backup_router)

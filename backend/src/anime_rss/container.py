@@ -18,6 +18,7 @@ from anime_rss.modules.operations.worker import Scheduler
 from anime_rss.modules.recognition.api import RecognitionService
 from anime_rss.modules.releases.api import ReleaseService
 from anime_rss.modules.schedule.api import ScheduleService
+from anime_rss.modules.seasonal.api import SeasonalService
 from anime_rss.modules.selection.api import SelectionService
 from anime_rss.modules.subscriptions.api import SubscriptionService
 from anime_rss.modules.system.api import InstanceSettingsService
@@ -48,6 +49,7 @@ class ServiceContainer:
     notifications: NotificationService
     settings: InstanceSettingsService
     schedule: ScheduleService
+    seasonal: SeasonalService
     backups: BackupService
     events: EventDispatcher
 

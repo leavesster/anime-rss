@@ -7,6 +7,7 @@ import { DashboardPage } from "../src/features/dashboard/DashboardPage";
 import {
   getOperationsOverview,
   getScheduleOverview,
+  getSeasonalOverview,
   listFeeds,
   listReleases,
   refreshSchedule,
@@ -15,9 +16,14 @@ import {
 vi.mock("../src/generated/api/client", () => ({
   getOperationsOverview: vi.fn(),
   getScheduleOverview: vi.fn(),
+  getSeasonalOverview: vi.fn(),
+  dismissSeasonalAnime: vi.fn(),
+  followSeasonalAnime: vi.fn(),
+  markSeasonalAnimeWatched: vi.fn(),
   listFeeds: vi.fn(),
   listReleases: vi.fn(),
   refreshSchedule: vi.fn(),
+  refreshSeasonalOverview: vi.fn(),
 }));
 
 const schedule = {
@@ -36,6 +42,14 @@ describe("dashboard schedule", () => {
       pending_jobs: 0,
     });
     vi.mocked(getScheduleOverview).mockResolvedValue(schedule);
+    vi.mocked(getSeasonalOverview).mockResolvedValue({
+      year: 2026,
+      quarter: 3,
+      title: "2026 年 7 月新番",
+      fetched_at: "2026-07-23T00:00:00Z",
+      stale: false,
+      items: [],
+    });
     vi.mocked(refreshSchedule).mockResolvedValue(schedule);
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 

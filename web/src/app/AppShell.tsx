@@ -7,7 +7,7 @@ import { getReadiness, listNotifications } from "../generated/api/client";
 import { Button } from "../shared/components/Button";
 
 const navigation = [
-  { to: "/", label: "概览", icon: LayoutDashboard, end: true },
+  { to: "/", label: "首页", icon: LayoutDashboard, end: true },
   { to: "/feeds", label: "订阅源", icon: Rss },
   { to: "/subscriptions", label: "追番", icon: BookOpenCheck },
   { to: "/downloads", label: "下载", icon: Download },

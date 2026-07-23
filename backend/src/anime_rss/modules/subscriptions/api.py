@@ -20,6 +20,8 @@ from anime_rss.modules.subscriptions.persistence import (
     SubscriptionRecord,
 )
 
+__all__ = ["Subscription", "SubscriptionService", "SubscriptionState"]
+
 GLOBAL_PROFILE_ID = "default"
 
 
