@@ -1,12 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bell,
-  Check,
   Clock3,
   Download,
   FileArchive,
   LogOut,
-  RefreshCw,
   RotateCcw,
   Save,
   Send,
@@ -28,11 +26,10 @@ import {
   testNotificationWebhook,
 } from "../../generated/api/client";
 import { Button } from "../../shared/components/Button";
-import { EmptyState } from "../../shared/components/EmptyState";
 import { ErrorBanner, LoadingState } from "../../shared/components/Feedback";
 import { PageHeader } from "../../shared/components/PageHeader";
-import { StatusBadge } from "../../shared/components/StatusBadge";
 import { formatDate } from "../../shared/lib/format";
+import { NotificationQueue } from "./NotificationQueue";
 
 function formatBytes(value: number): string {
   if (value < 1024 * 1024) return `${Math.max(1, Math.round(value / 1024))} KB`;
@@ -100,7 +97,7 @@ export function SystemPage() {
     },
   });
   const markRead = useMutation({
-    mutationFn: markNotificationRead,
+    mutationFn: (notificationIds: string[]) => Promise.all(notificationIds.map(markNotificationRead)),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
   });
   const makeBackup = useMutation({
@@ -221,26 +218,13 @@ export function SystemPage() {
             </div>
           </section>
 
-          <section className="system-section system-section--wide">
-            <div className="section-heading">
-              <div><h2>站内消息</h2><p>{(notifications.data ?? []).filter((item) => !item.read_at).length} 条未读</p></div>
-              <Button size="icon" variant="ghost" title="刷新消息" aria-label="刷新消息" icon={<RefreshCw size={16} />} onClick={() => notifications.refetch()} />
-            </div>
-            {(notifications.data?.length ?? 0) === 0 ? (
-              <EmptyState icon={Bell} title="暂无消息" description="自动选择、下载和运行异常会显示在这里。" />
-            ) : (
-              <div className="notification-list">
-                {notifications.data?.map((item) => (
-                  <article className={item.read_at ? "notification-row" : "notification-row notification-row--unread"} key={item.id}>
-                    <span className={`notification-level notification-level--${item.level}`} />
-                    <div><strong>{item.title}</strong><p>{item.message}</p><small>{formatDate(item.created_at)}{item.delivery_state ? ` · Webhook ${item.delivery_state}` : ""}</small></div>
-                    <StatusBadge status={item.level} />
-                    {!item.read_at ? <Button size="icon" variant="ghost" aria-label="标记已读" title="标记已读" icon={<Check size={16} />} disabled={markRead.isPending} onClick={() => markRead.mutate(item.id)} /> : <span className="notification-spacer" />}
-                  </article>
-                ))}
-              </div>
-            )}
-          </section>
+          <NotificationQueue
+            items={notifications.data ?? []}
+            isMarkingRead={markRead.isPending}
+            isRefreshing={notifications.isFetching}
+            onMarkRead={(ids) => markRead.mutate(ids)}
+            onRefresh={() => { void notifications.refetch(); }}
+          />
         </div>
       )}
     </>

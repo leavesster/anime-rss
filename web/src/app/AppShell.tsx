@@ -32,7 +32,7 @@ export function AppShell() {
             <NavLink key={to} end={end} to={to} className={({ isActive }) => isActive ? "nav-link nav-link--active" : "nav-link"}>
               <Icon size={18} />
               <span>{label}</span>
-              {to === "/system" && unread > 0 && <small className="nav-count">{Math.min(unread, 99)}</small>}
+              {to === "/system" && unread > 0 && <small className="nav-count" title={`当前载入消息中 ${unread} 条未读`}>{Math.min(unread, 99)}</small>}
             </NavLink>
           ))}
         </nav>
@@ -55,7 +55,7 @@ export function AppShell() {
           <NavLink key={to} end={end} to={to} className={({ isActive }) => isActive ? "mobile-nav__link mobile-nav__link--active" : "mobile-nav__link"}>
             <Icon size={20} />
             <span>{label}</span>
-            {to === "/system" && unread > 0 && <small className="mobile-nav__count">{Math.min(unread, 99)}</small>}
+            {to === "/system" && unread > 0 && <small className="mobile-nav__count" title={`当前载入消息中 ${unread} 条未读`}>{Math.min(unread, 99)}</small>}
           </NavLink>
         ))}
       </nav>
