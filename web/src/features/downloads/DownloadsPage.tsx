@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, Download, HardDrive, PlugZap, RefreshCw, RotateCcw, Save } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, Download, HardDrive, PlugZap, RefreshCw, RotateCcw, Save } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
 import {
@@ -18,6 +18,8 @@ import { StatusBadge } from "../../shared/components/StatusBadge";
 import { formatDate, truncateHash } from "../../shared/lib/format";
 
 const retryableStates = new Set(["failed", "externally_removed", "submitted"]);
+const activeStates = new Set(["planned", "retrying", "submitting", "submitted", "downloading"]);
+const attentionStates = new Set(["failed", "externally_removed"]);
 const errorLabels: Record<string, string> = {
   authentication_failed: "认证失败",
   connection_failed: "连接失败",
@@ -40,6 +42,8 @@ export function DownloadsPage() {
   const [savePath, setSavePath] = useState("");
   const [category, setCategory] = useState("");
   const [tags, setTags] = useState("");
+  const [taskView, setTaskView] = useState<"attention" | "active" | "all">("all");
+  const [visibleTaskCount, setVisibleTaskCount] = useState(30);
 
   useEffect(() => {
     if (!config.data) return;
@@ -76,9 +80,19 @@ export function DownloadsPage() {
     save.mutate();
   };
   const taskItems = tasks.data ?? [];
-  const active = taskItems.filter((item) => ["planned", "retrying", "submitting", "submitted", "downloading"].includes(item.state)).length;
+  const active = taskItems.filter((item) => activeStates.has(item.state)).length;
   const completed = taskItems.filter((item) => item.state === "completed").length;
-  const attention = taskItems.filter((item) => ["failed", "externally_removed"].includes(item.state)).length;
+  const attention = taskItems.filter((item) => attentionStates.has(item.state)).length;
+  const orderedTasks = [...taskItems].sort((left, right) => {
+    const priority = (state: string) => attentionStates.has(state) ? 0 : activeStates.has(state) ? 1 : 2;
+    return priority(left.state) - priority(right.state);
+  });
+  const viewedTasks = taskView === "attention"
+    ? orderedTasks.filter((item) => attentionStates.has(item.state))
+    : taskView === "active"
+      ? orderedTasks.filter((item) => activeStates.has(item.state))
+      : orderedTasks;
+  const visibleTasks = viewedTasks.slice(0, visibleTaskCount);
   const hasError = config.isError || tasks.isError || save.isError || test.isError || sync.isError || retry.isError;
 
   return (
@@ -109,8 +123,9 @@ export function DownloadsPage() {
 
         <section className="data-section download-task-section">
           <div className="section-heading"><div><h2>任务状态</h2><p>共 {taskItems.length} 个下载任务</p></div></div>
-          {taskItems.length === 0 ? <EmptyState icon={HardDrive} title="还没有下载任务" description="自动选择版本或手动提交种子后，任务会在这里等待提交到 qBittorrent。" /> : <div className="download-list">
-            {taskItems.map((task) => <article className="download-row" key={task.id}>
+          {taskItems.length > 0 && <div className="task-toolbar"><div className="segmented" role="tablist" aria-label="下载任务状态"><button className={taskView === "attention" ? "segmented__active" : ""} role="tab" aria-selected={taskView === "attention"} onClick={() => { setTaskView("attention"); setVisibleTaskCount(30); }}>需处理 <span>{attention}</span></button><button className={taskView === "active" ? "segmented__active" : ""} role="tab" aria-selected={taskView === "active"} onClick={() => { setTaskView("active"); setVisibleTaskCount(30); }}>处理中 <span>{active}</span></button><button className={taskView === "all" ? "segmented__active" : ""} role="tab" aria-selected={taskView === "all"} onClick={() => { setTaskView("all"); setVisibleTaskCount(30); }}>全部 <span>{taskItems.length}</span></button></div><span className="result-count">显示 {visibleTasks.length} / {viewedTasks.length}</span></div>}
+          {taskItems.length === 0 ? <EmptyState icon={HardDrive} title="还没有下载任务" description="自动选择版本或手动提交种子后，任务会在这里等待提交到 qBittorrent。" /> : viewedTasks.length === 0 ? <EmptyState icon={CheckCircle2} title={taskView === "attention" ? "没有需要处理的任务" : "没有处理中的任务"} description="可以切换到“全部”查看下载历史。" /> : <><div className="download-list">
+            {visibleTasks.map((task) => <article className="download-row" key={task.id}>
               <div className="download-row__identity"><strong title={task.display_name ?? task.info_hash}>{task.display_name ?? truncateHash(task.info_hash)}</strong><small><span className="download-row__hash">{truncateHash(task.info_hash)}</span> · {task.actual_save_path ?? task.requested_save_path ?? "使用 qBittorrent 默认路径"}</small></div>
               <div className="download-progress"><div><span style={{ width: `${Math.round(task.progress * 100)}%` }} /></div><small>{Math.round(task.progress * 100)}%</small></div>
               <div className="download-row__meta"><small>{task.category || "无分类"}</small><strong>{task.tags.join(", ") || "无标签"}</strong></div>
@@ -118,7 +133,7 @@ export function DownloadsPage() {
               <div className="download-row__time"><small>上次读取到状态</small><strong>{formatDate(task.last_observed_at)}</strong></div>
               {retryableStates.has(task.state) ? <Button aria-label="重试任务" title="重试任务" size="icon" variant="ghost" icon={<RotateCcw size={16} />} disabled={retry.isPending} onClick={() => retry.mutate(task.id)} /> : <span className="download-row__spacer" />}
             </article>)}
-          </div>}
+          </div>{visibleTasks.length < viewedTasks.length && <div className="progressive-footer"><Button variant="secondary" icon={<ChevronDown size={16} />} onClick={() => setVisibleTaskCount((count) => count + 30)}>再显示 {Math.min(30, viewedTasks.length - visibleTasks.length)} 个任务</Button></div>}</>}
         </section>
       </>}
     </>

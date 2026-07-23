@@ -1,5 +1,5 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, CheckCircle2, Layers3, PencilLine, RefreshCw, Rss, Search, ShieldCheck, Trash2, UsersRound, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronDown, Layers3, PencilLine, RefreshCw, Rss, Search, ShieldCheck, Trash2, UsersRound, X } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 
@@ -121,6 +121,8 @@ export function CandidatesPage() {
   const seriesFilter = searchParams.get("series");
   const [tab, setTab] = useState<CandidateTab>("grouped");
   const [search, setSearch] = useState("");
+  const [visibleSeriesCount, setVisibleSeriesCount] = useState(12);
+  const [visibleUnmatchedCount, setVisibleUnmatchedCount] = useState(30);
   const [remapTarget, setRemapTarget] = useState<RemapTarget | null>(null);
   const [dismissTarget, setDismissTarget] = useState<UnmatchedRelease | null>(null);
   const [rerunResult, setRerunResult] = useState<RecognitionRerun | null>(null);
@@ -211,6 +213,8 @@ export function CandidatesPage() {
   }, [animeById, filteredGroups]);
   const filteredSeries = groups.data?.find((group) => group.series_identity === seriesFilter);
   const filteredSeriesTitle = (filteredSeries?.anime_id ? animeById.get(filteredSeries.anime_id)?.primary_title : undefined) ?? filteredSeries?.series_title;
+  const visibleSeriesGroups = seriesGroups.slice(0, visibleSeriesCount);
+  const visibleUnmatched = (unmatched.data ?? []).slice(0, visibleUnmatchedCount);
   const duplicateGroups = groups.data?.filter((group) => group.candidate_count > 1).length ?? 0;
   const refresh = async () => {
     await Promise.all([
@@ -252,16 +256,16 @@ export function CandidatesPage() {
 
           <div className="candidate-toolbar">
             <div className="segmented" role="tablist" aria-label="版本识别状态">
-              <button className={tab === "grouped" ? "segmented__active" : ""} role="tab" aria-selected={tab === "grouped"} onClick={() => setTab("grouped")}>已解析集数 <span>{groups.data.length}</span></button>
-              <button className={tab === "unmatched" ? "segmented__active" : ""} role="tab" aria-selected={tab === "unmatched"} onClick={() => setTab("unmatched")}>待解析 <span>{unmatched.data.length}</span></button>
+              <button className={tab === "grouped" ? "segmented__active" : ""} role="tab" aria-selected={tab === "grouped"} onClick={() => { setTab("grouped"); setVisibleSeriesCount(12); }}>已解析集数 <span>{groups.data.length}</span></button>
+              <button className={tab === "unmatched" ? "segmented__active" : ""} role="tab" aria-selected={tab === "unmatched"} onClick={() => { setTab("unmatched"); setVisibleUnmatchedCount(30); }}>待解析 <span>{unmatched.data.length}</span></button>
             </div>
-            {tab === "grouped" && <label className="search-field candidate-search"><Search size={17} /><input aria-label="搜索版本识别结果" placeholder="搜索动画、集数或字幕组" value={search} onChange={(event) => setSearch(event.target.value)} /></label>}
+            {tab === "grouped" && <label className="search-field candidate-search"><Search size={17} /><input aria-label="搜索版本识别结果" placeholder="搜索动画、集数或字幕组" value={search} onChange={(event) => { setSearch(event.target.value); setVisibleSeriesCount(12); }} /></label>}
           </div>
 
-          {tab === "grouped" && seriesFilter && <div className="candidate-series-filter"><span>正在查看 <strong>{filteredSeriesTitle ?? seriesFilter}</strong> 的识别结果</span><Button size="small" variant="ghost" icon={<X size={15} />} onClick={() => { const next = new URLSearchParams(searchParams); next.delete("series"); setSearchParams(next, { replace: true }); }}>查看全部动画</Button></div>}
+          {tab === "grouped" && seriesFilter && <div className="candidate-series-filter"><span>正在查看 <strong>{filteredSeriesTitle ?? seriesFilter}</strong> 的识别结果</span><Button size="small" variant="ghost" icon={<X size={15} />} onClick={() => { const next = new URLSearchParams(searchParams); next.delete("series"); setVisibleSeriesCount(12); setSearchParams(next, { replace: true }); }}>查看全部动画</Button></div>}
 
           {tab === "grouped" && filteredGroups.length === 0 && <EmptyState icon={Layers3} title={groups.data.length ? "没有匹配结果" : "还没有已解析的集数"} description={groups.data.length ? "清空搜索条件或尝试其他关键词。" : "刷新订阅源后，解析出集数的版本会集中显示。"} />}
-          {tab === "grouped" && filteredGroups.length > 0 && <div className="series-group-list">{seriesGroups.map((series) => (
+          {tab === "grouped" && filteredGroups.length > 0 && <><div className="series-group-list">{visibleSeriesGroups.map((series) => (
             <section className="series-group" key={series.identity}>
               <header className="series-group__header"><div><h2>{series.title}</h2><span>{series.episodes.length} 集 · {series.candidateCount} 个版本</span></div>{series.bangumiId && <a className="bgm-link" href={`https://bgm.tv/subject/${series.bangumiId}`} target="_blank" rel="noreferrer" referrerPolicy="no-referrer" aria-label={`在 Bangumi 查看《${series.title}》`} title="在 Bangumi 查看">bgm.tv</a>}</header>
               <div className="episode-group-list">{series.episodes.map((group) => (
@@ -285,10 +289,10 @@ export function CandidatesPage() {
                 </article>
               ))}</div>
             </section>
-          ))}</div>}
+          ))}</div>{visibleSeriesGroups.length < seriesGroups.length && <div className="progressive-footer"><Button variant="secondary" icon={<ChevronDown size={16} />} onClick={() => setVisibleSeriesCount((count) => count + 12)}>再显示 {Math.min(12, seriesGroups.length - visibleSeriesGroups.length)} 部动画</Button></div>}</>}
 
           {tab === "unmatched" && unmatched.data.length === 0 && <EmptyState icon={CheckCircle2} title="没有待解析条目" description="当前 RSS 条目都已经解析出集数。" />}
-          {tab === "unmatched" && unmatched.data.length > 0 && <div className="unmatched-list">{unmatched.data.map((release) => <article key={release.id}><div className="unmatched-copy"><strong>{release.source_title}</strong><small>{formatDate(release.parsed_at)}</small></div><span className="reason-code">{recognitionReason(release.reason_code)}</span><div className="candidate-actions">{release.source_url && <a className="button button--ghost button--icon external-link" href={release.source_url} target="_blank" rel="noreferrer" referrerPolicy="no-referrer" aria-label="打开 RSS 原始条目" title="打开 RSS 原始条目"><Rss size={16} /></a>}<Button aria-label="重新识别标题" title="重新识别标题" size="icon" variant="ghost" icon={<RefreshCw className={rerun.isPending && rerun.variables === release.release_id ? "spin" : ""} size={16} />} disabled={rerun.isPending} onClick={() => rerun.mutate(release.release_id)} /><Button size="small" variant="secondary" icon={<PencilLine size={15} />} onClick={() => setRemapTarget(release)}>填写动画与集数</Button><Button size="small" variant="ghost" icon={<Trash2 size={15} />} onClick={() => setDismissTarget(release)}>忽略</Button></div></article>)}</div>}
+          {tab === "unmatched" && unmatched.data.length > 0 && <><div className="unmatched-list">{visibleUnmatched.map((release) => <article key={release.id}><div className="unmatched-copy"><strong>{release.source_title}</strong><small>{formatDate(release.parsed_at)}</small></div><span className="reason-code">{recognitionReason(release.reason_code)}</span><div className="candidate-actions">{release.source_url && <a className="button button--ghost button--icon external-link" href={release.source_url} target="_blank" rel="noreferrer" referrerPolicy="no-referrer" aria-label="打开 RSS 原始条目" title="打开 RSS 原始条目"><Rss size={16} /></a>}<Button aria-label="重新识别标题" title="重新识别标题" size="icon" variant="ghost" icon={<RefreshCw className={rerun.isPending && rerun.variables === release.release_id ? "spin" : ""} size={16} />} disabled={rerun.isPending} onClick={() => rerun.mutate(release.release_id)} /><Button size="small" variant="secondary" icon={<PencilLine size={15} />} onClick={() => setRemapTarget(release)}>填写动画与集数</Button><Button size="small" variant="ghost" icon={<Trash2 size={15} />} onClick={() => setDismissTarget(release)}>忽略</Button></div></article>)}</div>{visibleUnmatched.length < unmatched.data.length && <div className="progressive-footer"><Button variant="secondary" icon={<ChevronDown size={16} />} onClick={() => setVisibleUnmatchedCount((count) => count + 30)}>再显示 {Math.min(30, unmatched.data.length - visibleUnmatched.length)} 条</Button></div>}</>}
         </>
       )}
       {remapTarget && <RemapDialog release={remapTarget} pending={remap.isPending} onClose={() => setRemapTarget(null)} onSubmit={(payload) => remap.mutate({ releaseId: remapTarget.release_id, payload })} />}
