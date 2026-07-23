@@ -36,6 +36,7 @@ export function OperationsPage() {
   const loading = overview.isLoading || jobs.isLoading || runs.isLoading || audit.isLoading;
   const failed = overview.isError || jobs.isError || runs.isError || audit.isError || runNow.isError;
   const latestRuns = runs.data?.slice(0, 12) ?? [];
+  const hasFailure = overview.data?.failed_work.some((item) => item.attention_kind === "failure") ?? false;
 
   return (
     <>
@@ -47,7 +48,7 @@ export function OperationsPage() {
           <div className="overview-metric"><span className="metric-icon metric-icon--green"><Activity size={19} /></span><div><small>调度器</small><strong>{overview.data.scheduler?.state ?? "starting"}</strong></div></div>
           <div className="overview-metric"><span className="metric-icon metric-icon--blue"><Clock3 size={19} /></span><div><small>已安排任务</small><strong>{overview.data.pending_jobs}</strong></div></div>
           <div className="overview-metric"><span className="metric-icon metric-icon--gray"><CheckCircle2 size={19} /></span><div><small>最近成功</small><strong>{latestRuns.filter((item) => item.status === "success").length}</strong></div></div>
-          <div className="overview-metric"><span className={`metric-icon ${overview.data.failed_work.length ? "metric-icon--red" : "metric-icon--gray"}`}><AlertTriangle size={19} /></span><div><small>需要处理</small><strong>{overview.data.failed_work.length}</strong></div></div>
+          <div className="overview-metric"><span className={`metric-icon ${hasFailure ? "metric-icon--red" : overview.data.failed_work.length ? "metric-icon--amber" : "metric-icon--gray"}`}><AlertTriangle size={19} /></span><div><small>需要处理</small><strong>{overview.data.failed_work.length}</strong></div></div>
         </section>
 
         <section className="data-section operations-section">
@@ -57,7 +58,7 @@ export function OperationsPage() {
 
         <section className="data-section operations-section">
           <div className="section-heading"><div><h2>需要处理</h2><p>聚合抓取、识别、下载和调度失败</p></div></div>
-          {overview.data.failed_work.length === 0 ? <EmptyState icon={CheckCircle2} title="没有待处理异常" description="当前后台任务和业务状态均正常，无需手动处理。" /> : <div className="failure-list">{overview.data.failed_work.map((item) => <article key={item.key}><span className="failure-kind">{item.kind}</span><div><strong title={item.title}>{item.title}</strong><small>{item.detail}{item.error_code ? ` · ${item.error_code}` : ""}</small></div><time>{formatDate(item.occurred_at)}</time>{item.action_path ? <Link to={item.action_path}>处理</Link> : null}</article>)}</div>}
+          {overview.data.failed_work.length === 0 ? <EmptyState icon={CheckCircle2} title="没有待处理事项" description="当前没有失败任务或需要确认的单集。" /> : <div className="failure-list">{overview.data.failed_work.map((item) => <article key={item.key}><StatusBadge status={item.attention_kind === "failure" ? "failed" : "needs_confirmation"} /><div><strong title={item.title}>{item.title}</strong><small>{item.detail}{item.error_code ? ` · ${item.error_code}` : ""}</small></div><time>{formatDate(item.occurred_at)}</time>{item.action_path ? <Link to={item.action_path}>处理</Link> : null}</article>)}</div>}
         </section>
 
         <div className="operations-grid">

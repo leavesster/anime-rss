@@ -36,6 +36,9 @@ export function DashboardPage() {
   const hasError = feeds.isError || releases.isError || operations.isError || schedule.isError;
   const healthyFeeds = feeds.data?.filter((feed) => feed.health === "healthy").length ?? 0;
   const attentionFeeds = feeds.data?.filter((feed) => !["healthy", "never_fetched"].includes(feed.health)) ?? [];
+  const failedWork = operations.data?.failed_work ?? [];
+  const hasFailure = failedWork.some((item) => item.attention_kind === "failure");
+  const needsAttention = failedWork.length + (schedule.data?.missing.length ?? 0);
 
   return (
     <>
@@ -47,7 +50,7 @@ export function DashboardPage() {
           <section className="overview-band overview-band--four" aria-label="运行指标">
             <div className="overview-metric"><span className="metric-icon metric-icon--green"><CheckCircle2 size={19} /></span><div><small>健康订阅源</small><strong>{healthyFeeds}<span> / {feeds.data?.length ?? 0}</span></strong></div></div>
             <div className="overview-metric"><span className="metric-icon metric-icon--blue"><Database size={19} /></span><div><small>唯一发布</small><strong>{releases.data?.length ?? 0}</strong></div></div>
-            <div className="overview-metric"><span className={`metric-icon ${(operations.data?.failed_work.length ?? 0) + (schedule.data?.missing.length ?? 0) ? "metric-icon--red" : "metric-icon--gray"}`}><AlertTriangle size={19} /></span><div><small>需要处理</small><strong>{(operations.data?.failed_work.length ?? attentionFeeds.length) + (schedule.data?.missing.length ?? 0)}</strong></div></div>
+            <div className="overview-metric"><span className={`metric-icon ${hasFailure ? "metric-icon--red" : needsAttention ? "metric-icon--amber" : "metric-icon--gray"}`}><AlertTriangle size={19} /></span><div><small>需要处理</small><strong>{operations.data ? needsAttention : attentionFeeds.length + (schedule.data?.missing.length ?? 0)}</strong></div></div>
             <div className="overview-metric"><span className="metric-icon metric-icon--gray"><ServerCog size={19} /></span><div><small>后台调度</small><strong>{operations.data?.scheduler?.state ?? "启动中"}</strong></div></div>
           </section>
 
@@ -97,7 +100,7 @@ export function DashboardPage() {
             </section>
           )}
 
-          {operations.data && operations.data.failed_work.length > 0 && <section className="dashboard-section dashboard-attention"><div className="section-heading"><div><h2>需要处理</h2><p>按最近发生时间汇总</p></div><Link to="/operations">查看运行中心<ArrowRight size={15} /></Link></div><div className="compact-list">{operations.data.failed_work.slice(0, 5).map((item) => <Link className="compact-row" to={item.action_path ?? "/operations"} key={item.key}><span className="compact-row__icon compact-row__icon--danger"><AlertTriangle size={17} /></span><div><strong>{item.title}</strong><small>{item.detail}{item.error_code ? ` · ${item.error_code}` : ""}</small></div><StatusBadge status="failed" /><ArrowRight className="compact-row__arrow" size={16} /></Link>)}</div></section>}
+          {operations.data && operations.data.failed_work.length > 0 && <section className="dashboard-section dashboard-attention"><div className="section-heading"><div><h2>需要处理</h2><p>失败任务和需要你确认的单集</p></div><Link to="/operations">查看运行中心<ArrowRight size={15} /></Link></div><div className="compact-list">{operations.data.failed_work.slice(0, 5).map((item) => <Link className="compact-row" to={item.action_path ?? "/operations"} key={item.key}><span className={`compact-row__icon ${item.attention_kind === "failure" ? "compact-row__icon--danger" : "compact-row__icon--warning"}`}><AlertTriangle size={17} /></span><div><strong>{item.title}</strong><small>{item.detail}{item.error_code ? ` · ${item.error_code}` : ""}</small></div><StatusBadge status={item.attention_kind === "failure" ? "failed" : "needs_confirmation"} /><ArrowRight className="compact-row__arrow" size={16} /></Link>)}</div></section>}
 
           <div className="dashboard-grid">
             <section className="dashboard-section">

@@ -102,6 +102,7 @@ h3 { font-size: 15px; letter-spacing: 0; }
 .metric-icon--green { color: var(--accent); background: var(--accent-soft); }
 .metric-icon--blue { color: var(--blue); background: var(--blue-soft); }
 .metric-icon--red { color: var(--red); background: var(--red-soft); }
+.metric-icon--amber { color: #87500e; background: var(--amber-soft); }
 .metric-icon--gray { color: #65706c; background: #edf0ef; }
 .overview-metric div { display: flex; flex-direction: column; gap: 5px; }
 .overview-metric small { color: var(--muted); font-size: 11px; font-weight: 650; }
@@ -345,6 +346,7 @@ a.compact-row:hover { background: var(--surface-soft); }
 .audit-list article { min-height: 58px; display: grid; grid-template-columns: 220px minmax(0, 1fr) 120px; align-items: center; gap: 14px; padding: 9px 14px; border-bottom: 1px solid var(--soft-line); }
 .dashboard-attention { margin-bottom: 34px; }
 .compact-row__icon--danger { color: #a54141; background: #f8eceb; }
+.compact-row__icon--warning { color: #87500e; background: var(--amber-soft); }
 
 .toolbar { min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
 .search-field { width: min(430px, 100%); min-height: 40px; display: flex; align-items: center; gap: 9px; padding: 0 12px; color: #79847f; background: var(--surface); border: 1px solid #d6ddda; border-radius: 6px; }

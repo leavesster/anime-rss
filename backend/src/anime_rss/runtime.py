@@ -183,6 +183,7 @@ class ApplicationRuntime:
                     title=feed.name,
                     detail="订阅源抓取失败",
                     error_code=feed.error_code,
+                    attention_kind="failure",
                     occurred_at=feed.last_attempt_at,
                     action_path=f"/feeds/{feed.id}",
                 )
@@ -197,18 +198,22 @@ class ApplicationRuntime:
                     title=task.info_hash,
                     detail="下载任务需要重试或确认外部删除",
                     error_code=task.error_code,
+                    attention_kind="failure",
                     occurred_at=task.updated_at,
                     action_path="/downloads",
                 )
             )
         for release in self._recognition.list_unmatched(limit=500):
+            if release.content_kind in {"batch", "movie", "special"}:
+                continue
             items.append(
                 FailedWork(
                     key=f"recognition:{release.id}",
                     kind="recognition",
                     title=release.source_title,
-                    detail="标题无法自动识别, 需要人工映射",
+                    detail="单集标题无法自动识别。需要确认动画与集数",
                     error_code=release.reason_code,
+                    attention_kind="confirmation",
                     occurred_at=release.parsed_at,
                     action_path="/candidates",
                 )
@@ -223,6 +228,7 @@ class ApplicationRuntime:
                     title=f"{job.job_kind} / {job.dedupe_key}",
                     detail="后台作业执行失败, 已按退避策略重试",
                     error_code=job.last_error_code,
+                    attention_kind="failure",
                     occurred_at=job.updated_at,
                     action_path="/operations",
                 )

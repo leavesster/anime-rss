@@ -72,6 +72,7 @@ class UnmatchedReleaseResponse(BaseModel):
     source_title: str
     confidence: str
     reason_code: str
+    content_kind: str
     parsed_at: datetime
     source_url: str | None = None
 

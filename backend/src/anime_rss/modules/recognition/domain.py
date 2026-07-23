@@ -188,6 +188,12 @@ def parse_release_title(title: str) -> ParsedReleaseTitle:
             series_key = normalize_series_key(series_title) or None
 
     content_kind = _content_kind(normalized)
+    if (
+        content_kind == ContentKind.EPISODE
+        and episode_key is None
+        and re.search(r"\bBD[-_. ]?RIP\b", normalized, re.IGNORECASE)
+    ):
+        content_kind = ContentKind.BATCH
     if series_key and episode_key and release_group:
         confidence = MatchConfidence.HIGH
         reason_code = "parsed_group_series_episode"

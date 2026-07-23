@@ -70,11 +70,14 @@ def test_decimal_range_and_revision_are_canonical() -> None:
 
 def test_unsupported_and_unparsed_titles_remain_explainable() -> None:
     batch = parse_release_title("[Group] Example Anime Complete Batch [1080p]")
+    bd_batch = parse_release_title("[Group] Example Anime BDRip [1080p]")
 
     assert batch.content_kind == ContentKind.BATCH
     assert batch.confidence == MatchConfidence.LOW
     assert batch.reason_code == "episode_not_found"
     assert batch.episode_key is None
+    assert bd_batch.content_kind == ContentKind.BATCH
+    assert bd_batch.episode_key is None
 
 
 def test_traditional_and_simplified_titles_share_a_chinese_canonical_key() -> None:

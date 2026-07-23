@@ -46,6 +46,7 @@ class FailedWork:
     title: str
     detail: str
     error_code: str | None
+    attention_kind: str
     occurred_at: datetime | None
     action_path: str | None = None
 

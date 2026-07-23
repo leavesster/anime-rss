@@ -168,6 +168,7 @@ describe("recognition parser rerun", () => {
       source_title: "Unrecognized weekly package",
       confidence: "low",
       reason_code: "episode_not_found",
+      content_kind: "episode",
       parsed_at: "2026-07-22T00:00:00Z",
     }]);
     vi.mocked(dismissRelease).mockResolvedValue();

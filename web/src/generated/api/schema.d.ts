@@ -1722,6 +1722,8 @@ export interface components {
             detail: string;
             /** Error Code */
             error_code: string | null;
+            /** Attention Kind */
+            attention_kind: string;
             /** Occurred At */
             occurred_at: string | null;
             /** Action Path */
@@ -2332,6 +2334,8 @@ export interface components {
             confidence: string;
             /** Reason Code */
             reason_code: string;
+            /** Content Kind */
+            content_kind: string;
             /**
              * Parsed At
              * Format: date-time

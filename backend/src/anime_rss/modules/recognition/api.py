@@ -99,6 +99,7 @@ class UnmatchedRelease:
     source_title: str
     confidence: str
     reason_code: str
+    content_kind: str
     parsed_at: datetime
     source_url: str | None = None
 
@@ -788,6 +789,7 @@ class RecognitionService:
                         source_title=record.source_title,
                         confidence=record.confidence,
                         reason_code=record.reason_code,
+                        content_kind=record.content_kind,
                         parsed_at=record.parsed_at,
                         source_url=reference.source_url if reference is not None else None,
                     )
