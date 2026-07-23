@@ -322,12 +322,14 @@ class DownloadService:
     def submit_release_manually(self, release_id: str) -> DownloadTask:
         if not self._releases.has_release(release_id):
             raise DownloadReleaseNotFoundError(release_id)
+        config = self.get_config()
+        if config is None:
+            raise DownloadConfigNotFoundError(_CONFIG_ID)
         source = self._releases.get_download_source(release_id)
         if source is None:
             raise DownloadSourceUnavailableError(
                 "release has no qBittorrent-compatible BTIH download source"
             )
-        config = self.get_config()
         now = self._clock()
         task_id = new_id()
         idempotency_key = f"manual-release:{release_id}:1"

@@ -81,6 +81,8 @@ h3 { font-size: 15px; letter-spacing: 0; }
 
 .notice-strip, .error-banner, .success-banner { display: flex; align-items: center; gap: 9px; min-height: 44px; margin-bottom: 20px; padding: 10px 14px; border-radius: 6px; font-size: 13px; line-height: 1.45; }
 .notice-strip { color: #38584c; background: #edf5f1; border: 1px solid #d9e9e1; }
+.notice-strip > span { min-width: 0; }
+.notice-strip > .button { margin-left: auto; }
 .error-banner { color: #813434; background: var(--red-soft); border: 1px solid #f1cccc; }
 .success-banner { color: #216047; background: var(--accent-soft); border: 1px solid #cde6da; }
 .loading-state { display: flex; align-items: center; justify-content: center; gap: 9px; min-height: 180px; color: var(--muted); font-size: 13px; }

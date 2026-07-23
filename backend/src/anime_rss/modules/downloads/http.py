@@ -161,6 +161,8 @@ def submit_release_download(release_id: str, request: Request) -> DownloadTaskRe
         task = _services(request).downloads.submit_release_manually(release_id)
     except DownloadReleaseNotFoundError as error:
         raise HTTPException(status_code=404, detail="release not found") from error
+    except DownloadConfigNotFoundError as error:
+        raise HTTPException(status_code=409, detail="qBittorrent is not configured") from error
     except DownloadSourceUnavailableError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     return DownloadTaskResponse.model_validate(asdict(task))

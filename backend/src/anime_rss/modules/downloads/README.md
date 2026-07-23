@@ -12,7 +12,7 @@
 
 本模块通过公共模块 API 使用发布资源载荷和订阅保存路径 DTO。它绝不决定由哪个候选项胜出，也绝不修改筛选决策历史。订阅保存路径优先于实例默认值；否则，新任务在规划时会捕获当时配置的默认路径、分类和标签。
 
-每个任务都有且只有一个明确且不可变的来源：`selection_decision` 任务引用一个 Decision 和 Subscription，`manual_release` 任务两者都不引用。手动提交发布资源时，会复用同一 Release 的现有任务；所有网络调用之前先记录意图，然后沿用自动下载所使用的工作器和 info hash 对账同步流程。
+每个任务都有且只有一个明确且不可变的来源：`selection_decision` 任务引用一个 Decision 和 Subscription，`manual_release` 任务两者都不引用。手动提交发布资源要求先保存 qBittorrent 配置；配置存在但下载器暂时离线时仍可持久化排队。提交时会复用同一 Release 的现有任务；所有网络调用之前先记录意图，然后沿用自动下载所使用的工作器和 info hash 对账同步流程。
 
 `DownloadService.retained_release_ids` 还会保护任务历史所引用的 Release 载荷，防止它们被未匹配条目的保留策略清理。
 

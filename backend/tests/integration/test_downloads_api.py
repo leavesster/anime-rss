@@ -237,7 +237,6 @@ def test_manual_release_submission_is_durable_idempotent_and_btih_only(tmp_path:
     )
 
     with TestClient(app) as client:
-        _configure(client)
         feed = client.post(
             "/api/v1/feeds", json={"name": "Manual", "url": "https://feed.test/rss"}
         ).json()
@@ -245,6 +244,12 @@ def test_manual_release_submission_is_durable_idempotent_and_btih_only(tmp_path:
         releases = client.get("/api/v1/releases").json()
         btih_release = next(item for item in releases if item["btih"] == INFO_HASH)
         btmh_release = next(item for item in releases if item["btmh"] == pure_v2)
+
+        unconfigured = client.post(f"/api/v1/downloads/releases/{btih_release['id']}/submit")
+        assert unconfigured.status_code == 409
+        assert unconfigured.json()["detail"] == "qBittorrent is not configured"
+
+        _configure(client)
 
         first = client.post(f"/api/v1/downloads/releases/{btih_release['id']}/submit")
         second = client.post(f"/api/v1/downloads/releases/{btih_release['id']}/submit")
