@@ -25,7 +25,7 @@ const release = {
   identity_value: "0123456789abcdef0123456789abcdef01234567",
   btih: "0123456789abcdef0123456789abcdef01234567",
   btmh: null,
-  automation_eligible: true,
+  automation_eligible: false,
   first_seen_at: "2026-07-22T00:00:00Z",
   source_count: 1,
 };
@@ -94,9 +94,9 @@ describe("manual release download", () => {
     expect(screen.getByText("去重后列表")).toBeInTheDocument();
     expect(screen.getByText("种子名称 / 种子哈希")).toBeInTheDocument();
     expect(screen.getByText("BT 标识")).toBeInTheDocument();
-    expect(screen.getByText("是否可靠")).toBeInTheDocument();
+    expect(screen.getByText("处理方式")).toBeInTheDocument();
     expect(screen.getByText("BTIH")).toBeInTheDocument();
-    expect(screen.getByText("可靠")).toBeInTheDocument();
+    expect(screen.getByText("仅可人工处理")).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "提交下载" }));
 
     await waitFor(() => expect(submitReleaseDownload).toHaveBeenCalled());

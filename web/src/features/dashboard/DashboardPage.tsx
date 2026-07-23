@@ -112,7 +112,7 @@ export function DashboardPage() {
             <section className="dashboard-section">
               <div className="section-heading"><div><h2>最近识别的发布</h2><p>跨来源去重后的种子列表</p></div><Link to="/releases">查看全部<ArrowRight size={15} /></Link></div>
               {releases.data?.length === 0 && <EmptyState icon={Clock3} title="等待种子" description="完成一次订阅源刷新后，识别结果会出现在这里。" />}
-              {releases.data && releases.data.length > 0 && <div className="compact-list">{releases.data.slice(0, 6).map((release) => <div className="compact-row" key={release.id}><span className="compact-row__icon"><Database size={17} /></span><div><strong title={release.display_name ?? release.identity_value}>{release.display_name ?? truncateHash(release.identity_value)}</strong><small>{release.source_count} 个来源 · {formatRelative(release.first_seen_at)}</small></div><span className={release.automation_eligible ? "eligibility eligibility--yes" : "eligibility"}>{release.automation_eligible ? "可靠" : "暂不可靠"}</span></div>)}</div>}
+              {releases.data && releases.data.length > 0 && <div className="compact-list">{releases.data.slice(0, 6).map((release) => <div className="compact-row" key={release.id}><span className="compact-row__icon"><Database size={17} /></span><div><strong title={release.display_name ?? release.identity_value}>{release.display_name ?? truncateHash(release.identity_value)}</strong><small>{release.source_count} 个来源 · {formatRelative(release.first_seen_at)}</small></div><span className={release.automation_eligible ? "eligibility eligibility--yes" : "eligibility"}>{release.automation_eligible ? "可自动处理" : "仅可人工处理"}</span></div>)}</div>}
             </section>
           </div>
         </>
