@@ -7,8 +7,12 @@ import { CandidatesPage } from "../src/features/recognition/CandidatesPage";
 import {
   dismissRelease,
   listAnime,
+  listDecisions,
   listEpisodeGroups,
+  listSelectionSlots,
+  listSubscriptions,
   listUnmatchedReleases,
+  previewBackfill,
   rerunRecognition,
 } from "../src/generated/api/client";
 
@@ -16,8 +20,12 @@ vi.mock("../src/generated/api/client", () => ({
   confirmCandidate: vi.fn(),
   dismissRelease: vi.fn(),
   listAnime: vi.fn(),
+  listDecisions: vi.fn(),
   listEpisodeGroups: vi.fn(),
+  listSelectionSlots: vi.fn(),
+  listSubscriptions: vi.fn(),
   listUnmatchedReleases: vi.fn(),
+  previewBackfill: vi.fn(),
   remapRelease: vi.fn(),
   rerunRecognition: vi.fn(),
 }));
@@ -29,6 +37,10 @@ afterEach(() => {
 
 beforeEach(() => {
   vi.mocked(listAnime).mockResolvedValue([]);
+  vi.mocked(listSubscriptions).mockResolvedValue([]);
+  vi.mocked(listSelectionSlots).mockResolvedValue([]);
+  vi.mocked(listDecisions).mockResolvedValue([]);
+  vi.mocked(previewBackfill).mockResolvedValue([]);
 });
 
 describe("recognition parser rerun", () => {
@@ -244,5 +256,77 @@ describe("recognition parser rerun", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "查看全部动画" }));
     expect(await screen.findByRole("heading", { name: "Other Anime" })).toBeInTheDocument();
+  });
+
+  it("explains the current winner and why another version loses", async () => {
+    vi.mocked(listAnime).mockResolvedValue([{
+      id: "anime-1",
+      primary_title: "Rule Anime",
+    } as never]);
+    vi.mocked(listSubscriptions).mockResolvedValue([{
+      id: "subscription-1",
+      anime_id: "anime-1",
+      state: "following",
+      uses_global_rules: true,
+    } as never]);
+    const candidate = {
+      id: "candidate-best",
+      release_id: "release-best",
+      source_title: "[Preferred] Rule Anime - 01 [1080p]",
+      series_title: "Rule Anime",
+      title_variants: ["Rule Anime"],
+      series_key: "ruleanime",
+      anime_id: "anime-1",
+      catalog_match_status: "matched",
+      catalog_match_method: "title",
+      catalog_match_key: "ruleanime",
+      season: 1,
+      episode_start: "1",
+      episode_end: null,
+      episode_key: "1",
+      release_group: "Preferred",
+      resolution: "1080p",
+      video_codec: "HEVC",
+      subtitle_language: "zh-Hans",
+      revision: 1,
+      content_kind: "episode",
+      confidence: "high",
+      recognition_eligible: true,
+      first_seen_at: "2026-07-22T00:00:00Z",
+      supersedes_candidate_id: null,
+      superseded_by_candidate_id: null,
+      superseded_at: null,
+    };
+    vi.mocked(listEpisodeGroups).mockResolvedValue([{
+      key: "anime:anime-1:1",
+      series_title: "Rule Anime",
+      series_key: "ruleanime",
+      series_identity: "anime:anime-1",
+      anime_id: "anime-1",
+      catalog_match_status: "matched",
+      season: 1,
+      episode_key: "1",
+      candidate_count: 2,
+      candidates: [candidate, { ...candidate, id: "candidate-loser", release_id: "release-loser", release_group: "Fallback", source_title: "[Fallback] Rule Anime - 01 [1080p]" }],
+      latest_seen_at: "2026-07-22T00:01:00Z",
+    }]);
+    vi.mocked(listUnmatchedReleases).mockResolvedValue([]);
+    vi.mocked(previewBackfill).mockResolvedValue([{
+      episode_key: "1",
+      selected_candidate_id: "candidate-best",
+      candidates: [
+        { candidate_id: "candidate-best", source_title: candidate.source_title, release_group: "Preferred", eligible: true, preferred: true, rank: [], first_loss_field: null, rejection_reasons: [], coverage_status: "none", covered_episode_keys: ["1"], already_covered_episode_keys: [] },
+        { candidate_id: "candidate-loser", source_title: "[Fallback] Rule Anime - 01 [1080p]", release_group: "Fallback", eligible: true, preferred: false, rank: [], first_loss_field: "release_group", rejection_reasons: [], coverage_status: "none", covered_episode_keys: ["1"], already_covered_episode_keys: [] },
+      ],
+    }]);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter><CandidatesPage /></MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("按当前规则首选 · 全局规则")).toBeInTheDocument();
+    expect(screen.getByText("字幕组优先级较低 · 全局规则")).toBeInTheDocument();
   });
 });

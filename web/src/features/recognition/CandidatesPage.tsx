@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, CheckCircle2, Layers3, PencilLine, RefreshCw, Rss, Search, ShieldCheck, Trash2, UsersRound, X } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -7,11 +7,16 @@ import {
   confirmCandidate,
   dismissRelease,
   listAnime,
+  listDecisions,
   listEpisodeGroups,
+  listSelectionSlots,
+  listSubscriptions,
   listUnmatchedReleases,
+  previewBackfill,
   remapRelease,
   rerunRecognition,
   type Candidate,
+  type BackfillPreview,
   type EpisodeGroup,
   type RecognitionRerun,
   type ReleaseRemap,
@@ -42,6 +47,10 @@ type RemapTarget = {
   episode_end?: string | null;
   season?: number | null;
   release_group?: string | null;
+};
+type SelectionEvidence = {
+  tone: "selected" | "waiting" | "rejected" | "candidate";
+  label: string;
 };
 
 const episodeKeyCollator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" });
@@ -77,6 +86,35 @@ function recognitionReason(reasonCode: string): string {
   return labels[reasonCode] ?? "暂时无法确定动画或集数";
 }
 
+function comparisonLabel(field: string | null): string {
+  const labels: Record<string, string> = {
+    release_group: "字幕组优先级较低",
+    subtitle: "字幕语言优先级较低",
+    resolution: "分辨率优先级较低",
+    codec: "编码优先级较低",
+    revision: "修订版本较旧",
+    first_seen_at: "发布时间较晚",
+    release_identity: "发布顺序靠后",
+  };
+  return field ? labels[field] ?? "排序低于当前首选" : "排序低于当前首选";
+}
+
+function rejectionLabel(reason: string): string {
+  const labels: Record<string, string> = {
+    not_eligible: "识别结果不足以自动处理",
+    confidence_not_high: "识别可信度不足",
+    content_kind_allowed: "内容类型不在允许范围",
+    release_group_allowed: "字幕组不在允许范围",
+    subtitle_allowed: "字幕语言不在允许范围",
+    resolution_allowed: "分辨率不在允许范围",
+    codec_allowed: "编码不在允许范围",
+    manually_rejected: "已被手动排除",
+    partially_overlaps_acquired_episodes: "与已获取集数部分重叠",
+    episodes_already_covered: "对应集数已经获取",
+  };
+  return labels[reason] ?? "不符合当前规则";
+}
+
 export function CandidatesPage() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -89,6 +127,48 @@ export function CandidatesPage() {
   const groups = useQuery({ queryKey: ["episode-groups"], queryFn: listEpisodeGroups });
   const anime = useQuery({ queryKey: ["anime"], queryFn: listAnime });
   const unmatched = useQuery({ queryKey: ["unmatched-releases"], queryFn: listUnmatchedReleases });
+  const subscriptions = useQuery({ queryKey: ["subscriptions"], queryFn: listSubscriptions });
+  const slots = useQuery({ queryKey: ["selection-slots"], queryFn: () => listSelectionSlots() });
+  const decisions = useQuery({ queryKey: ["decisions"], queryFn: () => listDecisions() });
+  const activeSubscriptions = (subscriptions.data ?? []).filter((item) => item.state !== "archived");
+  const previews = useQueries({
+    queries: activeSubscriptions.map((subscription) => ({
+      queryKey: ["candidate-rule-preview", subscription.id],
+      queryFn: () => previewBackfill(subscription.id),
+      staleTime: 60_000,
+    })),
+  });
+  const selectionEvidence = useMemo(() => {
+    const result = new Map<string, SelectionEvidence>();
+    const slotsBySubscriptionEpisode = new Map(
+      (slots.data ?? []).map((slot) => [`${slot.subscription_id}:${slot.episode_key}`, slot]),
+    );
+    const decisionsById = new Map((decisions.data ?? []).map((decision) => [decision.id, decision]));
+    activeSubscriptions.forEach((subscription, index) => {
+      const ruleSource = subscription.uses_global_rules ? "全局规则" : "单独规则";
+      for (const episode of (previews[index]?.data ?? []) as BackfillPreview[]) {
+        const slot = slotsBySubscriptionEpisode.get(`${subscription.id}:${episode.episode_key}`);
+        for (const candidate of episode.candidates) {
+          const selectedDecision = slot?.selected_decision_id ? decisionsById.get(slot.selected_decision_id) : undefined;
+          if (selectedDecision?.candidate_id === candidate.candidate_id) {
+            result.set(candidate.candidate_id, { tone: "selected", label: `已选择 · ${ruleSource}` });
+          } else if (episode.selected_candidate_id === candidate.candidate_id) {
+            const state = slot?.state === "waiting_fallback"
+              ? "当前最佳，正在等待首选版本"
+              : slot?.state === "needs_confirmation"
+                ? "当前最佳，需要确认"
+                : "按当前规则首选";
+            result.set(candidate.candidate_id, { tone: slot?.state === "waiting_fallback" ? "waiting" : "selected", label: `${state} · ${ruleSource}` });
+          } else if (candidate.rejection_reasons.length > 0) {
+            result.set(candidate.candidate_id, { tone: "rejected", label: `已排除：${rejectionLabel(candidate.rejection_reasons[0])} · ${ruleSource}` });
+          } else {
+            result.set(candidate.candidate_id, { tone: "candidate", label: `${comparisonLabel(candidate.first_loss_field)} · ${ruleSource}` });
+          }
+        }
+      }
+    });
+    return result;
+  }, [activeSubscriptions, decisions.data, previews, slots.data]);
   const animeById = useMemo(() => new Map((anime.data ?? []).map((item) => [item.id, item])), [anime.data]);
   const filteredGroups = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -189,7 +269,7 @@ export function CandidatesPage() {
                   <header className="episode-group__header"><span className="episode-number">第 {group.episode_key} 集</span><span className="candidate-count">{group.candidate_count} 个版本</span></header>
                   <div className="candidate-list">{group.candidates.map((candidate) => (
                     <div className="candidate-row" key={candidate.id}>
-                      <div className="candidate-group"><strong>{candidate.release_group ?? "未知字幕组"}</strong><small title={candidate.source_title}>{candidate.source_title}</small></div>
+                      <div className="candidate-group"><strong>{candidate.release_group ?? "未知字幕组"}</strong><small title={candidate.source_title}>{candidate.source_title}</small>{selectionEvidence.get(candidate.id) && <span className={`candidate-selection candidate-selection--${selectionEvidence.get(candidate.id)?.tone}`}>{selectionEvidence.get(candidate.id)?.label}</span>}</div>
                       <span className="candidate-media">{mediaSummary(candidate)}</span>
                       <span className="revision-label">V{candidate.revision}</span>
                       <StatusBadge status={candidate.confidence} />

@@ -232,6 +232,10 @@ a.compact-row:hover { background: var(--surface-soft); }
 .candidate-group { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
 .candidate-group strong { font-size: 13px; }
 .candidate-group small { overflow: hidden; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.candidate-selection { overflow: hidden; color: var(--muted); font-size: 10px; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
+.candidate-selection--selected { color: var(--accent); }
+.candidate-selection--waiting { color: #87500e; }
+.candidate-selection--rejected { color: var(--red); }
 .candidate-media { color: #4b5853; font-size: 10px; }
 .revision-label, .reason-code { width: fit-content; padding: 4px 7px; color: #53615c; background: #edf1ef; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; }
 .unmatched-list { display: grid; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
