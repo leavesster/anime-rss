@@ -110,6 +110,16 @@ def test_scheduled_retention_preserves_subscription_and_correction_history(
     with TestClient(
         create_app(_settings(tmp_path, "retention.sqlite3"), feed_transport=transport)
     ) as client:
+        configured = client.put(
+            "/api/v1/downloads/config",
+            headers={"If-Match": "0"},
+            json={
+                "base_url": "http://qb.test:8080",
+                "username": "admin",
+                "password": "download-secret",
+            },
+        )
+        assert configured.status_code == 200
         anime = client.post("/api/v1/catalog/anime", json={"title": "Keep Anime"}).json()
         client.post(
             "/api/v1/subscriptions",
