@@ -28,7 +28,10 @@ class InvalidTorrent(ValueError):
 
 
 def parse_magnet_identity(value: str) -> TorrentIdentity:
-    parts = urlsplit(value)
+    try:
+        parts = urlsplit(value)
+    except ValueError as error:
+        raise InvalidTorrent("invalid_magnet") from error
     if parts.scheme.lower() != "magnet":
         raise InvalidTorrent("not_a_magnet")
     query = parse_qs(parts.query)

@@ -4,6 +4,7 @@ from anime_rss.infrastructure.events import EventDispatcher
 from anime_rss.kernel.time import Clock, utc_now
 from anime_rss.modules.downloads.api import DownloadService
 from anime_rss.modules.feeds.api import FeedNotFoundError, FeedService
+from anime_rss.modules.feeds.domain import FeedHealth
 from anime_rss.modules.notifications.api import NotificationService
 from anime_rss.modules.operations.api import ClaimedJob, JobService
 from anime_rss.modules.operations.ports import (
@@ -18,6 +19,12 @@ from anime_rss.modules.releases.api import ReleaseService
 from anime_rss.modules.schedule.api import ScheduleService
 from anime_rss.modules.selection.api import SelectionService
 from anime_rss.modules.system.backup import BackupService
+
+_FAILED_FEED_HEALTH = {
+    FeedHealth.TRANSIENT_FAILURE,
+    FeedHealth.DEGRADED,
+    FeedHealth.AUTH_FAILED,
+}
 
 
 class ApplicationRuntime:
@@ -106,7 +113,7 @@ class ApplicationRuntime:
 
     def dependencies(self) -> list[DependencyStatus]:
         feeds = self._feeds.list_feeds()
-        feed_failures = [item for item in feeds if item.health in {"failing", "auth_failed"}]
+        feed_failures = [item for item in feeds if item.health in _FAILED_FEED_HEALTH]
         if feed_failures:
             feed_status = "degraded"
             feed_summary = f"{len(feed_failures)} 个订阅源需要处理"
@@ -174,7 +181,7 @@ class ApplicationRuntime:
     def failed_work(self, *, limit: int = 50) -> list[FailedWork]:
         items: list[FailedWork] = []
         for feed in self._feeds.list_feeds():
-            if feed.health not in {"failing", "auth_failed"}:
+            if feed.health not in _FAILED_FEED_HEALTH:
                 continue
             items.append(
                 FailedWork(
@@ -188,9 +195,7 @@ class ApplicationRuntime:
                     action_path=f"/feeds/{feed.id}",
                 )
             )
-        for task in self._downloads.list_tasks(limit=500):
-            if task.state not in {"failed", "externally_removed"}:
-                continue
+        for task in self._downloads.list_tasks(limit=500, states={"failed", "externally_removed"}):
             items.append(
                 FailedWork(
                     key=f"download:{task.id}",
@@ -218,9 +223,7 @@ class ApplicationRuntime:
                     action_path="/candidates",
                 )
             )
-        for job in self._jobs.list_jobs(limit=500):
-            if job.last_error_code is None:
-                continue
+        for job in self._jobs.list_jobs(limit=500, failed_only=True):
             items.append(
                 FailedWork(
                     key=f"job:{job.id}",

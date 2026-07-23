@@ -92,11 +92,18 @@ def redact_url(value: None) -> None: ...
 def redact_url(value: str | None) -> str | None:
     if value is None:
         return None
-    parts = urlsplit(value)
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        return "<invalid-url>"
     hostname = parts.hostname or ""
     if ":" in hostname and not hostname.startswith("["):
         hostname = f"[{hostname}]"
-    port = f":{parts.port}" if parts.port is not None else ""
+    try:
+        parsed_port = parts.port
+    except ValueError:
+        parsed_port = None
+    port = f":{parsed_port}" if parsed_port is not None else ""
     username = "***@" if parts.username is not None else ""
     netloc = f"{username}{hostname}{port}"
     redacted_path = "/***" if parts.path not in {"", "/"} else parts.path
@@ -110,13 +117,17 @@ def public_entry_url(value: str | None) -> str | None:
     """Return a navigable RSS item URL without credentials, query data, or fragments."""
     if value is None:
         return None
-    parts = urlsplit(value)
+    try:
+        parts = urlsplit(value)
+        parsed_port = parts.port
+    except ValueError:
+        return None
     if parts.scheme not in {"http", "https"} or not parts.hostname:
         return None
     hostname = parts.hostname
     if ":" in hostname and not hostname.startswith("["):
         hostname = f"[{hostname}]"
-    port = f":{parts.port}" if parts.port is not None else ""
+    port = f":{parsed_port}" if parsed_port is not None else ""
     return urlunsplit((parts.scheme, f"{hostname}{port}", parts.path or "/", "", ""))
 
 

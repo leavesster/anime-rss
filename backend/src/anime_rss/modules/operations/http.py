@@ -98,7 +98,6 @@ def _services(request: Request) -> OperationsHttpServices:
 @router.get("/overview", response_model=OperationsOverviewResponse)
 def get_operations_overview(request: Request) -> OperationsOverviewResponse:
     services = _services(request)
-    jobs = services.jobs.list_jobs(limit=500)
     scheduler = services.jobs.get_scheduler_state()
     return OperationsOverviewResponse(
         scheduler=(SchedulerStateResponse.model_validate(asdict(scheduler)) if scheduler else None),
@@ -110,7 +109,7 @@ def get_operations_overview(request: Request) -> OperationsOverviewResponse:
             FailedWorkResponse.model_validate(asdict(item))
             for item in services.diagnostics.failed_work(limit=100)
         ],
-        pending_jobs=len(jobs),
+        pending_jobs=services.jobs.count_jobs(),
     )
 
 

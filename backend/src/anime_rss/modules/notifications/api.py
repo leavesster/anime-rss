@@ -219,27 +219,10 @@ class NotificationService:
                 session.scalars(
                     select(NotificationRecord)
                     .order_by(NotificationRecord.created_at.desc(), NotificationRecord.id.desc())
-                    .limit(min(max(limit, 1), 500))
+                    .limit(max(limit, 1))
                 )
             )
-            return [
-                Notification(
-                    id=item.id,
-                    kind=item.kind,
-                    level=item.level,
-                    title=item.title,
-                    message=item.message,
-                    entity_type=item.entity_type,
-                    entity_id=item.entity_id,
-                    read_at=item.read_at,
-                    delivery_state=(attempts[item.id].state if item.id in attempts else None),
-                    delivery_error_code=(
-                        attempts[item.id].error_code if item.id in attempts else None
-                    ),
-                    created_at=item.created_at,
-                )
-                for item in records
-            ]
+            return [self._to_notification(item, attempts.get(item.id)) for item in records]
 
     def mark_read(self, notification_id: str) -> Notification:
         with self._session_factory.begin() as session:
@@ -247,9 +230,13 @@ class NotificationService:
             if record is None:
                 raise LookupError("notification not found")
             record.read_at = record.read_at or self._clock()
-        return next(
-            item for item in self.list_notifications(limit=500) if item.id == notification_id
-        )
+            attempt = session.scalar(
+                select(NotificationAttemptRecord)
+                .where(NotificationAttemptRecord.notification_id == notification_id)
+                .order_by(NotificationAttemptRecord.updated_at.desc())
+                .limit(1)
+            )
+            return self._to_notification(record, attempt)
 
     def process_deliveries(self, *, limit: int = 50) -> DeliveryCycle:
         now = self._clock()
@@ -386,6 +373,24 @@ class NotificationService:
             last_tested_at=record.last_tested_at,
             last_success_at=record.last_success_at,
             last_error_code=record.last_error_code,
+        )
+
+    @staticmethod
+    def _to_notification(
+        record: NotificationRecord, attempt: NotificationAttemptRecord | None
+    ) -> Notification:
+        return Notification(
+            id=record.id,
+            kind=record.kind,
+            level=record.level,
+            title=record.title,
+            message=record.message,
+            entity_type=record.entity_type,
+            entity_id=record.entity_id,
+            read_at=record.read_at,
+            delivery_state=attempt.state if attempt is not None else None,
+            delivery_error_code=attempt.error_code if attempt is not None else None,
+            created_at=record.created_at,
         )
 
     @staticmethod

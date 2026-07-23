@@ -126,6 +126,29 @@ function unwrap<T>(result: { data?: T; error?: unknown; response: Response }): T
   return result.data;
 }
 
+async function collectCursorPages<T>(
+  loadPage: (cursor: string | undefined) => Promise<{
+    data?: T[];
+    error?: unknown;
+    response: Response;
+  }>,
+): Promise<T[]> {
+  const items: T[] = [];
+  const seenCursors = new Set<string>();
+  let cursor: string | undefined;
+  while (true) {
+    const result = await loadPage(cursor);
+    items.push(...unwrap(result));
+    const nextCursor = result.response.headers.get("x-next-cursor") ?? undefined;
+    if (nextCursor === undefined) return items;
+    if (seenCursors.has(nextCursor)) {
+      throw new ApiError("服务返回了重复的分页游标", 502);
+    }
+    seenCursors.add(nextCursor);
+    cursor = nextCursor;
+  }
+}
+
 export async function getReadiness(): Promise<Record<string, string>> {
   return unwrap(await client.GET("/api/v1/health/ready"));
 }
@@ -150,7 +173,9 @@ export async function logout(): Promise<void> {
 }
 
 export async function listFeeds(): Promise<Feed[]> {
-  return unwrap(await client.GET("/api/v1/feeds"));
+  return collectCursorPages((cursor) =>
+    client.GET("/api/v1/feeds", { params: { query: { limit: 200, cursor } } }),
+  );
 }
 
 export async function createFeed(payload: FeedCreate): Promise<Feed> {
@@ -202,31 +227,31 @@ export async function refreshFeed(feedId: string): Promise<RefreshResult> {
 }
 
 export async function listFeedEntries(feedId: string): Promise<FeedEntry[]> {
-  return unwrap(
-    await client.GET("/api/v1/feeds/{feed_id}/entries", {
-      params: { path: { feed_id: feedId }, query: { limit: 100 } },
+  return collectCursorPages((cursor) =>
+    client.GET("/api/v1/feeds/{feed_id}/entries", {
+      params: { path: { feed_id: feedId }, query: { limit: 200, cursor } },
     }),
   );
 }
 
 export async function listFeedFetches(feedId: string): Promise<FeedFetch[]> {
-  return unwrap(
-    await client.GET("/api/v1/feeds/{feed_id}/fetches", {
-      params: { path: { feed_id: feedId }, query: { limit: 100 } },
+  return collectCursorPages((cursor) =>
+    client.GET("/api/v1/feeds/{feed_id}/fetches", {
+      params: { path: { feed_id: feedId }, query: { limit: 200, cursor } },
     }),
   );
 }
 
 export async function listReleases(): Promise<Release[]> {
-  return unwrap(
-    await client.GET("/api/v1/releases", { params: { query: { limit: 200 } } }),
+  return collectCursorPages((cursor) =>
+    client.GET("/api/v1/releases", { params: { query: { limit: 200, cursor } } }),
   );
 }
 
 export async function listEpisodeGroups(): Promise<EpisodeGroup[]> {
-  return unwrap(
-    await client.GET("/api/v1/recognition/episode-groups", {
-      params: { query: { limit: 200 } },
+  return collectCursorPages((cursor) =>
+    client.GET("/api/v1/recognition/episode-groups", {
+      params: { query: { limit: 200, cursor } },
     }),
   );
 }
@@ -236,9 +261,9 @@ export async function listRssMatches(): Promise<AnimeRssMatch[]> {
 }
 
 export async function listUnmatchedReleases(): Promise<UnmatchedRelease[]> {
-  return unwrap(
-    await client.GET("/api/v1/recognition/unmatched", {
-      params: { query: { limit: 200 } },
+  return collectCursorPages((cursor) =>
+    client.GET("/api/v1/recognition/unmatched", {
+      params: { query: { limit: 200, cursor } },
     }),
   );
 }
@@ -278,7 +303,9 @@ export async function rerunRecognition(releaseId: string): Promise<RecognitionRe
 }
 
 export async function listAnime(): Promise<Anime[]> {
-  return unwrap(await client.GET("/api/v1/catalog/anime"));
+  return collectCursorPages((cursor) =>
+    client.GET("/api/v1/catalog/anime", { params: { query: { limit: 200, cursor } } }),
+  );
 }
 
 export async function getSeasonalOverview(
@@ -373,7 +400,9 @@ export async function updateAnimeSchedule(
 }
 
 export async function listSubscriptions(): Promise<Subscription[]> {
-  return unwrap(await client.GET("/api/v1/subscriptions"));
+  return collectCursorPages((cursor) =>
+    client.GET("/api/v1/subscriptions", { params: { query: { limit: 200, cursor } } }),
+  );
 }
 
 export async function createSubscription(payload: SubscriptionCreate): Promise<Subscription> {
@@ -413,17 +442,17 @@ export async function saveGlobalPreferences(
 }
 
 export async function listSelectionSlots(subscriptionId?: string): Promise<EpisodeSlot[]> {
-  return unwrap(
-    await client.GET("/api/v1/selection/episodes", {
-      params: { query: { subscription_id: subscriptionId, limit: 200 } },
+  return collectCursorPages((cursor) =>
+    client.GET("/api/v1/selection/episodes", {
+      params: { query: { subscription_id: subscriptionId, limit: 200, cursor } },
     }),
   );
 }
 
 export async function listDecisions(subscriptionId?: string): Promise<Decision[]> {
-  return unwrap(
-    await client.GET("/api/v1/selection/decisions", {
-      params: { query: { subscription_id: subscriptionId, limit: 200 } },
+  return collectCursorPages((cursor) =>
+    client.GET("/api/v1/selection/decisions", {
+      params: { query: { subscription_id: subscriptionId, limit: 200, cursor } },
     }),
   );
 }
@@ -508,9 +537,9 @@ export async function markEpisodeAcquired(
 }
 
 export async function listManualActions(subscriptionId?: string): Promise<ManualAction[]> {
-  return unwrap(
-    await client.GET("/api/v1/selection/manual-actions", {
-      params: { query: { subscription_id: subscriptionId, limit: 200 } },
+  return collectCursorPages((cursor) =>
+    client.GET("/api/v1/selection/manual-actions", {
+      params: { query: { subscription_id: subscriptionId, limit: 200, cursor } },
     }),
   );
 }
@@ -536,9 +565,9 @@ export async function testDownloadConnection(): Promise<DownloadConnection> {
 }
 
 export async function listDownloadTasks(): Promise<DownloadTask[]> {
-  return unwrap(
-    await client.GET("/api/v1/downloads/tasks", {
-      params: { query: { limit: 200 } },
+  return collectCursorPages((cursor) =>
+    client.GET("/api/v1/downloads/tasks", {
+      params: { query: { limit: 200, cursor } },
     }),
   );
 }
@@ -568,14 +597,14 @@ export async function getOperationsOverview(): Promise<OperationsOverview> {
 }
 
 export async function listScheduledJobs(): Promise<ScheduledJob[]> {
-  return unwrap(
-    await client.GET("/api/v1/operations/jobs", { params: { query: { limit: 200 } } }),
+  return collectCursorPages((cursor) =>
+    client.GET("/api/v1/operations/jobs", { params: { query: { limit: 200, cursor } } }),
   );
 }
 
 export async function listJobRuns(): Promise<JobRun[]> {
-  return unwrap(
-    await client.GET("/api/v1/operations/runs", { params: { query: { limit: 100 } } }),
+  return collectCursorPages((cursor) =>
+    client.GET("/api/v1/operations/runs", { params: { query: { limit: 200, cursor } } }),
   );
 }
 
@@ -594,8 +623,8 @@ export async function listScheduleCalendar(days = 8): Promise<CalendarDay[]> {
 }
 
 export async function listMissingEpisodes(): Promise<ExpectedEpisode[]> {
-  return unwrap(
-    await client.GET("/api/v1/schedule/missing", { params: { query: { limit: 100 } } }),
+  return collectCursorPages((cursor) =>
+    client.GET("/api/v1/schedule/missing", { params: { query: { limit: 200, cursor } } }),
   );
 }
 
@@ -611,9 +640,9 @@ export async function getScheduleOverview(): Promise<{
 }
 
 export async function listAnimeEpisodeHistory(animeId: string): Promise<ExpectedEpisode[]> {
-  return unwrap(
-    await client.GET("/api/v1/schedule/anime/{anime_id}/episodes", {
-      params: { path: { anime_id: animeId }, query: { limit: 200 } },
+  return collectCursorPages((cursor) =>
+    client.GET("/api/v1/schedule/anime/{anime_id}/episodes", {
+      params: { path: { anime_id: animeId }, query: { limit: 200, cursor } },
     }),
   );
 }
@@ -621,9 +650,9 @@ export async function listAnimeEpisodeHistory(animeId: string): Promise<Expected
 export async function listEpisodeScheduleOverrides(
   animeId: string,
 ): Promise<EpisodeScheduleOverride[]> {
-  return unwrap(
-    await client.GET("/api/v1/schedule/anime/{anime_id}/overrides", {
-      params: { path: { anime_id: animeId } },
+  return collectCursorPages((cursor) =>
+    client.GET("/api/v1/schedule/anime/{anime_id}/overrides", {
+      params: { path: { anime_id: animeId }, query: { limit: 200, cursor } },
     }),
   );
 }
@@ -673,8 +702,8 @@ export async function refreshSchedule(): Promise<{
 }
 
 export async function listAuditEvents(): Promise<AuditEvent[]> {
-  return unwrap(
-    await client.GET("/api/v1/audit/events", { params: { query: { limit: 100 } } }),
+  return collectCursorPages((cursor) =>
+    client.GET("/api/v1/audit/events", { params: { query: { limit: 200, cursor } } }),
   );
 }
 
@@ -702,8 +731,8 @@ export async function testNotificationWebhook(): Promise<void> {
 }
 
 export async function listNotifications(): Promise<Notification[]> {
-  return unwrap(
-    await client.GET("/api/v1/notifications", { params: { query: { limit: 100 } } }),
+  return collectCursorPages((cursor) =>
+    client.GET("/api/v1/notifications", { params: { query: { limit: 200, cursor } } }),
   );
 }
 
@@ -716,7 +745,9 @@ export async function markNotificationRead(notificationId: string): Promise<Noti
 }
 
 export async function listBackups(): Promise<Backup[]> {
-  return unwrap(await client.GET("/api/v1/system/backups"));
+  return collectCursorPages((cursor) =>
+    client.GET("/api/v1/system/backups", { params: { query: { limit: 200, cursor } } }),
+  );
 }
 
 export async function getInstanceSettings(): Promise<InstanceSettings> {

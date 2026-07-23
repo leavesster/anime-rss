@@ -75,6 +75,13 @@ class FeedDocumentParser:
         return str(value)[:4096] if value else None
 
     @staticmethod
+    def _has_torrent_path(value: str) -> bool:
+        try:
+            return urlsplit(value).path.lower().endswith(".torrent")
+        except ValueError:
+            return False
+
+    @staticmethod
     def _torrent_reference(entry: Any) -> str | None:
         links = list(entry.get("links", []))
         for link in links:
@@ -84,12 +91,10 @@ class FeedDocumentParser:
             if href.startswith("magnet:"):
                 return href
             if content_type == "application/x-bittorrent" or (
-                relation == "enclosure" and urlsplit(href).path.lower().endswith(".torrent")
+                relation == "enclosure" and FeedDocumentParser._has_torrent_path(href)
             ):
                 return href
         link = FeedDocumentParser._entry_link(entry)
-        if link and (
-            link.startswith("magnet:") or urlsplit(link).path.lower().endswith(".torrent")
-        ):
+        if link and (link.startswith("magnet:") or FeedDocumentParser._has_torrent_path(link)):
             return link
         return None

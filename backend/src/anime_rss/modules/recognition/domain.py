@@ -62,6 +62,15 @@ _BRACKET_EPISODE = re.compile(
     r"(?:V(?P<revision>[1-9]\d{0,2}))?[\]】]",
     re.IGNORECASE,
 )
+_FILE_SIZE = re.compile(r"(?i)\b\d+(?:\.\d+)?\s*(?:KIB|MIB|GIB|TIB|KB|MB|GB|TB)\b")
+_SIMPLIFIED_SUBTITLE = re.compile(
+    r"简|簡|(?<![A-Z0-9])(?:CHS|GB(?:2312|K)?)(?![A-Z0-9])",
+    re.IGNORECASE,
+)
+_TRADITIONAL_SUBTITLE = re.compile(
+    r"繁|(?<![A-Z0-9])(?:CHT|BIG5)(?![A-Z0-9])",
+    re.IGNORECASE,
+)
 
 
 def canonical_episode_number(value: str | None) -> str | None:
@@ -122,17 +131,17 @@ def _video_codec(title: str) -> str | None:
     return None
 
 
-def _subtitle_language(title: str) -> str | None:
-    upper = title.upper()
-    simplified = bool(re.search(r"简|簡|CHS|GB", upper))
-    traditional = bool(re.search(r"繁|CHT|BIG5", upper))
+def _subtitle_language(metadata: str) -> str | None:
+    without_file_sizes = _FILE_SIZE.sub(" ", metadata)
+    simplified = bool(_SIMPLIFIED_SUBTITLE.search(without_file_sizes))
+    traditional = bool(_TRADITIONAL_SUBTITLE.search(without_file_sizes))
     if simplified and traditional:
         return "zh-Hans+zh-Hant"
     if simplified:
         return "zh-Hans"
     if traditional:
         return "zh-Hant"
-    if re.search(r"\bRAW\b", upper):
+    if re.search(r"\bRAW\b", without_file_sizes, re.IGNORECASE):
         return "raw"
     return None
 
@@ -219,7 +228,9 @@ def parse_release_title(title: str) -> ParsedReleaseTitle:
         episode_key=episode_key,
         resolution=_resolution(normalized),
         video_codec=_video_codec(normalized),
-        subtitle_language=_subtitle_language(normalized),
+        subtitle_language=_subtitle_language(
+            body[episode_match.end() :] if episode_match else body
+        ),
         revision=revision,
         content_kind=content_kind,
         confidence=confidence,

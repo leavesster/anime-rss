@@ -249,23 +249,22 @@ class SelectionService:
         return committed
 
     def list_slots(
-        self, *, subscription_id: str | None = None, limit: int = 200
+        self, *, subscription_id: str | None = None, limit: int | None = 200
     ) -> list[EpisodeSlot]:
         with self._session_factory() as session:
             statement = select(EpisodeSlotRecord)
             if subscription_id is not None:
                 statement = statement.where(EpisodeSlotRecord.subscription_id == subscription_id)
-            records = list(
-                session.scalars(
-                    statement.order_by(
-                        EpisodeSlotRecord.updated_at.desc(), EpisodeSlotRecord.id
-                    ).limit(min(max(limit, 1), 500))
-                )
+            statement = statement.order_by(
+                EpisodeSlotRecord.updated_at.desc(), EpisodeSlotRecord.id
             )
+            if limit is not None:
+                statement = statement.limit(max(limit, 1))
+            records = list(session.scalars(statement))
             return [self._to_slot(record) for record in records]
 
     def list_decisions(
-        self, *, subscription_id: str | None = None, limit: int = 200
+        self, *, subscription_id: str | None = None, limit: int | None = 200
     ) -> list[Decision]:
         with self._session_factory() as session:
             statement = select(DecisionRecord, EpisodeSlotRecord.anime_title).join(
@@ -273,9 +272,9 @@ class SelectionService:
             )
             if subscription_id is not None:
                 statement = statement.where(DecisionRecord.subscription_id == subscription_id)
-            statement = statement.order_by(
-                DecisionRecord.created_at.desc(), DecisionRecord.id
-            ).limit(min(max(limit, 1), 500))
+            statement = statement.order_by(DecisionRecord.created_at.desc(), DecisionRecord.id)
+            if limit is not None:
+                statement = statement.limit(max(limit, 1))
             return [
                 Decision(
                     id=record.id,
@@ -520,7 +519,7 @@ class SelectionService:
                 session.scalars(
                     statement.order_by(
                         ManualActionRecord.created_at.desc(), ManualActionRecord.id
-                    ).limit(min(max(limit, 1), 500))
+                    ).limit(max(limit, 1))
                 )
             )
             return [self._to_manual_action(record) for record in records]

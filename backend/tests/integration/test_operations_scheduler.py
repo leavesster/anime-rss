@@ -1,8 +1,12 @@
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
 from anime_rss.config import Settings
+from anime_rss.container import ServiceContainer
+from anime_rss.infrastructure.database import create_session_factory
 from anime_rss.main import create_app
+from anime_rss.modules.operations.persistence import ScheduledJobRecord
 from fastapi.testclient import TestClient
 
 
@@ -76,3 +80,81 @@ def test_scheduler_refreshes_due_feed_and_exposes_diagnostics(tmp_path: Path) ->
         assert recognition_work[0]["attention_kind"] == "confirmation"
         audit = client.get("/api/v1/audit/events").json()
         assert any(item["event_type"] == "feed.refresh_succeeded" for item in audit)
+
+
+def test_feed_transient_failure_is_exposed_in_operations_diagnostics(tmp_path: Path) -> None:
+    settings = Settings(
+        data_dir=tmp_path,
+        database_url=f"sqlite:///{tmp_path / 'scheduler.sqlite3'}",
+        master_key_file=tmp_path / "master.key",
+        scheduler_poll_seconds=60,
+        auth_enabled=False,
+    )
+    transport = httpx.MockTransport(lambda request: httpx.Response(503))
+
+    with TestClient(create_app(settings, feed_transport=transport)) as client:
+        feed = client.post(
+            "/api/v1/feeds",
+            json={"name": "Unavailable", "url": "https://feed.test/rss"},
+        ).json()
+        refreshed = client.post(f"/api/v1/feeds/{feed['id']}/refresh")
+
+        assert refreshed.status_code == 200
+        assert refreshed.json()["status"] == "transient_failure"
+        overview = client.get("/api/v1/operations/overview").json()
+        feeds = next(item for item in overview["dependencies"] if item["key"] == "feeds")
+        failed_feed = next(
+            item for item in overview["failed_work"] if item["key"] == f"feed:{feed['id']}"
+        )
+        assert feeds["status"] == "degraded"
+        assert failed_feed["kind"] == "feed"
+        assert failed_feed["error_code"] == "upstream_unavailable"
+
+
+def test_operations_overview_counts_all_jobs_and_does_not_hide_late_failures(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(
+        data_dir=tmp_path,
+        database_url=f"sqlite:///{tmp_path / 'scheduler.sqlite3'}",
+        master_key_file=tmp_path / "master.key",
+        scheduler_poll_seconds=60,
+        auth_enabled=False,
+    )
+
+    with TestClient(create_app(settings)) as client:
+        baseline = client.get("/api/v1/operations/overview").json()["pending_jobs"]
+        services: ServiceContainer = client.app.state.services
+        sessions = create_session_factory(services.engine)
+        future = datetime(2100, 1, 1, tzinfo=UTC)
+        with sessions.begin() as session:
+            session.add_all(
+                ScheduledJobRecord(
+                    id=f"bulk-{index:03d}",
+                    job_kind="audit.test",
+                    dedupe_key=f"bulk-{index:03d}",
+                    payload={},
+                    due_at=future,
+                    created_at=future,
+                    updated_at=future,
+                )
+                for index in range(500)
+            )
+            session.add(
+                ScheduledJobRecord(
+                    id="zz-failed",
+                    job_kind="audit.test",
+                    dedupe_key="failed",
+                    payload={},
+                    due_at=future,
+                    last_error_code="persistent_failure",
+                    created_at=future,
+                    updated_at=future,
+                )
+            )
+
+        overview = client.get("/api/v1/operations/overview").json()
+
+        assert overview["pending_jobs"] == baseline + 501
+        failed = next(item for item in overview["failed_work"] if item["key"] == "job:zz-failed")
+        assert failed["error_code"] == "persistent_failure"

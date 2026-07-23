@@ -3,7 +3,10 @@ from pathlib import Path
 
 import httpx
 from anime_rss.config import Settings
+from anime_rss.container import ServiceContainer
+from anime_rss.infrastructure.database import create_session_factory
 from anime_rss.main import create_app
+from anime_rss.modules.selection.persistence import EpisodeSlotRecord
 from fastapi.testclient import TestClient
 
 
@@ -98,6 +101,64 @@ def test_schedule_marks_missing_once_without_creating_download_work(tmp_path: Pa
         assert client.get("/api/v1/schedule/missing").json() == []
         history = client.get(f"/api/v1/schedule/anime/{anime['id']}/episodes").json()
         assert next(item for item in history if item["episode_key"] == "1")["state"] == "acquired"
+
+
+def test_schedule_considers_acquired_slots_beyond_the_latest_500(tmp_path: Path) -> None:
+    current = [datetime(2026, 7, 20, 0, 0, tzinfo=UTC)]
+
+    def clock() -> datetime:
+        return current[0]
+
+    with TestClient(create_app(_settings(tmp_path), clock=clock)) as client:
+        anime = client.post("/api/v1/catalog/anime", json={"title": "Long History"}).json()
+        client.put(
+            f"/api/v1/catalog/anime/{anime['id']}/schedule",
+            headers={"If-Match": str(anime["version"])},
+            json={
+                "air_date": "2026-07-20",
+                "episode_count": 1,
+                "airing_weekday": 0,
+                "airing_time": "01:00",
+                "schedule_timezone": "UTC",
+            },
+        )
+        subscription = client.post("/api/v1/subscriptions", json={"anime_id": anime["id"]}).json()
+        services: ServiceContainer = client.app.state.services
+        sessions = create_session_factory(services.engine)
+        with sessions.begin() as session:
+            session.add(
+                EpisodeSlotRecord(
+                    id="old-acquired",
+                    subscription_id=subscription["id"],
+                    anime_title="Long History",
+                    episode_key="1",
+                    state="acquired_elsewhere",
+                    version=1,
+                    created_at=current[0],
+                    updated_at=current[0],
+                )
+            )
+            session.add_all(
+                EpisodeSlotRecord(
+                    id=f"newer-{index:03d}",
+                    subscription_id=subscription["id"],
+                    anime_title="Long History",
+                    episode_key=f"archive-{index:03d}",
+                    state="pending",
+                    version=1,
+                    created_at=datetime(2026, 7, 20, 0, index % 60, tzinfo=UTC),
+                    updated_at=datetime(2026, 7, 20, 1, index % 60, tzinfo=UTC),
+                )
+                for index in range(500)
+            )
+
+        current[0] = datetime(2026, 7, 21, 2, 0, tzinfo=UTC)
+        synced = client.post("/api/v1/schedule/sync").json()
+        history = client.get(f"/api/v1/schedule/anime/{anime['id']}/episodes").json()
+
+        assert synced["acquired"] == 1
+        assert synced["missing"] == 0
+        assert history[0]["state"] == "acquired"
 
 
 def test_acceptable_fallback_suppresses_missing_warning(tmp_path: Path) -> None:

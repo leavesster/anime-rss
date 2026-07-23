@@ -50,7 +50,7 @@ class AuditService:
                 session.scalars(
                     select(AuditEventRecord)
                     .order_by(AuditEventRecord.created_at.desc(), AuditEventRecord.id.desc())
-                    .limit(min(max(limit, 1), 500))
+                    .limit(max(limit, 1))
                 )
             )
             return [

@@ -68,6 +68,26 @@ def test_decimal_range_and_revision_are_canonical() -> None:
     assert episode_range.episode_end == "2"
 
 
+@pytest.mark.parametrize(
+    "title",
+    [
+        "[Group] Example Anime - 01 [1080p HEVC][1.2GB]",
+        "[Group] Example Anime - 01 [1080p HEVC][1.2 GB]",
+        "[Group] 简单易懂的现代魔法 - 01 [1080p HEVC]",
+        "[Group] 繁花 - 01 [1080p HEVC]",
+    ],
+)
+def test_titles_and_file_sizes_do_not_claim_chinese_subtitles(title: str) -> None:
+    assert parse_release_title(title).subtitle_language is None
+
+
+@pytest.mark.parametrize("marker", ["GB", "GB2312", "GBK", "CHS"])
+def test_explicit_simplified_subtitle_markers_remain_supported(marker: str) -> None:
+    parsed = parse_release_title(f"[Group] Example Anime - 01 [1080p HEVC][{marker}]")
+
+    assert parsed.subtitle_language == "zh-Hans"
+
+
 def test_unsupported_and_unparsed_titles_remain_explainable() -> None:
     batch = parse_release_title("[Group] Example Anime Complete Batch [1080p]")
     bd_batch = parse_release_title("[Group] Example Anime BDRip [1080p]")

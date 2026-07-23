@@ -754,7 +754,6 @@ class RecognitionService:
                     select(CandidateRecord)
                     .where(CandidateRecord.superseded_by_candidate_id.is_(None))
                     .order_by(CandidateRecord.first_seen_at.desc(), CandidateRecord.id)
-                    .limit(min(max(limit, 1), 500) * 20)
                 )
             )
 
@@ -867,7 +866,7 @@ class RecognitionService:
                     ~dismissal_exists.exists(),
                 )
                 .order_by(MatchAttemptRecord.parsed_at.desc())
-                .limit(min(max(limit, 1), 500))
+                .limit(max(limit, 1))
             )
             records = list(session.scalars(statement))
             references = self._sources.get_references({record.release_id for record in records})

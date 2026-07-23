@@ -5,7 +5,9 @@ from urllib.parse import parse_qs
 import httpx
 from anime_rss.config import Settings
 from anime_rss.container import ServiceContainer
+from anime_rss.infrastructure.database import create_session_factory
 from anime_rss.main import create_app
+from anime_rss.modules.downloads.persistence import DownloadTaskRecord
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
@@ -416,3 +418,52 @@ def test_restart_recovers_an_interrupted_submission(tmp_path: Path) -> None:
         assert task["state"] == "downloading"
         assert task["error_code"] is None
         assert qb.add_hashes == [INFO_HASH]
+
+
+def test_operations_diagnostics_does_not_hide_an_older_failed_download(
+    tmp_path: Path,
+) -> None:
+    feed_transport = httpx.MockTransport(
+        lambda request: httpx.Response(200, content=_rss(INFO_HASH))
+    )
+    app = create_app(
+        _settings(tmp_path, "diagnostics.sqlite3"),
+        feed_transport=feed_transport,
+    )
+
+    with TestClient(app) as client:
+        _subscribe_and_refresh(client, feed_transport)
+        task = client.get("/api/v1/downloads/tasks").json()[0]
+        services: ServiceContainer = client.app.state.services
+        sessions = create_session_factory(services.engine)
+        old = datetime(2026, 1, 1, tzinfo=UTC)
+        recent = datetime(2027, 1, 1, tzinfo=UTC)
+        with sessions.begin() as session:
+            failed = session.get(DownloadTaskRecord, task["id"])
+            assert failed is not None
+            failed.state = "failed"
+            failed.error_code = "submission_failed"
+            failed.updated_at = old
+            session.add_all(
+                DownloadTaskRecord(
+                    id=f"completed-{index:03d}",
+                    origin_kind="manual_release",
+                    decision_id=None,
+                    release_id=task["release_id"],
+                    subscription_id=None,
+                    info_hash=INFO_HASH,
+                    idempotency_key=f"completed-{index:03d}",
+                    state="completed",
+                    tags=[],
+                    created_at=recent,
+                    updated_at=recent,
+                )
+                for index in range(500)
+            )
+
+        overview = client.get("/api/v1/operations/overview").json()
+
+        failed_work = next(
+            item for item in overview["failed_work"] if item["key"] == f"download:{task['id']}"
+        )
+        assert failed_work["error_code"] == "submission_failed"

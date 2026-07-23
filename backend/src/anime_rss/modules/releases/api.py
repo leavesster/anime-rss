@@ -302,7 +302,10 @@ class ReleaseService:
             encoded = reference.encode()
             return parse_magnet_identity(reference), encoded, "magnet"
 
-        parts = urlsplit(reference)
+        try:
+            parts = urlsplit(reference)
+        except ValueError as error:
+            raise HttpFetchError("unsupported_url", transient=False) from error
         if parts.scheme not in {"http", "https"}:
             raise InvalidTorrent("unsupported_torrent_reference")
         headers = entry.headers if self._same_origin(entry.feed_url, reference) else {}
@@ -427,10 +430,13 @@ class ReleaseService:
 
     @staticmethod
     def _same_origin(first: str, second: str) -> bool:
-        left = urlsplit(first)
-        right = urlsplit(second)
-        return (left.scheme, left.hostname, left.port) == (
-            right.scheme,
-            right.hostname,
-            right.port,
-        )
+        try:
+            left = urlsplit(first)
+            right = urlsplit(second)
+            return (left.scheme, left.hostname, left.port) == (
+                right.scheme,
+                right.hostname,
+                right.port,
+            )
+        except ValueError:
+            return False

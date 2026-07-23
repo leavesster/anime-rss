@@ -30,6 +30,16 @@ def test_public_entry_url_keeps_path_and_drops_sensitive_parts() -> None:
     assert public_entry_url("magnet:?xt=urn:btih:abc") is None
 
 
+def test_malformed_entry_urls_are_safely_redacted_and_not_exposed_as_links() -> None:
+    malformed_port = "https://alice:secret@example.test:bad/private?token=abc"
+    malformed_ipv6 = "https://[broken/private?token=abc"
+
+    assert redact_url(malformed_port) == "https://***@example.test/***?token=%2A%2A%2A"
+    assert public_entry_url(malformed_port) is None
+    assert redact_url(malformed_ipv6) == "<invalid-url>"
+    assert public_entry_url(malformed_ipv6) is None
+
+
 def test_title_normalization_is_bounded_and_deterministic() -> None:
     raw = "  [Group]\x00 Anime　Name  " + "x" * 5000
 

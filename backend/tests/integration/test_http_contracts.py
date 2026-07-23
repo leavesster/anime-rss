@@ -2,7 +2,10 @@ from pathlib import Path
 from uuid import UUID
 
 from anime_rss.config import Settings
+from anime_rss.container import ServiceContainer
+from anime_rss.infrastructure.database import create_session_factory
 from anime_rss.main import create_app
+from anime_rss.modules.audit.api import record_event
 from fastapi.testclient import TestClient
 
 
@@ -101,6 +104,36 @@ def test_cursor_pages_are_opaque_complete_and_non_overlapping(tmp_path: Path) ->
 
         assert page_count == 3
         assert seen_ids == expected_ids
+        assert len(seen_ids) == len(set(seen_ids))
+
+
+def test_cursor_pages_continue_beyond_legacy_service_limit(tmp_path: Path) -> None:
+    with TestClient(create_app(_settings(tmp_path))) as client:
+        services: ServiceContainer = client.app.state.services
+        sessions = create_session_factory(services.engine)
+        with sessions.begin() as session:
+            for index in range(501):
+                record_event(
+                    session,
+                    event_type="pagination.tested",
+                    entity_type="test",
+                    entity_id=f"event-{index:03d}",
+                )
+
+        seen_ids: list[str] = []
+        cursor: str | None = None
+        while True:
+            params = {"limit": "200"}
+            if cursor is not None:
+                params["cursor"] = cursor
+            response = client.get("/api/v1/audit/events", params=params)
+            assert response.status_code == 200
+            seen_ids.extend(item["id"] for item in response.json())
+            cursor = response.headers.get("x-next-cursor")
+            if cursor is None:
+                break
+
+        assert len(seen_ids) == 501
         assert len(seen_ids) == len(set(seen_ids))
 
 

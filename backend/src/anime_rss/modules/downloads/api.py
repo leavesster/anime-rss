@@ -393,12 +393,15 @@ class DownloadService:
                     )
         return self.get_task(task_id)
 
-    def list_tasks(self, *, limit: int = 200) -> list[DownloadTask]:
+    def list_tasks(self, *, limit: int = 200, states: set[str] | None = None) -> list[DownloadTask]:
         with self._session_factory() as session:
+            statement = select(DownloadTaskRecord)
+            if states is not None:
+                statement = statement.where(DownloadTaskRecord.state.in_(states))
             records = session.scalars(
-                select(DownloadTaskRecord)
-                .order_by(DownloadTaskRecord.updated_at.desc(), DownloadTaskRecord.id)
-                .limit(limit)
+                statement.order_by(
+                    DownloadTaskRecord.updated_at.desc(), DownloadTaskRecord.id
+                ).limit(max(limit, 1))
             ).all()
             references = self._releases.get_references({record.release_id for record in records})
             tasks: list[DownloadTask] = []

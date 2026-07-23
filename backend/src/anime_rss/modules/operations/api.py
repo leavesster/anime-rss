@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, cast
 
-from sqlalchemy import delete, or_, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -356,13 +356,20 @@ class JobService:
                 updated_at=record.updated_at,
             )
 
-    def list_jobs(self, *, limit: int = 200) -> list[ScheduledJob]:
+    def count_jobs(self) -> int:
         with self._session_factory() as session:
+            return session.scalar(select(func.count()).select_from(ScheduledJobRecord)) or 0
+
+    def list_jobs(self, *, limit: int = 200, failed_only: bool = False) -> list[ScheduledJob]:
+        with self._session_factory() as session:
+            statement = select(ScheduledJobRecord)
+            if failed_only:
+                statement = statement.where(ScheduledJobRecord.last_error_code.is_not(None))
             records = list(
                 session.scalars(
-                    select(ScheduledJobRecord)
-                    .order_by(ScheduledJobRecord.due_at, ScheduledJobRecord.id)
-                    .limit(min(max(limit, 1), 500))
+                    statement.order_by(ScheduledJobRecord.due_at, ScheduledJobRecord.id).limit(
+                        max(limit, 1)
+                    )
                 )
             )
             return [
@@ -386,7 +393,7 @@ class JobService:
                 session.scalars(
                     select(JobRunRecord)
                     .order_by(JobRunRecord.started_at.desc(), JobRunRecord.id.desc())
-                    .limit(min(max(limit, 1), 500))
+                    .limit(max(limit, 1))
                 )
             )
             return [

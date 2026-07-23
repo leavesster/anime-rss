@@ -1,11 +1,13 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
 from anime_rss.config import Settings
 from anime_rss.container import ServiceContainer
+from anime_rss.infrastructure.database import create_session_factory
 from anime_rss.infrastructure.events import IntegrationEvent
 from anime_rss.main import create_app
+from anime_rss.modules.notifications.persistence import NotificationRecord
 from fastapi.testclient import TestClient
 
 
@@ -106,3 +108,36 @@ def test_webhook_transient_failure_is_retained_for_retry(tmp_path: Path) -> None
         notification = client.get("/api/v1/notifications").json()[0]
         assert notification["delivery_state"] == "retrying"
         assert notification["delivery_error_code"] == "webhook_unavailable"
+
+
+def test_old_notification_can_be_marked_read_beyond_the_list_page_limit(tmp_path: Path) -> None:
+    settings = Settings(
+        data_dir=tmp_path,
+        database_url=f"sqlite:///{tmp_path / 'old-notification.sqlite3'}",
+        master_key_file=tmp_path / "master.key",
+        auth_enabled=False,
+        scheduler_poll_seconds=60,
+    )
+    with TestClient(create_app(settings)) as client:
+        services: ServiceContainer = client.app.state.services
+        sessions = create_session_factory(services.engine)
+        created_at = datetime(2026, 7, 1, tzinfo=UTC)
+        with sessions.begin() as session:
+            session.add_all(
+                NotificationRecord(
+                    id=f"notification-{index:03d}",
+                    source_event_id=f"event-{index:03d}",
+                    kind="test",
+                    level="info",
+                    title=f"Notification {index}",
+                    message="pagination regression",
+                    created_at=created_at + timedelta(seconds=index),
+                )
+                for index in range(501)
+            )
+
+        response = client.post("/api/v1/notifications/notification-000/read")
+
+        assert response.status_code == 200
+        assert response.json()["id"] == "notification-000"
+        assert response.json()["read_at"] is not None

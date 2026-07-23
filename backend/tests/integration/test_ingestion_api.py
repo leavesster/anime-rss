@@ -109,6 +109,46 @@ def test_authentication_failure_disables_automatic_retry(tmp_path: Path) -> None
         assert stored["next_fetch_at"] is None
 
 
+def test_malformed_entry_urls_do_not_abort_the_feed_or_event_batch(tmp_path: Path) -> None:
+    body = f"""<?xml version="1.0"?>
+    <rss version="2.0"><channel><title>Test</title>
+      <item><guid>valid</guid><title>[Group] Anime - 01</title>
+        <enclosure url="magnet:?xt=urn:btih:{INFO_HASH}" type="application/x-bittorrent" />
+      </item>
+      <item><guid>invalid-url</guid><title>[Group] Anime - 02</title>
+        <link>https://[broken</link>
+        <enclosure url="https://[broken/episode.torrent" type="application/x-bittorrent" />
+      </item>
+      <item><guid>invalid-magnet</guid><title>[Group] Anime - 03</title>
+        <enclosure url="magnet://[broken" type="application/x-bittorrent" />
+      </item>
+    </channel></rss>""".encode()
+    handler = httpx.MockTransport(lambda request: httpx.Response(200, content=body))
+
+    with _app(tmp_path, handler) as client:
+        feed = client.post(
+            "/api/v1/feeds", json={"name": "Mixed", "url": "https://feed.test/rss"}
+        ).json()
+        refresh = client.post(f"/api/v1/feeds/{feed['id']}/refresh")
+        entries = client.get(f"/api/v1/feeds/{feed['id']}/entries").json()
+        releases = client.get("/api/v1/releases").json()
+
+    assert refresh.status_code == 200
+    assert refresh.json()["entry_count"] == 3
+    assert refresh.json()["dispatched_events"] == 5
+    assert {item["release_status"] for item in entries} == {"identified", "invalid"}
+    malformed_url = next(
+        item for item in entries if item["release_error_code"] == "unsupported_url"
+    )
+    malformed_magnet = next(
+        item for item in entries if item["release_error_code"] == "invalid_magnet"
+    )
+    assert malformed_url["link_redacted"] == "<invalid-url>"
+    assert malformed_url["release_error_code"] == "unsupported_url"
+    assert malformed_magnet["release_error_code"] == "invalid_magnet"
+    assert len(releases) == 1
+
+
 def test_torrent_payload_is_fetched_hashed_and_encrypted(tmp_path: Path) -> None:
     torrent_payload, expected_hash = _torrent()
     torrent_requests: list[httpx.Request] = []

@@ -84,6 +84,16 @@
       "name": "empty input is bounded and explainable",
       "title": "　 ",
       "expected": {"source_title": "", "release_group": null, "series_title": null, "episode_key": null, "confidence": "low", "reason_code": "episode_not_found"}
+    },
+    {
+      "name": "file size is not a simplified subtitle marker",
+      "title": "[Group] Example Anime - 01 [1080p HEVC][1.2 GB]",
+      "expected": {"subtitle_language": null}
+    },
+    {
+      "name": "series title characters are not subtitle metadata",
+      "title": "[Group] 简单易懂的现代魔法 - 01 [1080p HEVC]",
+      "expected": {"series_title": "简单易懂的现代魔法", "subtitle_language": null}
     }
   ]
 }

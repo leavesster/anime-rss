@@ -21,3 +21,21 @@ def test_rss_is_normalized_without_using_description() -> None:
     assert entries[0].title_normalized == "[Group] Anime Name - 01"
     assert entries[0].torrent_reference is not None
     assert "bad.test" not in entries[0].torrent_reference
+
+
+def test_malformed_url_does_not_abort_other_feed_entries() -> None:
+    body = b"""<?xml version="1.0"?>
+    <rss version="2.0"><channel><title>Test</title>
+      <item><guid>bad</guid><title>Bad</title>
+        <link>https://[broken</link>
+      </item>
+      <item><guid>good</guid><title>Good</title>
+        <link>https://example.test/page</link>
+      </item>
+    </channel></rss>"""
+
+    entries = FeedDocumentParser().parse(body)
+
+    assert [entry.source_guid for entry in entries] == ["bad", "good"]
+    assert entries[0].torrent_reference is None
+    assert entries[1].link == "https://example.test/page"

@@ -154,6 +154,33 @@ def test_release_events_create_episode_candidate_groups(tmp_path: Path) -> None:
         assert b"private" not in (tmp_path / "recognition.sqlite3").read_bytes()
 
 
+def test_episode_groups_do_not_drop_later_groups_when_one_group_is_large(tmp_path: Path) -> None:
+    titles = [("older-group", "[Older] Overflow Anime - 02 [1080p AVC][CHS]")]
+    titles.extend(
+        (f"popular-{index:02d}", f"[Group-{index:02d}] Overflow Anime - 01 [1080p AVC][CHS]")
+        for index in range(41)
+    )
+    items = "".join(
+        f"<item><guid>{guid}</guid><title>{title}</title>"
+        f'<enclosure url="magnet:?xt=urn:btih:{index + 1:040x}" '
+        'type="application/x-bittorrent" /></item>'
+        for index, (guid, title) in enumerate(titles)
+    )
+    rss = f'<?xml version="1.0"?><rss version="2.0"><channel>{items}</channel></rss>'.encode()
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, content=rss))
+
+    with TestClient(create_app(_settings(tmp_path), feed_transport=transport)) as client:
+        feed = client.post(
+            "/api/v1/feeds", json={"name": "Large group", "url": "https://feed.test/rss"}
+        ).json()
+        client.post(f"/api/v1/feeds/{feed['id']}/refresh").raise_for_status()
+
+        groups = client.app.state.services.recognition.list_episode_groups(limit=2)
+
+        assert {group.episode_key for group in groups} == {"1", "2"}
+        assert next(group for group in groups if group.episode_key == "1").candidate_count == 41
+
+
 def test_title_variant_sets_group_and_bind_season_without_guessing(tmp_path: Path) -> None:
     titles = [
         (

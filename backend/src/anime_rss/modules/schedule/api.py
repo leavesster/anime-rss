@@ -36,11 +36,11 @@ class SubscriptionQueries(Protocol):
 
 class SelectionQueries(Protocol):
     def list_slots(
-        self, *, subscription_id: str | None = None, limit: int = 200
+        self, *, subscription_id: str | None = None, limit: int | None = 200
     ) -> list[EpisodeSlot]: ...
 
     def list_decisions(
-        self, *, subscription_id: str | None = None, limit: int = 200
+        self, *, subscription_id: str | None = None, limit: int | None = 200
     ) -> list[Decision]: ...
 
 
@@ -132,11 +132,11 @@ class ScheduleService:
         anime_by_id = {anime.id: anime for anime in self._catalog.list_anime()}
         slots = {
             (slot.subscription_id, slot.episode_key): slot
-            for slot in self._selection.list_slots(limit=500)
+            for slot in self._selection.list_slots(limit=None)
         }
         decisions = {
             (decision.subscription_id, decision.episode_key)
-            for decision in self._selection.list_decisions(limit=500)
+            for decision in self._selection.list_decisions(limit=None)
         }
         overrides_by_anime = self._overrides_by_anime()
         generated = acquired = missing = notifications = 0
@@ -374,7 +374,7 @@ class ScheduleService:
                     select(ExpectedEpisodeRecord)
                     .where(ExpectedEpisodeRecord.anime_id == anime_id)
                     .order_by(ExpectedEpisodeRecord.expected_at.desc(), ExpectedEpisodeRecord.id)
-                    .limit(min(max(limit, 1), 500))
+                    .limit(max(limit, 1))
                 )
             )
         return [self._to_expected(record, timezone) for record in records]
@@ -387,7 +387,7 @@ class ScheduleService:
                     select(ExpectedEpisodeRecord)
                     .where(ExpectedEpisodeRecord.state == "missing")
                     .order_by(ExpectedEpisodeRecord.expected_at.desc(), ExpectedEpisodeRecord.id)
-                    .limit(min(max(limit, 1), 500))
+                    .limit(max(limit, 1))
                 )
             )
         return [self._to_expected(record, timezone) for record in records]

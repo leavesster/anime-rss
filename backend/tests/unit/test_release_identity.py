@@ -36,6 +36,11 @@ def test_magnet_extracts_and_normalizes_torrent_name() -> None:
     assert identity.torrent_name == "[Group] Anime 01.mkv"
 
 
+def test_malformed_magnet_is_reported_as_invalid_torrent() -> None:
+    with pytest.raises(InvalidTorrent, match="invalid_magnet"):
+        parse_magnet_identity("magnet://[broken")
+
+
 def test_torrent_hash_uses_exact_raw_info_slice() -> None:
     payload, raw_info = _v1_torrent()
 

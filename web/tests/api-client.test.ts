@@ -88,4 +88,53 @@ describe("API client HTTP contracts", () => {
 
     window.removeEventListener("anime-rss-auth-required", authRequired);
   });
+
+  it("collects every cursor page and forwards the opaque cursor", async () => {
+    supportRelativeRequests();
+    const fetchMock = vi
+      .fn<(request: Request) => Promise<Response>>()
+      .mockImplementationOnce(async (request) => {
+        expect(new URL(request.url).searchParams.get("cursor")).toBeNull();
+        expect(new URL(request.url).searchParams.get("limit")).toBe("200");
+        return new Response(JSON.stringify([{ id: "feed-1" }]), {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+            "x-next-cursor": "opaque-page-2",
+          },
+        });
+      })
+      .mockImplementationOnce(async (request) => {
+        expect(new URL(request.url).searchParams.get("cursor")).toBe("opaque-page-2");
+        return new Response(JSON.stringify([{ id: "feed-2" }]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    const { listFeeds } = await import("../src/generated/api/client");
+
+    const feeds = await listFeeds();
+
+    expect(feeds.map((feed) => feed.id)).toEqual(["feed-1", "feed-2"]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects a repeated cursor instead of looping forever", async () => {
+    supportRelativeRequests();
+    const fetchMock = vi.fn(async () =>
+      new Response("[]", {
+        status: 200,
+        headers: { "content-type": "application/json", "x-next-cursor": "stuck" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { listFeeds } = await import("../src/generated/api/client");
+
+    await expect(listFeeds()).rejects.toMatchObject({
+      message: "服务返回了重复的分页游标",
+      status: 502,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });

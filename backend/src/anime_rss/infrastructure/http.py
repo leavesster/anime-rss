@@ -108,8 +108,14 @@ class SafeHttpClient:
 
     @staticmethod
     def _validate_url(value: str) -> str:
-        parts = urlsplit(value)
+        try:
+            parts = urlsplit(value)
+            port = parts.port
+        except ValueError as error:
+            raise HttpFetchError("unsupported_url", transient=False) from error
         if parts.scheme not in {"http", "https"} or not parts.hostname:
+            raise HttpFetchError("unsupported_url", transient=False)
+        if port is not None and not 1 <= port <= 65535:
             raise HttpFetchError("unsupported_url", transient=False)
         return value
 
