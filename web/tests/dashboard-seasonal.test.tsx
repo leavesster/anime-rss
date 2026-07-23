@@ -7,6 +7,7 @@ import { SeasonalAnimeSection } from "../src/features/dashboard/SeasonalAnimeSec
 import {
   followSeasonalAnime,
   getSeasonalOverview,
+  listRssMatches,
   markSeasonalAnimeWatched,
   refreshSeasonalOverview,
 } from "../src/generated/api/client";
@@ -15,6 +16,7 @@ vi.mock("../src/generated/api/client", () => ({
   dismissSeasonalAnime: vi.fn(),
   followSeasonalAnime: vi.fn(),
   getSeasonalOverview: vi.fn(),
+  listRssMatches: vi.fn(),
   markSeasonalAnimeWatched: vi.fn(),
   refreshSeasonalOverview: vi.fn(),
 }));
@@ -33,7 +35,7 @@ const items = [
     rating_score: 8.2,
     rating_total: 321,
     status: "undecided",
-    anime_id: null,
+    anime_id: "anime-101",
     subscription_id: null,
   },
   {
@@ -49,7 +51,7 @@ const items = [
     rating_score: null,
     rating_total: 0,
     status: "dismissed",
-    anime_id: null,
+    anime_id: "anime-102",
     subscription_id: null,
   },
   {
@@ -94,6 +96,13 @@ describe("seasonal anime homepage", () => {
       stale: false,
       items: [...items],
     });
+    vi.mocked(listRssMatches).mockResolvedValue([{
+      anime_id: "anime-101",
+      candidate_count: 2,
+      episode_count: 1,
+      latest_seen_at: "2026-07-23T00:00:00Z",
+      conflicts: [],
+    }]);
     vi.mocked(followSeasonalAnime).mockResolvedValue({
       bangumi_id: 101,
       status: "following",
@@ -118,6 +127,11 @@ describe("seasonal anime homepage", () => {
       "https://lain.bgm.tv/101.jpg",
     );
     expect(screen.getByLabelText("Bangumi 321 人评分")).toHaveTextContent("8.2");
+    const followedCard = screen.getByText("准备追的新番").closest("article");
+    expect(within(followedCard!).getByText("RSS 已匹配")).toBeInTheDocument();
+    expect(within(followedCard!).getByText("1 集 · 2 个种子")).toBeInTheDocument();
+    const dismissedCard = screen.getByText("已经不追的新番").closest("article");
+    expect(within(dismissedCard!).getByText("RSS 未匹配")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "不追 1" }));
     expect(screen.queryByText("准备追的新番")).not.toBeInTheDocument();

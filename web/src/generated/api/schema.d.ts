@@ -261,6 +261,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/recognition/rss-matches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Rss Matches */
+        get: operations["list_rss_matches_api_v1_recognition_rss_matches_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/recognition/releases/{release_id}/dismiss": {
         parameters: {
             query?: never;
@@ -1261,6 +1278,19 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** AnimeRssMatchResponse */
+        AnimeRssMatchResponse: {
+            /** Anime Id */
+            anime_id: string;
+            /** Candidate Count */
+            candidate_count: number;
+            /** Episode Count */
+            episode_count: number;
+            /** Latest Seen At */
+            latest_seen_at: string | null;
+            /** Conflicts */
+            conflicts: components["schemas"]["RssBindingConflictResponse"][];
         };
         /** AnimeScheduleUpdateRequest */
         AnimeScheduleUpdateRequest: {
@@ -2263,6 +2293,32 @@ export interface components {
             created_at: string;
             /** Restart Required */
             restart_required: boolean;
+        };
+        /** RssBindingConflictResponse */
+        RssBindingConflictResponse: {
+            /** Candidate Id */
+            candidate_id: string;
+            /** Release Id */
+            release_id: string;
+            /** Source Title */
+            source_title: string;
+            /** Title Variants */
+            title_variants: string[];
+            /** Episode Key */
+            episode_key: string;
+            /** Current Anime Id */
+            current_anime_id: string;
+            /** Suggested Anime Id */
+            suggested_anime_id: string;
+            /** Evidence Titles */
+            evidence_titles: string[];
+            /**
+             * First Seen At
+             * Format: date-time
+             */
+            first_seen_at: string;
+            /** Source Url */
+            source_url: string | null;
         };
         /** RunNowResponse */
         RunNowResponse: {
@@ -4507,6 +4563,125 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UnmatchedReleaseResponse"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Precondition Failed */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Precondition Required */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    list_rss_matches_api_v1_recognition_rss_matches_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnimeRssMatchResponse"][];
                 };
             };
             /** @description Bad Request */

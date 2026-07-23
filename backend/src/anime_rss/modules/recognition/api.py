@@ -13,7 +13,7 @@ from anime_rss.kernel.ids import new_id
 from anime_rss.kernel.time import Clock, utc_now
 from anime_rss.kernel.titles import title_variant_signature
 from anime_rss.modules.audit.api import record_event
-from anime_rss.modules.catalog.api import CatalogTitleMatch
+from anime_rss.modules.catalog.api import CatalogTitleBindingConflict, CatalogTitleMatch
 from anime_rss.modules.recognition.domain import (
     ContentKind,
     MatchConfidence,
@@ -44,6 +44,10 @@ class RecognitionSourceProvider(Protocol):
 
 class CatalogTitleResolver(Protocol):
     def resolve_titles(self, titles: list[str]) -> CatalogTitleMatch: ...
+
+    def find_title_binding_conflict(
+        self, titles: list[str], current_anime_id: str
+    ) -> CatalogTitleBindingConflict | None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,6 +120,29 @@ class RecognitionRerun:
     previous_candidate_id: str | None
     candidate_changed: bool
     candidate_adopted: bool
+
+
+@dataclass(frozen=True, slots=True)
+class RssBindingConflict:
+    candidate_id: str
+    release_id: str
+    source_title: str
+    title_variants: list[str]
+    episode_key: str
+    current_anime_id: str
+    suggested_anime_id: str
+    evidence_titles: list[str]
+    first_seen_at: datetime
+    source_url: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class AnimeRssMatch:
+    anime_id: str
+    candidate_count: int
+    episode_count: int
+    latest_seen_at: datetime | None
+    conflicts: list[RssBindingConflict]
 
 
 class CandidateNotFoundError(LookupError):
@@ -747,6 +774,71 @@ class RecognitionService:
         ]
         groups.sort(key=lambda group: (group.latest_seen_at, group.key), reverse=True)
         return groups[:limit]
+
+    def list_rss_matches(self) -> list[AnimeRssMatch]:
+        with self._session_factory() as session:
+            records = list(
+                session.scalars(
+                    select(CandidateRecord)
+                    .where(CandidateRecord.superseded_by_candidate_id.is_(None))
+                    .order_by(CandidateRecord.first_seen_at.desc(), CandidateRecord.id)
+                )
+            )
+
+        assigned: dict[str, list[CandidateRecord]] = defaultdict(list)
+        pending_conflicts: dict[str, list[tuple[CandidateRecord, CatalogTitleBindingConflict]]] = (
+            defaultdict(list)
+        )
+        for record in records:
+            if record.anime_id is None:
+                continue
+            assigned[record.anime_id].append(record)
+            if not (record.catalog_match_method or "").startswith("manual_"):
+                continue
+            titles = list(record.title_variants or [record.series_title])
+            conflict = self._catalog.find_title_binding_conflict(titles, record.anime_id)
+            if conflict is not None:
+                pending_conflicts[conflict.suggested_anime_id].append((record, conflict))
+
+        release_ids = {
+            record.release_id for items in pending_conflicts.values() for record, _ in items
+        }
+        references = self._sources.get_references(release_ids)
+        anime_ids = set(assigned) | set(pending_conflicts)
+        results: list[AnimeRssMatch] = []
+        for anime_id in anime_ids:
+            candidates = assigned.get(anime_id, [])
+            conflicts = [
+                RssBindingConflict(
+                    candidate_id=record.id,
+                    release_id=record.release_id,
+                    source_title=record.source_title,
+                    title_variants=list(record.title_variants or [record.series_title]),
+                    episode_key=record.episode_key,
+                    current_anime_id=record.anime_id or "",
+                    suggested_anime_id=conflict.suggested_anime_id,
+                    evidence_titles=conflict.evidence_titles,
+                    first_seen_at=record.first_seen_at,
+                    source_url=(
+                        references[record.release_id].source_url
+                        if record.release_id in references
+                        else None
+                    ),
+                )
+                for record, conflict in pending_conflicts.get(anime_id, [])
+            ]
+            results.append(
+                AnimeRssMatch(
+                    anime_id=anime_id,
+                    candidate_count=len(candidates),
+                    episode_count=len({candidate.episode_key for candidate in candidates}),
+                    latest_seen_at=max(
+                        (candidate.first_seen_at for candidate in candidates), default=None
+                    ),
+                    conflicts=conflicts,
+                )
+            )
+        return sorted(results, key=lambda item: item.anime_id)
 
     def list_unmatched(self, *, limit: int = 100) -> list[UnmatchedRelease]:
         with self._session_factory() as session:

@@ -10,6 +10,7 @@ import {
   getSeasonalOverview,
   listFeeds,
   listReleases,
+  listRssMatches,
   refreshSchedule,
 } from "../src/generated/api/client";
 
@@ -22,6 +23,7 @@ vi.mock("../src/generated/api/client", () => ({
   markSeasonalAnimeWatched: vi.fn(),
   listFeeds: vi.fn(),
   listReleases: vi.fn(),
+  listRssMatches: vi.fn(),
   refreshSchedule: vi.fn(),
   refreshSeasonalOverview: vi.fn(),
 }));
@@ -35,6 +37,7 @@ describe("dashboard schedule", () => {
   it("loads the calendar without synchronizing and syncs only after explicit action", async () => {
     vi.mocked(listFeeds).mockResolvedValue([]);
     vi.mocked(listReleases).mockResolvedValue([]);
+    vi.mocked(listRssMatches).mockResolvedValue([]);
     vi.mocked(getOperationsOverview).mockResolvedValue({
       scheduler: null,
       dependencies: [],

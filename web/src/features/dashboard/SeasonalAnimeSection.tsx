@@ -6,9 +6,12 @@ import {
   CircleCheck,
   EyeOff,
   ImageOff,
+  Link2Off,
+  Radio,
   RefreshCw,
   RotateCcw,
   Star,
+  TriangleAlert,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -16,6 +19,7 @@ import {
   dismissSeasonalAnime,
   followSeasonalAnime,
   getSeasonalOverview,
+  listRssMatches,
   markSeasonalAnimeWatched,
   refreshSeasonalOverview,
   type SeasonalAnime,
@@ -64,6 +68,10 @@ export function SeasonalAnimeSection() {
     queryFn: () => getSeasonalOverview(period.year, period.quarter),
     staleTime: 5 * 60_000,
   });
+  const rssMatches = useQuery({
+    queryKey: ["rss-matches"],
+    queryFn: listRssMatches,
+  });
   const refresh = useMutation({
     mutationFn: () => refreshSeasonalOverview(period.year, period.quarter),
     onSuccess: (data) => queryClient.setQueryData(
@@ -81,6 +89,7 @@ export function SeasonalAnimeSection() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["seasonal"] }),
         queryClient.invalidateQueries({ queryKey: ["subscriptions"] }),
+        queryClient.invalidateQueries({ queryKey: ["rss-matches"] }),
         queryClient.invalidateQueries({ queryKey: ["schedule-calendar"] }),
       ]);
     },
@@ -119,7 +128,7 @@ export function SeasonalAnimeSection() {
       </div>
 
       {seasonal.isLoading && <LoadingState label="正在读取本季新番" />}
-      {(seasonal.isError || refresh.isError || action.isError) && <ErrorBanner message={action.error?.message ?? refresh.error?.message ?? seasonal.error?.message ?? "本季新番加载失败。"} />}
+      {(seasonal.isError || rssMatches.isError || refresh.isError || action.isError) && <ErrorBanner message={action.error?.message ?? refresh.error?.message ?? seasonal.error?.message ?? rssMatches.error?.message ?? "本季新番加载失败。"} />}
       {seasonal.data?.stale && <div className="notice-strip"><span>Bangumi 暂时不可用，当前显示上次同步的数据。</span></div>}
 
       {seasonal.data && (
@@ -145,6 +154,14 @@ export function SeasonalAnimeSection() {
               {visible.map((item) => {
                 const title = displayTitle(item);
                 const pending = action.isPending && action.variables?.bangumiId === item.bangumi_id;
+                const rssMatch = item.anime_id
+                  ? rssMatches.data?.find((match) => match.anime_id === item.anime_id)
+                  : undefined;
+                const rssTone = (rssMatch?.conflicts.length ?? 0) > 0
+                  ? "warning"
+                  : (rssMatch?.candidate_count ?? 0) > 0
+                    ? "matched"
+                    : "empty";
                 return (
                   <article className="seasonal-card" key={item.bangumi_id}>
                     <a className="seasonal-cover" href={`https://bgm.tv/subject/${item.bangumi_id}`} target="_blank" rel="noreferrer" referrerPolicy="no-referrer" aria-label={`在 Bangumi 查看《${title}》`}>
@@ -172,6 +189,15 @@ export function SeasonalAnimeSection() {
                         {item.name_cn && item.name_cn !== item.name && <small title={item.name}>{item.name}</small>}
                       </div>
                       <p>{dateLabel(item.air_date)}{item.episode_count ? ` · ${item.episode_count} 集` : ""}</p>
+                      {item.anime_id && rssMatches.data && <div className={`seasonal-card__rss seasonal-card__rss--${rssTone}`}>
+                        {rssTone === "warning" ? <TriangleAlert size={13} /> : rssTone === "matched" ? <Radio size={13} /> : <Link2Off size={13} />}
+                        <span>{rssTone === "warning" ? "RSS 绑定需确认" : rssTone === "matched" ? "RSS 已匹配" : "RSS 未匹配"}</span>
+                        <small>{rssTone === "warning"
+                          ? `${rssMatch?.conflicts.length ?? 0} 个疑似错误`
+                          : rssTone === "matched"
+                            ? `${rssMatch?.episode_count ?? 0} 集 · ${rssMatch?.candidate_count ?? 0} 个种子`
+                            : "尚无单集种子"}</small>
+                      </div>}
                       <div className="seasonal-card__actions">
                         {item.status === "undecided" && <>
                           <Button size="small" variant="primary" disabled={pending} icon={<BookOpenCheck size={15} />} onClick={() => action.mutate({ bangumiId: item.bangumi_id, kind: "follow" })}>追番</Button>

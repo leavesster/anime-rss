@@ -14,6 +14,7 @@ export type EpisodeGroup = components["schemas"]["EpisodeGroupResponse"];
 export type Candidate = components["schemas"]["CandidateResponse"];
 export type UnmatchedRelease = components["schemas"]["UnmatchedReleaseResponse"];
 export type RecognitionRerun = components["schemas"]["RecognitionRerunResponse"];
+export type AnimeRssMatch = components["schemas"]["AnimeRssMatchResponse"];
 export type Anime = components["schemas"]["AnimeResponse"];
 export type BangumiAnime = components["schemas"]["BangumiAnimeResponse"];
 export type CatalogSearch = components["schemas"]["CatalogSearchResponse"];
@@ -228,6 +229,10 @@ export async function listEpisodeGroups(): Promise<EpisodeGroup[]> {
       params: { query: { limit: 200 } },
     }),
   );
+}
+
+export async function listRssMatches(): Promise<AnimeRssMatch[]> {
+  return unwrap(await client.GET("/api/v1/recognition/rss-matches"));
 }
 
 export async function listUnmatchedReleases(): Promise<UnmatchedRelease[]> {

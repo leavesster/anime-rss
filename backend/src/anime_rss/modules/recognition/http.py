@@ -90,6 +90,27 @@ class RecognitionRerunResponse(BaseModel):
     candidate_adopted: bool
 
 
+class RssBindingConflictResponse(BaseModel):
+    candidate_id: str
+    release_id: str
+    source_title: str
+    title_variants: list[str]
+    episode_key: str
+    current_anime_id: str
+    suggested_anime_id: str
+    evidence_titles: list[str]
+    first_seen_at: datetime
+    source_url: str | None
+
+
+class AnimeRssMatchResponse(BaseModel):
+    anime_id: str
+    candidate_count: int
+    episode_count: int
+    latest_seen_at: datetime | None
+    conflicts: list[RssBindingConflictResponse]
+
+
 class RecognitionHttpServices(Protocol):
     recognition: RecognitionService
     events: EventDispatcher
@@ -127,6 +148,15 @@ def list_unmatched(
     releases = services.recognition.list_unmatched(limit=requested_item_count(cursor, limit))
     items = [UnmatchedReleaseResponse.model_validate(asdict(release)) for release in releases]
     return page_response(items, response, cursor=cursor, limit=limit)
+
+
+@router.get("/rss-matches", response_model=list[AnimeRssMatchResponse])
+def list_rss_matches(request: Request) -> list[AnimeRssMatchResponse]:
+    services = cast(RecognitionHttpServices, request.app.state.services)
+    return [
+        AnimeRssMatchResponse.model_validate(asdict(item))
+        for item in services.recognition.list_rss_matches()
+    ]
 
 
 @router.post("/releases/{release_id}/dismiss", status_code=204)

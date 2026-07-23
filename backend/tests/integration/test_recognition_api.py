@@ -226,6 +226,79 @@ def test_title_variant_sets_group_and_bind_season_without_guessing(tmp_path: Pat
         assert all(candidate["title_variants"] for candidate in candidates)
 
 
+def test_explicit_season_match_overrides_wrong_manual_variant_binding(tmp_path: Path) -> None:
+    title_variants = [
+        "无职转生 第三季 ~到了异世界就拿出真本事~",
+        "Mushoku Tensei III: Isekai Ittara Honki Dasu",
+    ]
+    title = f"[Group] {' / '.join(title_variants)} - 04 [1080p AVC]"
+    rss = (
+        '<?xml version="1.0"?><rss version="2.0"><channel><item>'
+        f"<guid>wrong-season</guid><title>{title}</title>"
+        '<enclosure url="magnet:?xt=urn:btih:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" '
+        'type="application/x-bittorrent" /></item></channel></rss>'
+    ).encode()
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, content=rss))
+
+    with TestClient(create_app(_settings(tmp_path), feed_transport=transport)) as client:
+        old_anime = client.post("/api/v1/catalog/anime", json={"title": "无职转生 第二季"}).json()
+        current_anime = client.post(
+            "/api/v1/catalog/anime",
+            json={
+                "title": "无职转生 第三季 ~到了异世界就拿出真本事~",
+                "aliases": ["Mushoku Tensei III: Isekai Ittara Honki Dasu"],
+            },
+        ).json()
+        feed = client.post(
+            "/api/v1/feeds", json={"name": "Mixed", "url": "https://feed.test/rss"}
+        ).json()
+        client.post(f"/api/v1/feeds/{feed['id']}/refresh").raise_for_status()
+        client.post(
+            f"/api/v1/catalog/anime/{old_anime['id']}/title-bindings",
+            json={"titles": title_variants},
+        ).raise_for_status()
+
+        groups = client.get("/api/v1/recognition/episode-groups").json()
+        assert len(groups) == 1
+        assert groups[0]["anime_id"] == current_anime["id"]
+        assert groups[0]["candidates"][0]["catalog_match_method"] == "exact_season"
+
+        diagnostics = client.get("/api/v1/recognition/rss-matches")
+        assert diagnostics.status_code == 200
+        current = next(
+            item for item in diagnostics.json() if item["anime_id"] == current_anime["id"]
+        )
+        assert current["candidate_count"] == 1
+        assert current["episode_count"] == 1
+        assert current["conflicts"] == []
+        assert all(item["anime_id"] != old_anime["id"] for item in diagnostics.json())
+
+        database = sqlite3.connect(tmp_path / "recognition.sqlite3")
+        try:
+            database.execute(
+                "UPDATE match_candidates SET anime_id = ?, catalog_match_method = ? WHERE id = ?",
+                (old_anime["id"], "manual_variant_set", groups[0]["candidates"][0]["id"]),
+            )
+            database.commit()
+        finally:
+            database.close()
+
+        stale = client.get("/api/v1/recognition/rss-matches").json()
+        current = next(item for item in stale if item["anime_id"] == current_anime["id"])
+        assert len(current["conflicts"]) == 1
+        assert current["conflicts"][0]["current_anime_id"] == old_anime["id"]
+        assert current["conflicts"][0]["suggested_anime_id"] == current_anime["id"]
+
+        client.post(
+            f"/api/v1/catalog/anime/{current_anime['id']}/title-bindings",
+            json={"titles": title_variants},
+        ).raise_for_status()
+        repaired = client.get("/api/v1/recognition/rss-matches").json()
+        current = next(item for item in repaired if item["anime_id"] == current_anime["id"])
+        assert current["candidate_count"] == 1
+        assert current["conflicts"] == []
+
+
 def test_existing_release_events_are_backfilled_on_startup(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     transport = httpx.MockTransport(lambda request: httpx.Response(200, content=_rss()))

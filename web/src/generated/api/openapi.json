@@ -2717,6 +2717,142 @@
         }
       }
     },
+    "/api/v1/recognition/rss-matches": {
+      "get": {
+        "tags": [
+          "recognition"
+        ],
+        "summary": "List Rss Matches",
+        "operationId": "list_rss_matches_api_v1_recognition_rss_matches_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AnimeRssMatchResponse"
+                  },
+                  "type": "array",
+                  "title": "Response List Rss Matches Api V1 Recognition Rss Matches Get"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": []
+      }
+    },
     "/api/v1/recognition/releases/{release_id}/dismiss": {
       "post": {
         "tags": [
@@ -13091,6 +13227,50 @@
         ],
         "title": "AnimeResponse"
       },
+      "AnimeRssMatchResponse": {
+        "properties": {
+          "anime_id": {
+            "type": "string",
+            "title": "Anime Id"
+          },
+          "candidate_count": {
+            "type": "integer",
+            "title": "Candidate Count"
+          },
+          "episode_count": {
+            "type": "integer",
+            "title": "Episode Count"
+          },
+          "latest_seen_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Seen At"
+          },
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/RssBindingConflictResponse"
+            },
+            "type": "array",
+            "title": "Conflicts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "anime_id",
+          "candidate_count",
+          "episode_count",
+          "latest_seen_at",
+          "conflicts"
+        ],
+        "title": "AnimeRssMatchResponse"
+      },
       "AnimeScheduleUpdateRequest": {
         "properties": {
           "air_date": {
@@ -16243,6 +16423,78 @@
           "restart_required"
         ],
         "title": "RestoreResponse"
+      },
+      "RssBindingConflictResponse": {
+        "properties": {
+          "candidate_id": {
+            "type": "string",
+            "title": "Candidate Id"
+          },
+          "release_id": {
+            "type": "string",
+            "title": "Release Id"
+          },
+          "source_title": {
+            "type": "string",
+            "title": "Source Title"
+          },
+          "title_variants": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Title Variants"
+          },
+          "episode_key": {
+            "type": "string",
+            "title": "Episode Key"
+          },
+          "current_anime_id": {
+            "type": "string",
+            "title": "Current Anime Id"
+          },
+          "suggested_anime_id": {
+            "type": "string",
+            "title": "Suggested Anime Id"
+          },
+          "evidence_titles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Evidence Titles"
+          },
+          "first_seen_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "First Seen At"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "candidate_id",
+          "release_id",
+          "source_title",
+          "title_variants",
+          "episode_key",
+          "current_anime_id",
+          "suggested_anime_id",
+          "evidence_titles",
+          "first_seen_at",
+          "source_url"
+        ],
+        "title": "RssBindingConflictResponse"
       },
       "RunNowResponse": {
         "properties": {

@@ -1,3 +1,4 @@
+import re
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from typing import Protocol
@@ -84,8 +85,21 @@ class CatalogTitleMatch:
     method: str | None
 
 
+@dataclass(frozen=True, slots=True)
+class CatalogTitleBindingConflict:
+    suggested_anime_id: str
+    evidence_titles: list[str]
+
+
 class AnimeNotFoundError(LookupError):
     pass
+
+
+_EXPLICIT_SEASON = re.compile(
+    r"(?i)(?:season\s*0*\d{1,2}|\d+(?:st|nd|rd|th)\s+season|"
+    r"\bS0*\d{1,2}\b|\b(?:II|III|IV|V|VI|VII|VIII|IX|X)\b|"
+    r"第\s*[一二三四五六七八九十\d]+\s*季)"
+)
 
 
 def normalize_title_key(value: str) -> str:
@@ -384,6 +398,41 @@ class CatalogService:
     def resolve_title(self, title: str) -> CatalogTitleMatch:
         return self.resolve_titles([title])
 
+    def find_title_binding_conflict(
+        self, titles: list[str], current_anime_id: str
+    ) -> CatalogTitleBindingConflict | None:
+        """Find strong catalog evidence that a manual binding points at the wrong season."""
+        values = list(
+            dict.fromkeys(title.strip() for title in titles if _EXPLICIT_SEASON.search(title))
+        )
+        if not values:
+            return None
+        normalized_titles = {normalize_title_key(title)[:300]: title for title in values}
+        with self._session_factory() as session:
+            rows = list(
+                session.execute(
+                    select(AnimeTitleRecord.anime_id, AnimeTitleRecord.normalized).where(
+                        AnimeTitleRecord.normalized.in_(normalized_titles)
+                    )
+                )
+            )
+        matches_by_key: dict[str, set[str]] = {}
+        for anime_id, normalized in rows:
+            matches_by_key.setdefault(normalized, set()).add(anime_id)
+        evidence_by_anime: dict[str, list[str]] = {}
+        for normalized, title in normalized_titles.items():
+            anime_ids = matches_by_key.get(normalized, set())
+            if len(anime_ids) != 1:
+                continue
+            anime_id = next(iter(anime_ids))
+            if anime_id == current_anime_id:
+                continue
+            evidence_by_anime.setdefault(anime_id, []).append(title)
+        if len(evidence_by_anime) != 1:
+            return None
+        suggested_anime_id, evidence_titles = next(iter(evidence_by_anime.items()))
+        return CatalogTitleBindingConflict(suggested_anime_id, evidence_titles)
+
     def resolve_titles(self, titles: list[str]) -> CatalogTitleMatch:
         values = list(dict.fromkeys(title.strip() for title in titles if anime_title_key(title)))
         if not values:
@@ -398,6 +447,14 @@ class CatalogService:
                     )
                 )
             if binding is not None:
+                conflict = self.find_title_binding_conflict(values, binding.anime_id)
+                if conflict is not None:
+                    return CatalogTitleMatch(
+                        "matched",
+                        conflict.suggested_anime_id,
+                        normalize_title_key(conflict.evidence_titles[0])[:300],
+                        "exact_season",
+                    )
                 return CatalogTitleMatch(
                     "matched", binding.anime_id, signature, "manual_variant_set"
                 )

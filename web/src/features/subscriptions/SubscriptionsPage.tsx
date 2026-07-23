@@ -3,17 +3,20 @@ import { Archive, BookOpen, CalendarClock, Check, ChevronDown, ChevronUp, Clock3
 import { useState } from "react";
 
 import {
+  bindCatalogTitles,
   listAnime,
   listDecisions,
   listEpisodeGroups,
+  listRssMatches,
   listSelectionSlots,
   listSubscriptions,
+  type AnimeRssMatch,
   type Subscription,
   type Anime,
   updateSubscription,
 } from "../../generated/api/client";
 import { EmptyState } from "../../shared/components/EmptyState";
-import { ErrorBanner, LoadingState } from "../../shared/components/Feedback";
+import { ErrorBanner, LoadingState, SuccessBanner } from "../../shared/components/Feedback";
 import { PageHeader } from "../../shared/components/PageHeader";
 import { StatusBadge } from "../../shared/components/StatusBadge";
 import { copyText } from "../../shared/lib/clipboard";
@@ -26,6 +29,7 @@ import { EpisodeControlDialog } from "./EpisodeControlDialog";
 import { GlobalPreferencesPanel } from "./GlobalPreferencesPanel";
 import { LifecycleMenu } from "./LifecycleMenu";
 import { SelectionLogicPanel } from "./SelectionLogicPanel";
+import { SubscriptionRssStatus } from "./SubscriptionRssStatus";
 import { ScheduleDialog } from "./ScheduleDialog";
 
 const decisionLabels: Record<string, string> = {
@@ -47,17 +51,31 @@ export function SubscriptionsPage() {
   const [copiedSubscriptionId, setCopiedSubscriptionId] = useState<string | null>(null);
   const [subscriptionView, setSubscriptionView] = useState<"active" | "archived">("active");
   const [showRecentDecisions, setShowRecentDecisions] = useState(true);
+  const [bindingMessage, setBindingMessage] = useState<string | null>(null);
   const anime = useQuery({ queryKey: ["anime"], queryFn: listAnime });
   const subscriptions = useQuery({ queryKey: ["subscriptions"], queryFn: listSubscriptions });
   const slots = useQuery({ queryKey: ["selection-slots"], queryFn: () => listSelectionSlots() });
   const decisions = useQuery({ queryKey: ["decisions"], queryFn: () => listDecisions() });
   const groups = useQuery({ queryKey: ["episode-groups"], queryFn: listEpisodeGroups });
+  const rssMatches = useQuery({ queryKey: ["rss-matches"], queryFn: listRssMatches });
   const lifecycle = useMutation({
     mutationFn: ({ subscription, state }: { subscription: Subscription; state: "following" | "paused" | "completed" | "archived" }) => updateSubscription(subscription.id, subscription.version, { state }),
     onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["subscriptions"] }); },
   });
-  const loading = anime.isLoading || subscriptions.isLoading || slots.isLoading || decisions.isLoading || groups.isLoading;
-  const failed = anime.isError || subscriptions.isError || slots.isError || decisions.isError || groups.isError;
+  const correctBinding = useMutation({
+    mutationFn: ({ subscription, conflict }: { subscription: Subscription; conflict: AnimeRssMatch["conflicts"][number] }) =>
+      bindCatalogTitles(subscription.anime_id, conflict.title_variants),
+    onSuccess: async (_, { subscription }) => {
+      setBindingMessage(`已将 RSS 标题重新绑定到《${subscription.anime_title}》。`);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["anime"] }),
+        queryClient.invalidateQueries({ queryKey: ["episode-groups"] }),
+        queryClient.invalidateQueries({ queryKey: ["rss-matches"] }),
+      ]);
+    },
+  });
+  const loading = anime.isLoading || subscriptions.isLoading || slots.isLoading || decisions.isLoading || groups.isLoading || rssMatches.isLoading;
+  const failed = anime.isError || subscriptions.isError || slots.isError || decisions.isError || groups.isError || rssMatches.isError;
   const waiting = slots.data?.filter((item) => item.state === "waiting_fallback").length ?? 0;
   const following = subscriptions.data?.filter((item) => item.state === "following").length ?? 0;
   const archived = subscriptions.data?.filter((item) => item.state === "archived").length ?? 0;
@@ -74,8 +92,9 @@ export function SubscriptionsPage() {
     <>
       <PageHeader eyebrow="版本选择" title="追番管理" description="添加动画并设置追番规则，查看等待中的剧集和每次版本选择。" actions={<><button className="button button--secondary" onClick={() => setShowAnime(true)}><BookOpen size={16} />添加动画</button><button className="button button--primary" onClick={() => setShowSubscription(true)} disabled={!anime.data?.length}><Plus size={16} />新建追番</button></>} />
       {loading && <LoadingState label="正在读取追番状态" />}
-      {(failed || lifecycle.isError) && <ErrorBanner message={lifecycle.error?.message ?? "追番和版本选择状态加载失败。"} />}
-      {anime.data && subscriptions.data && slots.data && decisions.data && groups.data && <>
+      {(failed || lifecycle.isError || correctBinding.isError) && <ErrorBanner message={correctBinding.error?.message ?? lifecycle.error?.message ?? "追番和版本选择状态加载失败。"} />}
+      {bindingMessage && <SuccessBanner message={bindingMessage} />}
+      {anime.data && subscriptions.data && slots.data && decisions.data && groups.data && rssMatches.data && <>
         <section className="overview-band" aria-label="追番指标">
           <div className="overview-metric"><span className="metric-icon metric-icon--green"><BookOpen size={19} /></span><div><small>正在追番</small><strong>{following}</strong></div></div>
           <div className="overview-metric"><span className="metric-icon metric-icon--blue"><Clock3 size={19} /></span><div><small>等待首选版本</small><strong>{waiting}</strong></div></div>
@@ -88,6 +107,7 @@ export function SubscriptionsPage() {
               <div className="subscription-row__main"><span className="subscription-mark"><BookOpen size={18} /></span><div><div className="subscription-title-line"><strong>{subscription.anime_title}</strong><button className="title-copy-button" aria-label={copiedSubscriptionId === subscription.id ? `已复制《${subscription.anime_title}》名称` : `复制《${subscription.anime_title}》名称`} title={copiedSubscriptionId === subscription.id ? "已复制" : "复制动画名称"} onClick={() => void copyAnimeTitle(subscription)}>{copiedSubscriptionId === subscription.id ? <Check size={14} /> : <Copy size={14} />}</button></div><small>{subscription.match_keys.length} 个可识别名称 · 本轮追番开始于 {formatDate(subscription.activation_at)}</small></div></div>
               <div className="subscription-rule"><small>{subscription.uses_global_rules ? "全局字幕组优先级" : "单独字幕组优先级"}</small><strong>{subscription.rules.preferred_groups?.join(" › ") || "不限制"}</strong></div>
               <div className="subscription-rule"><small>等待首选版本</small><strong>{subscription.rules.fallback_wait_minutes ?? 120} 分钟</strong></div>
+              <SubscriptionRssStatus anime={anime.data} subscription={subscription} rssMatch={rssMatches.data.find((item) => item.anime_id === subscription.anime_id)} pendingCandidateId={correctBinding.isPending ? correctBinding.variables.conflict.candidate_id : null} onCorrect={(conflict) => correctBinding.mutate({ subscription, conflict })} />
               <StatusBadge status={subscription.state} />
               <div className="feed-actions">{anime.data.find((item) => item.id === subscription.anime_id)?.bangumi_id && <a className="bgm-link" href={`https://bgm.tv/subject/${anime.data.find((item) => item.id === subscription.anime_id)?.bangumi_id}`} target="_blank" rel="noreferrer" referrerPolicy="no-referrer" aria-label={`在 Bangumi 查看《${subscription.anime_title}》`} title="在 Bangumi 查看">bgm.tv</a>}<button className="button button--ghost button--small" onClick={() => setEpisodeControl(subscription)}><ListTree size={15} />剧集</button><button className="button button--ghost button--small" onClick={() => setScheduleAnime(anime.data.find((item) => item.id === subscription.anime_id) ?? null)}><CalendarClock size={15} />播出</button><button className="button button--ghost button--small" onClick={() => setBackfill(subscription)}><History size={15} />补番</button><LifecycleMenu state={subscription.state as "following" | "paused" | "completed" | "archived"} disabled={lifecycle.isPending} onChange={(state) => lifecycle.mutate({ subscription, state })} /></div>
             </article>)}</div>}
