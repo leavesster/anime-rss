@@ -118,6 +118,15 @@ describe("RSS discovered series", () => {
         episode_count: 12,
         cover_url: null,
         aliases: [],
+      }, {
+        bangumi_id: 456,
+        name: "New Anime Alternative",
+        name_cn: "新番候选",
+        summary: null,
+        air_date: "2025-07-01",
+        episode_count: 12,
+        cover_url: null,
+        aliases: [],
       }],
     });
     vi.mocked(importBangumi).mockResolvedValue({ id: "anime-123", primary_title: "新番" } as never);
@@ -148,17 +157,19 @@ describe("RSS discovered series", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "RSS 动画" }));
-    fireEvent.click(screen.getByRole("button", { name: "匹配" }));
     expect(screen.getByText("1 集 · 1 个候选 · 1 个 RSS 标题 · 未匹配到动画")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "匹配 Bangumi 动画" })).toBeInTheDocument();
-    expect(screen.queryByRole("tab", { name: "本地创建" })).not.toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "搜索 Bangumi 动画" })).toHaveValue("New Anime");
-    fireEvent.click(screen.getByRole("button", { name: "搜索" }));
-    const dialog = screen.getByRole("dialog");
-    const matchButton = await within(dialog).findByRole("button", { name: "匹配" });
+    await waitFor(() => expect(searchBangumi).toHaveBeenCalledWith("New Anime"));
+    expect(await screen.findByText("推荐匹配")).toBeInTheDocument();
+    expect(screen.getByText("新番")).toBeInTheDocument();
+    expect(screen.getByText("Bangumi ID 123")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "为《New Anime》选择其他匹配" })).toBeInTheDocument();
+    const matchButton = screen.getByRole("button", { name: "使用匹配" });
     expect(matchButton.querySelector(".lucide-check")).toBeInTheDocument();
+    expect(matchButton.parentElement?.lastElementChild).toBe(matchButton);
     fireEvent.click(matchButton);
 
+    await waitFor(() => expect(importBangumi).toHaveBeenCalledWith(123));
     await waitFor(() => expect(bindCatalogTitles).toHaveBeenCalledWith(
       "anime-123",
       ["New Anime", "新番 第二季"],
@@ -224,8 +235,7 @@ describe("RSS discovered series", () => {
     fireEvent.click(section.getByRole("checkbox", { name: "选择 RSS 动画 新番动画 RSS" }));
     fireEvent.click(section.getByRole("button", { name: "匹配所选（2）" }));
     expect(section.getByText("将 “New Anime RSS”、“新番动画 RSS” 固定到同一部 Bangumi 动画；匹配后不会自动开始追番。")).toBeInTheDocument();
-    fireEvent.click(section.getByRole("button", { name: "搜索" }));
-    fireEvent.click(await within(section.getByRole("dialog")).findByRole("button", { name: "匹配" }));
+    fireEvent.click(await within(section.getByRole("dialog")).findByRole("button", { name: "匹配推荐" }));
 
     await waitFor(() => expect(bindCatalogTitles).toHaveBeenCalledTimes(2));
     expect(bindCatalogTitles).toHaveBeenNthCalledWith(1, "anime-123", ["New Anime", "新番"]);
@@ -333,8 +343,7 @@ describe("RSS discovered series", () => {
     fireEvent.click(section.getByRole("checkbox", { name: "选择 RSS 动画 新番" }));
     fireEvent.click(section.getByRole("checkbox", { name: "选择 RSS 动画 New Anime Extra RSS" }));
     fireEvent.click(section.getByRole("button", { name: "匹配所选（2）" }));
-    fireEvent.click(section.getByRole("button", { name: "搜索" }));
-    fireEvent.click(await within(section.getByRole("dialog")).findByRole("button", { name: "匹配" }));
+    fireEvent.click(await within(section.getByRole("dialog")).findByRole("button", { name: "匹配推荐" }));
 
     await waitFor(() => expect(bindCatalogTitles).toHaveBeenCalledTimes(3));
     expect(bindCatalogTitles).toHaveBeenNthCalledWith(1, "anime-123", ["New Anime", "新番"]);

@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Import, Search, X, type LucideIcon } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
@@ -20,6 +20,7 @@ interface Props {
   dialogDescription?: string;
   bangumiActionLabel?: string;
   bangumiActionIcon?: LucideIcon;
+  recommendFirstResult?: boolean;
 }
 
 function splitAliases(value: string): string[] {
@@ -36,12 +37,17 @@ export function AddAnimeDialog({
   dialogDescription = "从 Bangumi 导入动画资料，或直接添加一部本地动画。",
   bangumiActionLabel = "导入",
   bangumiActionIcon: BangumiActionIcon = Import,
+  recommendFirstResult = false,
 }: Props) {
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<"local" | "bangumi">(allowLocal ? initialMode : "bangumi");
   const [title, setTitle] = useState(initialTitle);
   const [aliases, setAliases] = useState("");
   const [query, setQuery] = useState(initialTitle);
+  const [submittedQuery, setSubmittedQuery] = useState<string | null>(() => {
+    const value = initialTitle.trim();
+    return recommendFirstResult && value.length >= 2 ? value : null;
+  });
   const create = useMutation({
     mutationFn: async () => {
       const anime = await createLocalAnime(title, splitAliases(aliases));
@@ -56,7 +62,13 @@ export function AddAnimeDialog({
       onClose();
     },
   });
-  const search = useMutation({ mutationFn: () => searchBangumi(query) });
+  const search = useQuery({
+    queryKey: ["bangumi-search", submittedQuery],
+    queryFn: () => searchBangumi(submittedQuery ?? ""),
+    enabled: submittedQuery !== null,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
   const imported = useMutation({
     mutationFn: async (bangumiId: number) => {
       const anime = await importBangumi(bangumiId);
@@ -79,7 +91,12 @@ export function AddAnimeDialog({
 
   function submitSearch(event: FormEvent) {
     event.preventDefault();
-    search.mutate();
+    const value = query.trim();
+    if (value === submittedQuery) {
+      void search.refetch();
+      return;
+    }
+    setSubmittedQuery(value);
   }
 
   return (
@@ -103,12 +120,17 @@ export function AddAnimeDialog({
 
         {mode === "bangumi" && <div className="form-stack">
           {(search.isError || imported.isError) && <ErrorBanner message={(search.error ?? imported.error)?.message ?? "Bangumi 请求失败"} />}
-          <form className="search-field catalog-search" onSubmit={submitSearch}><Search size={17} /><input aria-label="搜索 Bangumi 动画" required minLength={2} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="输入动画名称" /><button className="button button--primary button--small" disabled={search.isPending}>搜索</button></form>
+          <form className="search-field catalog-search" onSubmit={submitSearch}><Search size={17} /><input aria-label="搜索 Bangumi 动画" required minLength={2} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="输入动画名称" /><button className="button button--primary button--small" disabled={search.isFetching}>搜索</button></form>
           {search.data?.stale && <p className="inline-note">Bangumi 当前不可用，正在显示本地缓存结果。</p>}
-          <div className="catalog-results">{search.data?.items.map((item) => <article key={item.bangumi_id}>
-            <div><strong>{item.name_cn ?? item.name}</strong><small>{item.name}{item.air_date ? ` · ${item.air_date}` : ""}</small></div>
-            <button className="button button--secondary button--small" type="button" onClick={() => imported.mutate(item.bangumi_id)} disabled={imported.isPending}><BangumiActionIcon size={15} />{bangumiActionLabel}</button>
-          </article>)}</div>
+          {search.isFetching && !search.data && <p className="inline-note">正在查找 Bangumi 推荐...</p>}
+          {search.data?.items.length === 0 && <p className="inline-note">未找到可推荐动画，请调整关键词。</p>}
+          <div className="catalog-results">{search.data?.items.map((item, index) => {
+            const recommended = recommendFirstResult && index === 0;
+            return <article className={recommended ? "catalog-result--recommended" : undefined} key={item.bangumi_id}>
+              <div><strong>{item.name_cn ?? item.name}</strong><small>{item.name}{item.air_date ? ` · ${item.air_date}` : ""}</small><span className="catalog-result-id">{recommended ? "推荐 · " : ""}Bangumi ID {item.bangumi_id}</span></div>
+              <button className={`button ${recommended ? "button--primary" : "button--secondary"} button--small`} type="button" onClick={() => imported.mutate(item.bangumi_id)} disabled={imported.isPending}><BangumiActionIcon size={15} />{recommended ? `${bangumiActionLabel}推荐` : bangumiActionLabel}</button>
+            </article>;
+          })}</div>
         </div>}
       </section>
     </div>

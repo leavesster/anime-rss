@@ -1,12 +1,15 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { BookOpenCheck, Check, ChevronDown, ChevronRight, ChevronUp, Link2 } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { BookOpenCheck, Check, ChevronDown, ChevronRight, ChevronUp, Link2, LoaderCircle, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import {
   bindCatalogTitles,
   createSubscription,
+  importBangumi,
+  searchBangumi,
   type Anime,
+  type BangumiAnime,
   type EpisodeGroup,
   type Subscription,
 } from "../../generated/api/client";
@@ -43,6 +46,45 @@ function uniqueTitleGroups(groups: string[][]): string[][] {
 function matchStatusLabel(series: DiscoveredSeries): string {
   if (series.animeId) return "已匹配到动画";
   return series.matchStatus === "ambiguous" ? "匹配到多部动画" : "未匹配到动画";
+}
+
+function RecommendationActions({
+  series,
+  pending,
+  onMatch,
+  onBrowse,
+}: {
+  series: DiscoveredSeries;
+  pending: boolean;
+  onMatch: (recommendation: BangumiAnime) => void;
+  onBrowse: () => void;
+}) {
+  const search = useQuery({
+    queryKey: ["bangumi-search", series.title],
+    queryFn: () => searchBangumi(series.title),
+    enabled: series.title.trim().length >= 2,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+  const recommendation = search.data?.items[0];
+
+  if (!recommendation) {
+    return <div className="discovered-series-actions">
+      {search.isFetching && <span className="discovered-series-recommendation-loading"><LoaderCircle className="spin" size={14} />查找推荐</span>}
+      <Button size="small" variant="secondary" icon={<Link2 size={15} />} disabled={pending} onClick={onBrowse}>匹配</Button>
+    </div>;
+  }
+
+  const title = recommendation.name_cn ?? recommendation.name;
+  return <div className="discovered-series-actions discovered-series-actions--recommendation">
+    <div className="discovered-series-recommendation" title={`${title} · ${recommendation.name} · Bangumi ID ${recommendation.bangumi_id}`}>
+      <small>推荐匹配</small>
+      <strong>{title}</strong>
+      <span>Bangumi ID {recommendation.bangumi_id}</span>
+    </div>
+    <Button aria-label={`为《${series.title}》选择其他匹配`} title="选择其他匹配" size="icon" variant="ghost" icon={<Search size={16} />} disabled={pending} onClick={onBrowse} />
+    <Button size="small" variant="primary" icon={<Check size={15} />} disabled={pending} onClick={() => onMatch(recommendation)}>{pending ? "匹配中" : "使用匹配"}</Button>
+  </div>;
 }
 
 export function DiscoveredSeriesSection({
@@ -97,13 +139,15 @@ export function DiscoveredSeriesSection({
     selectedSeries.has(series.seriesIdentity)
   );
   const match = useMutation({
-    mutationFn: async ({ animeRecord, targets }: { animeRecord: Anime; targets: DiscoveredSeries[] }) => {
+    mutationFn: async ({ animeRecord, bangumiId, targets }: { animeRecord?: Anime; bangumiId?: number; targets: DiscoveredSeries[] }) => {
+      const matchedAnime = animeRecord ?? (bangumiId === undefined ? null : await importBangumi(bangumiId));
+      if (matchedAnime === null) throw new Error("没有可用的匹配动画");
       for (const target of targets) {
         for (const titles of target.titleGroups) {
-          await bindCatalogTitles(animeRecord.id, titles);
+          await bindCatalogTitles(matchedAnime.id, titles);
         }
       }
-      return { animeRecord, count: targets.length };
+      return { animeRecord: matchedAnime, count: targets.length };
     },
     onSuccess: async ({ animeRecord, count }) => {
       setMatchedMessage(`已将 ${count} 个 RSS 动画匹配到《${animeRecord.primary_title}》。`);
@@ -168,6 +212,7 @@ export function DiscoveredSeriesSection({
       <div className="section-heading"><div><h2><button className="discovered-section-toggle" type="button" aria-expanded={isExpanded} aria-controls="discovered-series-content" onClick={() => setIsExpanded((current) => !current)}>RSS 动画 {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</button></h2><p>先把一个或多个 RSS 动画匹配到 Bangumi 动画，再单独选择是否追番。“未匹配到动画”表示尚未对应上 Bangumi 动画 ID。</p></div><div className="discovered-series-heading-actions">{selectedMatchTargets.length > 0 && <Button size="small" variant="secondary" icon={<Link2 size={15} />} onClick={() => setMatchTargets(selectedMatchTargets)}>匹配所选（{selectedMatchTargets.length}）</Button>}<span className="candidate-count">{discovered.length} 部</span></div></div>
       {isExpanded && <div id="discovered-series-content">
         {matchedMessage && <SuccessBanner message={matchedMessage} />}
+        {match.isError && <ErrorBanner message={match.error.message} />}
         {follow.isError && <ErrorBanner message={follow.error.message} />}
         {follow.isSuccess && followedTitle && <SuccessBanner message={`已合并到《${followedTitle}》并开始追番。`} />}
         <div className="discovered-series-list">{discovered.map((series) => (
@@ -178,10 +223,10 @@ export function DiscoveredSeriesSection({
                 <span><strong>{series.title}</strong><small>{series.episodeCount} 集 · {series.candidateCount} 个候选 · {series.rssTitles.length} 个 RSS 标题 · {matchStatusLabel(series)}</small></span>
                 {expandedSeries.has(series.seriesIdentity) ? <ChevronUp size={17} /> : <ChevronDown size={17} />}
               </button>
-              <div className="discovered-series-actions">{series.animeId ? <Button size="small" variant="primary" icon={<BookOpenCheck size={15} />} disabled={follow.isPending} onClick={() => {
+              {series.animeId ? <div className="discovered-series-actions"><Button size="small" variant="primary" icon={<BookOpenCheck size={15} />} disabled={follow.isPending} onClick={() => {
                 const animeRecord = anime.find((item) => item.id === series.animeId);
                 if (animeRecord) follow.mutate(animeRecord);
-              }}>{follow.isPending && follow.variables?.id === series.animeId ? "创建中" : "开始追番"}</Button> : <Button size="small" variant="secondary" icon={<Link2 size={15} />} disabled={match.isPending} onClick={() => setMatchTargets([series])}>匹配</Button>}</div>
+              }}>{follow.isPending && follow.variables?.id === series.animeId ? "创建中" : "开始追番"}</Button></div> : <RecommendationActions series={series} pending={match.isPending} onMatch={(recommendation) => match.mutate({ bangumiId: recommendation.bangumi_id, targets: [series] })} onBrowse={() => setMatchTargets([series])} />}
             </div>
             {expandedSeries.has(series.seriesIdentity) && <div className="discovered-series-details" id={`rss-titles-${series.seriesIdentity}`}>
               <div><strong>RSS 识别标题</strong><small>{series.animeId ? `以下标题均对应《${series.title}》` : "可勾选多个 RSS 动画，一次匹配到同一部 Bangumi 动画"}</small></div>
@@ -191,7 +236,7 @@ export function DiscoveredSeriesSection({
           </article>
         ))}</div>
       </div>}
-      {matchTargets && <AddAnimeDialog allowLocal={false} bangumiActionLabel="匹配" bangumiActionIcon={Check} dialogTitle="匹配 Bangumi 动画" dialogDescription={`将 ${matchTargets.map((series) => `“${series.title}”`).join("、")} 固定到同一部 Bangumi 动画；匹配后不会自动开始追番。`} initialMode="bangumi" initialTitle={matchTargets[0]?.title ?? ""} onClose={() => setMatchTargets(null)} onSelected={async (animeRecord) => { await match.mutateAsync({ animeRecord, targets: matchTargets }); }} />}
+      {matchTargets && <AddAnimeDialog allowLocal={false} bangumiActionLabel="匹配" bangumiActionIcon={Check} dialogTitle="匹配 Bangumi 动画" dialogDescription={`将 ${matchTargets.map((series) => `“${series.title}”`).join("、")} 固定到同一部 Bangumi 动画；匹配后不会自动开始追番。`} initialMode="bangumi" initialTitle={matchTargets[0]?.title ?? ""} recommendFirstResult onClose={() => setMatchTargets(null)} onSelected={async (animeRecord) => { await match.mutateAsync({ animeRecord, targets: matchTargets }); }} />}
     </section>
   );
 }
