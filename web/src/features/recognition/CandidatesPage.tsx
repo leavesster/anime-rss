@@ -238,29 +238,29 @@ export function CandidatesPage() {
 
   return (
     <>
-      <PageHeader eyebrow="RSS 识别结果" title="单集版本" description="查看系统从 RSS 标题中确定的动画、集数和不同发布版本，并保留识别依据。" />
-      {(groups.isLoading || unmatched.isLoading) && <LoadingState label="正在整理单集版本" />}
+      <PageHeader eyebrow="RSS 识别结果" title="版本识别" description="先解析集数，再关联动画；每一步的结果和不同发布版本都会保留。" />
+      {(groups.isLoading || unmatched.isLoading) && <LoadingState label="正在整理版本识别结果" />}
       {(groups.isError || unmatched.isError || confirm.isError || remap.isError || dismiss.isError || rerun.isError) && <ErrorBanner message="识别操作未完成，请检查输入后重试。" />}
       {rerunResult && <SuccessBanner message={rerunMessage(rerunResult)} />}
       {groups.data && unmatched.data && (
         <>
-          <section className="overview-band" aria-label="单集版本识别结果">
-            <div className="overview-metric"><span className="metric-icon metric-icon--green"><Layers3 size={19} /></span><div><small>已定位集数</small><strong>{groups.data.length}</strong></div></div>
+          <section className="overview-band" aria-label="版本识别结果">
+            <div className="overview-metric"><span className="metric-icon metric-icon--green"><Layers3 size={19} /></span><div><small>已解析集数</small><strong>{groups.data.length}</strong></div></div>
             <div className="overview-metric"><span className="metric-icon metric-icon--blue"><UsersRound size={19} /></span><div><small>多版本集数</small><strong>{duplicateGroups}</strong></div></div>
-            <div className="overview-metric"><span className={`metric-icon ${unmatched.data.length ? "metric-icon--red" : "metric-icon--gray"}`}><AlertCircle size={19} /></span><div><small>尚未定位</small><strong>{unmatched.data.length}</strong></div></div>
+            <div className="overview-metric"><span className={`metric-icon ${unmatched.data.length ? "metric-icon--amber" : "metric-icon--gray"}`}><AlertCircle size={19} /></span><div><small>待解析条目</small><strong>{unmatched.data.length}</strong></div></div>
           </section>
 
           <div className="candidate-toolbar">
-            <div className="segmented" role="tablist" aria-label="单集版本定位状态">
-              <button className={tab === "grouped" ? "segmented__active" : ""} role="tab" aria-selected={tab === "grouped"} onClick={() => setTab("grouped")}>已定位 <span>{groups.data.length}</span></button>
-              <button className={tab === "unmatched" ? "segmented__active" : ""} role="tab" aria-selected={tab === "unmatched"} onClick={() => setTab("unmatched")}>尚未定位 <span>{unmatched.data.length}</span></button>
+            <div className="segmented" role="tablist" aria-label="版本识别状态">
+              <button className={tab === "grouped" ? "segmented__active" : ""} role="tab" aria-selected={tab === "grouped"} onClick={() => setTab("grouped")}>已解析集数 <span>{groups.data.length}</span></button>
+              <button className={tab === "unmatched" ? "segmented__active" : ""} role="tab" aria-selected={tab === "unmatched"} onClick={() => setTab("unmatched")}>待解析 <span>{unmatched.data.length}</span></button>
             </div>
-            {tab === "grouped" && <label className="search-field candidate-search"><Search size={17} /><input aria-label="搜索单集版本" placeholder="搜索动画、集数或字幕组" value={search} onChange={(event) => setSearch(event.target.value)} /></label>}
+            {tab === "grouped" && <label className="search-field candidate-search"><Search size={17} /><input aria-label="搜索版本识别结果" placeholder="搜索动画、集数或字幕组" value={search} onChange={(event) => setSearch(event.target.value)} /></label>}
           </div>
 
           {tab === "grouped" && seriesFilter && <div className="candidate-series-filter"><span>正在查看 <strong>{filteredSeriesTitle ?? seriesFilter}</strong> 的识别结果</span><Button size="small" variant="ghost" icon={<X size={15} />} onClick={() => { const next = new URLSearchParams(searchParams); next.delete("series"); setSearchParams(next, { replace: true }); }}>查看全部动画</Button></div>}
 
-          {tab === "grouped" && filteredGroups.length === 0 && <EmptyState icon={Layers3} title={groups.data.length ? "没有匹配结果" : "还没有单集版本"} description={groups.data.length ? "清空搜索条件或尝试其他关键词。" : "刷新订阅源后，识别出的版本会按动画和集数显示。"} />}
+          {tab === "grouped" && filteredGroups.length === 0 && <EmptyState icon={Layers3} title={groups.data.length ? "没有匹配结果" : "还没有已解析的集数"} description={groups.data.length ? "清空搜索条件或尝试其他关键词。" : "刷新订阅源后，解析出集数的版本会集中显示。"} />}
           {tab === "grouped" && filteredGroups.length > 0 && <div className="series-group-list">{seriesGroups.map((series) => (
             <section className="series-group" key={series.identity}>
               <header className="series-group__header"><div><h2>{series.title}</h2><span>{series.episodes.length} 集 · {series.candidateCount} 个版本</span></div>{series.bangumiId && <a className="bgm-link" href={`https://bgm.tv/subject/${series.bangumiId}`} target="_blank" rel="noreferrer" referrerPolicy="no-referrer" aria-label={`在 Bangumi 查看《${series.title}》`} title="在 Bangumi 查看">bgm.tv</a>}</header>
@@ -273,7 +273,7 @@ export function CandidatesPage() {
                       <span className="candidate-media">{mediaSummary(candidate)}</span>
                       <span className="revision-label">V{candidate.revision}</span>
                       <StatusBadge status={candidate.confidence} />
-                      <span className={candidate.anime_id && candidate.recognition_eligible ? "eligibility eligibility--yes" : "eligibility"}><CheckCircle2 size={16} />{candidate.anime_id ? `已匹配到动画 · ${candidate.recognition_eligible ? "可自动筛选" : "需要确认"}` : candidate.catalog_match_status === "ambiguous" ? "匹配到多部动画" : "未匹配到动画"}</span>
+                      <span className={candidate.anime_id && candidate.recognition_eligible ? "eligibility eligibility--yes" : "eligibility"}><CheckCircle2 size={16} />{candidate.anime_id ? `已关联动画 · ${candidate.recognition_eligible ? "可参与版本选择" : "需要确认"}` : candidate.catalog_match_status === "ambiguous" ? "集数已解析 · 动画关联有歧义" : "集数已解析 · 动画待关联"}</span>
                       <div className="candidate-actions">
                         {candidate.source_url && <a className="button button--ghost button--icon external-link" href={candidate.source_url} target="_blank" rel="noreferrer" referrerPolicy="no-referrer" aria-label="打开 RSS 原始条目" title="打开 RSS 原始条目"><Rss size={16} /></a>}
                         {!candidate.recognition_eligible && <Button aria-label="确认识别结果" title="确认识别结果" size="icon" variant="ghost" icon={<ShieldCheck size={16} />} disabled={confirm.isPending} onClick={() => confirm.mutate(candidate.id)} />}
@@ -287,12 +287,12 @@ export function CandidatesPage() {
             </section>
           ))}</div>}
 
-          {tab === "unmatched" && unmatched.data.length === 0 && <EmptyState icon={CheckCircle2} title="没有尚未定位的条目" description="当前 RSS 条目都已经确定了动画和集数。" />}
+          {tab === "unmatched" && unmatched.data.length === 0 && <EmptyState icon={CheckCircle2} title="没有待解析条目" description="当前 RSS 条目都已经解析出集数。" />}
           {tab === "unmatched" && unmatched.data.length > 0 && <div className="unmatched-list">{unmatched.data.map((release) => <article key={release.id}><div className="unmatched-copy"><strong>{release.source_title}</strong><small>{formatDate(release.parsed_at)}</small></div><span className="reason-code">{recognitionReason(release.reason_code)}</span><div className="candidate-actions">{release.source_url && <a className="button button--ghost button--icon external-link" href={release.source_url} target="_blank" rel="noreferrer" referrerPolicy="no-referrer" aria-label="打开 RSS 原始条目" title="打开 RSS 原始条目"><Rss size={16} /></a>}<Button aria-label="重新识别标题" title="重新识别标题" size="icon" variant="ghost" icon={<RefreshCw className={rerun.isPending && rerun.variables === release.release_id ? "spin" : ""} size={16} />} disabled={rerun.isPending} onClick={() => rerun.mutate(release.release_id)} /><Button size="small" variant="secondary" icon={<PencilLine size={15} />} onClick={() => setRemapTarget(release)}>填写动画与集数</Button><Button size="small" variant="ghost" icon={<Trash2 size={15} />} onClick={() => setDismissTarget(release)}>忽略</Button></div></article>)}</div>}
         </>
       )}
       {remapTarget && <RemapDialog release={remapTarget} pending={remap.isPending} onClose={() => setRemapTarget(null)} onSubmit={(payload) => remap.mutate({ releaseId: remapTarget.release_id, payload })} />}
-      <Dialog open={dismissTarget !== null} title="忽略尚未定位的条目" description="条目将不再出现在“尚未定位”；RSS 原始条目和识别记录仍会保留。" onClose={() => setDismissTarget(null)}>
+      <Dialog open={dismissTarget !== null} title="忽略待解析条目" description="条目将不再出现在“待解析”；RSS 原始条目和识别记录仍会保留。" onClose={() => setDismissTarget(null)}>
         <p className="confirm-copy" title={dismissTarget?.source_title}>{dismissTarget?.source_title}</p>
         <div className="dialog__actions"><Button variant="secondary" onClick={() => setDismissTarget(null)}>取消</Button><Button variant="danger" icon={<Trash2 size={16} />} disabled={dismiss.isPending} onClick={() => dismissTarget && dismiss.mutate(dismissTarget.release_id)}>{dismiss.isPending ? "处理中" : "确认忽略"}</Button></div>
       </Dialog>
