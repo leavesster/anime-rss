@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ArrowRight,
@@ -13,20 +13,25 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import { getOperationsOverview, listReleases, refreshSchedule } from "../../generated/api/client";
+import { getOperationsOverview, getScheduleOverview, listReleases, refreshSchedule } from "../../generated/api/client";
 import { Button } from "../../shared/components/Button";
 import { EmptyState } from "../../shared/components/EmptyState";
-import { ErrorBanner, LoadingState } from "../../shared/components/Feedback";
+import { ErrorBanner, LoadingState, SuccessBanner } from "../../shared/components/Feedback";
 import { PageHeader } from "../../shared/components/PageHeader";
 import { StatusBadge } from "../../shared/components/StatusBadge";
 import { formatRelative, truncateHash } from "../../shared/lib/format";
 import { feedsQuery } from "../feeds/queries";
 
 export function DashboardPage() {
+  const queryClient = useQueryClient();
   const feeds = useQuery(feedsQuery);
   const releases = useQuery({ queryKey: ["releases"], queryFn: listReleases });
   const operations = useQuery({ queryKey: ["operations-overview"], queryFn: getOperationsOverview, refetchInterval: 15_000 });
-  const schedule = useQuery({ queryKey: ["schedule-calendar"], queryFn: refreshSchedule, staleTime: 5 * 60_000 });
+  const schedule = useQuery({ queryKey: ["schedule-calendar"], queryFn: getScheduleOverview, staleTime: 5 * 60_000 });
+  const scheduleSync = useMutation({
+    mutationFn: refreshSchedule,
+    onSuccess: (data) => queryClient.setQueryData(["schedule-calendar"], data),
+  });
   const isLoading = feeds.isLoading || releases.isLoading || operations.isLoading || schedule.isLoading;
   const hasError = feeds.isError || releases.isError || operations.isError || schedule.isError;
   const healthyFeeds = feeds.data?.filter((feed) => feed.health === "healthy").length ?? 0;
@@ -50,8 +55,10 @@ export function DashboardPage() {
             <section className="dashboard-section schedule-section">
               <div className="section-heading">
                 <div><h2>播出日历</h2><p>今天起八天，时间按实例时区显示</p></div>
-                <Button size="icon" variant="ghost" title="刷新日历" aria-label="刷新日历" icon={<RefreshCw size={16} />} disabled={schedule.isFetching} onClick={() => schedule.refetch()} />
+                <Button size="small" variant="ghost" icon={<RefreshCw className={scheduleSync.isPending ? "spin" : ""} size={16} />} disabled={scheduleSync.isPending || schedule.isFetching} onClick={() => scheduleSync.mutate()}>{scheduleSync.isPending ? "同步中" : "同步播出信息"}</Button>
               </div>
+              {scheduleSync.isError && <ErrorBanner message="播出信息同步失败，现有日历仍可查看。" />}
+              {scheduleSync.isSuccess && <SuccessBanner message="播出信息已同步，日历已经更新。" />}
               <div className="schedule-calendar">
                 {schedule.data.calendar.map((day) => (
                   <div className="schedule-day" key={day.date}>

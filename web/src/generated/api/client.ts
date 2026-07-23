@@ -545,6 +545,17 @@ export async function listMissingEpisodes(): Promise<ExpectedEpisode[]> {
   );
 }
 
+export async function getScheduleOverview(): Promise<{
+  calendar: CalendarDay[];
+  missing: ExpectedEpisode[];
+}> {
+  const [calendar, missing] = await Promise.all([
+    listScheduleCalendar(),
+    listMissingEpisodes(),
+  ]);
+  return { calendar, missing };
+}
+
 export async function listAnimeEpisodeHistory(animeId: string): Promise<ExpectedEpisode[]> {
   return unwrap(
     await client.GET("/api/v1/schedule/anime/{anime_id}/episodes", {
@@ -604,11 +615,7 @@ export async function refreshSchedule(): Promise<{
   missing: ExpectedEpisode[];
 }> {
   await syncSchedule();
-  const [calendar, missing] = await Promise.all([
-    listScheduleCalendar(),
-    listMissingEpisodes(),
-  ]);
-  return { calendar, missing };
+  return getScheduleOverview();
 }
 
 export async function listAuditEvents(): Promise<AuditEvent[]> {
