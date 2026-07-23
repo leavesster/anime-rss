@@ -398,6 +398,8 @@ a.compact-row:hover { background: var(--surface-soft); }
 .auth-heading h1 { font-size: 20px; }
 .auth-heading p { margin-top: 4px; color: var(--muted); font-size: 11px; }
 .auth-panel .form-stack > .button { width: 100%; margin-top: 4px; }
+.auth-recovery { margin-top: 18px; color: var(--muted); font-size: 10px; line-height: 1.6; }
+.auth-recovery code { color: #46544f; font-size: 9px; overflow-wrap: anywhere; }
 .field-error { color: var(--red); font-size: 10px; }
 
 .setup-screen { min-height: 100vh; background: #f1f4f2; }

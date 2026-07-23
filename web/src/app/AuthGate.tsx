@@ -15,6 +15,7 @@ import { ErrorBanner } from "../shared/components/Feedback";
 
 export function AuthGate({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
+  const [sessionExpired, setSessionExpired] = useState(false);
   const status = useQuery({
     queryKey: ["auth-status"],
     queryFn: getAuthStatus,
@@ -23,7 +24,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    const refresh = () => queryClient.invalidateQueries({ queryKey: ["auth-status"] });
+    const refresh = () => {
+      setSessionExpired(true);
+      queryClient.invalidateQueries({ queryKey: ["auth-status"] });
+    };
     window.addEventListener("anime-rss-auth-required", refresh);
     return () => window.removeEventListener("anime-rss-auth-required", refresh);
   }, [queryClient]);
@@ -48,7 +52,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }
   if (!status.data.enabled) return children;
   if (status.data.authenticated) return <SetupGate>{children}</SetupGate>;
-  return <AuthForm setupRequired={status.data.setup_required} />;
+  return <AuthForm setupRequired={status.data.setup_required} sessionExpired={sessionExpired} />;
 }
 
 function SetupGate({ children }: { children: ReactNode }) {
@@ -79,7 +83,7 @@ function SetupGate({ children }: { children: ReactNode }) {
   return children;
 }
 
-function AuthForm({ setupRequired }: { setupRequired: boolean }) {
+function AuthForm({ setupRequired, sessionExpired }: { setupRequired: boolean; sessionExpired: boolean }) {
   const queryClient = useQueryClient();
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
@@ -115,7 +119,7 @@ function AuthForm({ setupRequired }: { setupRequired: boolean }) {
           <span><LockKeyhole size={19} /></span>
           <div>
             <h1>{setupRequired ? "设置管理员" : "管理员登录"}</h1>
-            <p>{setupRequired ? "首次启动" : "会话已过期"}</p>
+            <p>{setupRequired ? "首次启动" : sessionExpired ? "登录状态已过期，请重新登录" : "请登录以继续"}</p>
           </div>
         </div>
         {authenticate.isError && <ErrorBanner message={errorMessage} />}
@@ -167,6 +171,7 @@ function AuthForm({ setupRequired }: { setupRequired: boolean }) {
             {setupRequired ? "完成设置" : "登录"}
           </Button>
         </form>
+        {!setupRequired && <p className="auth-recovery">忘记密码？请在服务所在机器运行 <code>anime-rss reset-password --data-dir &lt;数据目录&gt;</code>。重置会撤销现有登录会话。</p>}
       </main>
     </div>
   );
