@@ -6,7 +6,9 @@ import {
   CircleCheck,
   EyeOff,
   ImageOff,
+  LayoutGrid,
   Link2Off,
+  List,
   Radio,
   RefreshCw,
   RotateCcw,
@@ -22,6 +24,7 @@ import {
   listRssMatches,
   markSeasonalAnimeWatched,
   refreshSeasonalOverview,
+  type AnimeRssMatch,
   type SeasonalAnime,
 } from "../../generated/api/client";
 import { Button } from "../../shared/components/Button";
@@ -30,6 +33,8 @@ import { ErrorBanner, LoadingState } from "../../shared/components/Feedback";
 import { StatusBadge } from "../../shared/components/StatusBadge";
 
 type SeasonalFilter = "all" | "undecided" | "following" | "watched" | "dismissed";
+type SeasonalViewMode = "cover" | "text";
+type SeasonalActionKind = "follow" | "watched" | "dismiss";
 
 const PAGE_SIZE = 16;
 
@@ -57,11 +62,77 @@ function dateLabel(value: string | null) {
   return `${Number(month)} 月 ${Number(day)} 日`;
 }
 
+function SeasonalRating({ item }: { item: SeasonalAnime }) {
+  if (typeof item.rating_score !== "number" || !Number.isFinite(item.rating_score)) return null;
+  return (
+    <span
+      className="seasonal-rating"
+      aria-label={`Bangumi ${item.rating_total} 人评分`}
+      title={`Bangumi ${item.rating_total} 人评分`}
+    >
+      <Star size={11} fill="currentColor" aria-hidden="true" />
+      {item.rating_score.toFixed(1)}
+    </span>
+  );
+}
+
+function SeasonalRssStatus({ rssMatch }: { rssMatch?: AnimeRssMatch }) {
+  const tone = (rssMatch?.conflicts.length ?? 0) > 0
+    ? "warning"
+    : (rssMatch?.candidate_count ?? 0) > 0
+      ? "matched"
+      : "empty";
+  return (
+    <div className={`seasonal-card__rss seasonal-card__rss--${tone}`}>
+      {tone === "warning" ? <TriangleAlert size={13} /> : tone === "matched" ? <Radio size={13} /> : <Link2Off size={13} />}
+      <span>{tone === "warning" ? "RSS 绑定需确认" : tone === "matched" ? "RSS 已匹配" : "RSS 未匹配"}</span>
+      <small>{tone === "warning"
+        ? `${rssMatch?.conflicts.length ?? 0} 个疑似错误`
+        : tone === "matched"
+          ? `${rssMatch?.episode_count ?? 0} 集 · ${rssMatch?.candidate_count ?? 0} 个种子`
+          : "尚无单集种子"}</small>
+    </div>
+  );
+}
+
+function SeasonalActions({
+  item,
+  pending,
+  className,
+  onAction,
+}: {
+  item: SeasonalAnime;
+  pending: boolean;
+  className: string;
+  onAction: (kind: SeasonalActionKind) => void;
+}) {
+  return (
+    <div className={className}>
+      {item.status === "undecided" && <>
+        <Button size="small" variant="primary" disabled={pending} icon={<BookOpenCheck size={15} />} onClick={() => onAction("follow")}>追番</Button>
+        <Button size="small" variant="secondary" disabled={pending} icon={<CircleCheck size={15} />} onClick={() => onAction("watched")}>已看完</Button>
+        <Button size="small" variant="secondary" disabled={pending} icon={<EyeOff size={15} />} onClick={() => onAction("dismiss")}>不追</Button>
+      </>}
+      {isFollowingStatus(item.status) && <>
+        {item.status !== "following" && <Button size="small" variant="primary" disabled={pending} icon={<RotateCcw size={15} />} onClick={() => onAction("follow")}>重新追番</Button>}
+        <Button size="small" variant="secondary" disabled={pending} icon={<CircleCheck size={15} />} onClick={() => onAction("watched")}>已看完</Button>
+        <Button size="small" variant="secondary" disabled={pending} icon={<EyeOff size={15} />} onClick={() => onAction("dismiss")}>不追了</Button>
+      </>}
+      {["dismissed", "watched"].includes(item.status) && <>
+        <Button size="small" variant="primary" disabled={pending} icon={<RotateCcw size={15} />} onClick={() => onAction("follow")}>重新追番</Button>
+        {item.status === "dismissed" && <Button size="small" variant="secondary" disabled={pending} icon={<CircleCheck size={15} />} onClick={() => onAction("watched")}>已看完</Button>}
+        {item.status === "watched" && <Button size="small" variant="secondary" disabled={pending} icon={<EyeOff size={15} />} onClick={() => onAction("dismiss")}>改为不追</Button>}
+      </>}
+    </div>
+  );
+}
+
 export function SeasonalAnimeSection() {
   const queryClient = useQueryClient();
   const initial = useMemo(currentPeriod, []);
   const [period, setPeriod] = useState(initial);
   const [filter, setFilter] = useState<SeasonalFilter>("all");
+  const [viewMode, setViewMode] = useState<SeasonalViewMode>("cover");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const seasonal = useQuery({
     queryKey: ["seasonal", period.year, period.quarter],
@@ -80,7 +151,7 @@ export function SeasonalAnimeSection() {
     ),
   });
   const action = useMutation({
-    mutationFn: ({ bangumiId, kind }: { bangumiId: number; kind: "follow" | "watched" | "dismiss" }) => {
+    mutationFn: ({ bangumiId, kind }: { bangumiId: number; kind: SeasonalActionKind }) => {
       if (kind === "follow") return followSeasonalAnime(bangumiId);
       if (kind === "watched") return markSeasonalAnimeWatched(bangumiId);
       return dismissSeasonalAnime(bangumiId);
@@ -133,35 +204,61 @@ export function SeasonalAnimeSection() {
 
       {seasonal.data && (
         <>
-          <div className="seasonal-filters segmented" aria-label="新番状态筛选">
-            {([
-              ["all", "全部"],
-              ["undecided", "待决定"],
-              ["following", "正在追"],
-              ["watched", "已看完"],
-              ["dismissed", "不追"],
-            ] as const).map(([value, label]) => (
-              <button key={value} className={filter === value ? "segmented__active" : ""} onClick={() => { setFilter(value); setVisibleCount(PAGE_SIZE); }}>
-                {label} <span>{counts[value]}</span>
+          <div className="seasonal-controls">
+            <div className="seasonal-filters segmented" aria-label="新番状态筛选">
+              {([
+                ["all", "全部"],
+                ["undecided", "待决定"],
+                ["following", "正在追"],
+                ["watched", "已看完"],
+                ["dismissed", "不追"],
+              ] as const).map(([value, label]) => (
+                <button key={value} className={filter === value ? "segmented__active" : ""} aria-pressed={filter === value} onClick={() => { setFilter(value); setVisibleCount(PAGE_SIZE); }}>
+                  {label} <span>{counts[value]}</span>
+                </button>
+              ))}
+            </div>
+            <div className="seasonal-view-switcher segmented" aria-label="新番显示方式">
+              <button className={viewMode === "cover" ? "segmented__active" : ""} aria-pressed={viewMode === "cover"} title="封面视图" onClick={() => setViewMode("cover")}>
+                <LayoutGrid size={15} aria-hidden="true" />封面
               </button>
-            ))}
+              <button className={viewMode === "text" ? "segmented__active" : ""} aria-pressed={viewMode === "text"} title="文字列表" onClick={() => setViewMode("text")}>
+                <List size={16} aria-hidden="true" />列表
+              </button>
+            </div>
           </div>
 
           {filtered.length === 0 ? (
             <EmptyState icon={BookOpenCheck} title="这里还没有动画" description="切换其他状态或季度查看。" />
           ) : (
-            <div className="seasonal-grid">
+            <div className={viewMode === "cover" ? "seasonal-grid" : "seasonal-text-list"}>
               {visible.map((item) => {
                 const title = displayTitle(item);
                 const pending = action.isPending && action.variables?.bangumiId === item.bangumi_id;
                 const rssMatch = item.anime_id
                   ? rssMatches.data?.find((match) => match.anime_id === item.anime_id)
                   : undefined;
-                const rssTone = (rssMatch?.conflicts.length ?? 0) > 0
-                  ? "warning"
-                  : (rssMatch?.candidate_count ?? 0) > 0
-                    ? "matched"
-                    : "empty";
+                const runAction = (kind: SeasonalActionKind) => action.mutate({ bangumiId: item.bangumi_id, kind });
+                if (viewMode === "text") {
+                  return (
+                    <article className="seasonal-text-row" key={item.bangumi_id}>
+                      <div className="seasonal-text-row__main">
+                        <div className="seasonal-text-row__heading">
+                          <a href={`https://bgm.tv/subject/${item.bangumi_id}`} target="_blank" rel="noreferrer" referrerPolicy="no-referrer" title={`在 Bangumi 查看《${title}》`}>{title}</a>
+                          <StatusBadge status={item.status} />
+                        </div>
+                        {item.name_cn && item.name_cn !== item.name && <small title={item.name}>{item.name}</small>}
+                        <div className="seasonal-text-row__facts">
+                          <span>{dateLabel(item.air_date)}{item.episode_count ? ` · ${item.episode_count} 集` : ""}</span>
+                          <span>{item.platform ?? "动画"}</span>
+                          <SeasonalRating item={item} />
+                        </div>
+                      </div>
+                      {item.anime_id && rssMatches.data && <SeasonalRssStatus rssMatch={rssMatch} />}
+                      <SeasonalActions item={item} pending={pending} className="seasonal-text-row__actions" onAction={runAction} />
+                    </article>
+                  );
+                }
                 return (
                   <article className="seasonal-card" key={item.bangumi_id}>
                     <a className="seasonal-cover" href={`https://bgm.tv/subject/${item.bangumi_id}`} target="_blank" rel="noreferrer" referrerPolicy="no-referrer" aria-label={`在 Bangumi 查看《${title}》`}>
@@ -171,16 +268,7 @@ export function SeasonalAnimeSection() {
                       <div className="seasonal-card__status">
                         <StatusBadge status={item.status} />
                         <div className="seasonal-card__facts">
-                          {typeof item.rating_score === "number" && Number.isFinite(item.rating_score) && (
-                            <span
-                              className="seasonal-rating"
-                              aria-label={`Bangumi ${item.rating_total} 人评分`}
-                              title={`Bangumi ${item.rating_total} 人评分`}
-                            >
-                              <Star size={11} fill="currentColor" aria-hidden="true" />
-                              {item.rating_score.toFixed(1)}
-                            </span>
-                          )}
+                          <SeasonalRating item={item} />
                           <small>{item.platform ?? "动画"}</small>
                         </div>
                       </div>
@@ -189,32 +277,8 @@ export function SeasonalAnimeSection() {
                         {item.name_cn && item.name_cn !== item.name && <small title={item.name}>{item.name}</small>}
                       </div>
                       <p>{dateLabel(item.air_date)}{item.episode_count ? ` · ${item.episode_count} 集` : ""}</p>
-                      {item.anime_id && rssMatches.data && <div className={`seasonal-card__rss seasonal-card__rss--${rssTone}`}>
-                        {rssTone === "warning" ? <TriangleAlert size={13} /> : rssTone === "matched" ? <Radio size={13} /> : <Link2Off size={13} />}
-                        <span>{rssTone === "warning" ? "RSS 绑定需确认" : rssTone === "matched" ? "RSS 已匹配" : "RSS 未匹配"}</span>
-                        <small>{rssTone === "warning"
-                          ? `${rssMatch?.conflicts.length ?? 0} 个疑似错误`
-                          : rssTone === "matched"
-                            ? `${rssMatch?.episode_count ?? 0} 集 · ${rssMatch?.candidate_count ?? 0} 个种子`
-                            : "尚无单集种子"}</small>
-                      </div>}
-                      <div className="seasonal-card__actions">
-                        {item.status === "undecided" && <>
-                          <Button size="small" variant="primary" disabled={pending} icon={<BookOpenCheck size={15} />} onClick={() => action.mutate({ bangumiId: item.bangumi_id, kind: "follow" })}>追番</Button>
-                          <Button size="small" variant="secondary" disabled={pending} icon={<CircleCheck size={15} />} onClick={() => action.mutate({ bangumiId: item.bangumi_id, kind: "watched" })}>已看完</Button>
-                          <Button size="small" variant="secondary" disabled={pending} icon={<EyeOff size={15} />} onClick={() => action.mutate({ bangumiId: item.bangumi_id, kind: "dismiss" })}>不追</Button>
-                        </>}
-                        {isFollowingStatus(item.status) && <>
-                          {item.status !== "following" && <Button size="small" variant="primary" disabled={pending} icon={<RotateCcw size={15} />} onClick={() => action.mutate({ bangumiId: item.bangumi_id, kind: "follow" })}>重新追番</Button>}
-                          <Button size="small" variant="secondary" disabled={pending} icon={<CircleCheck size={15} />} onClick={() => action.mutate({ bangumiId: item.bangumi_id, kind: "watched" })}>已看完</Button>
-                          <Button size="small" variant="secondary" disabled={pending} icon={<EyeOff size={15} />} onClick={() => action.mutate({ bangumiId: item.bangumi_id, kind: "dismiss" })}>不追了</Button>
-                        </>}
-                        {["dismissed", "watched"].includes(item.status) && <>
-                          <Button size="small" variant="primary" disabled={pending} icon={<RotateCcw size={15} />} onClick={() => action.mutate({ bangumiId: item.bangumi_id, kind: "follow" })}>重新追番</Button>
-                          {item.status === "dismissed" && <Button size="small" variant="secondary" disabled={pending} icon={<CircleCheck size={15} />} onClick={() => action.mutate({ bangumiId: item.bangumi_id, kind: "watched" })}>已看完</Button>}
-                          {item.status === "watched" && <Button size="small" variant="secondary" disabled={pending} icon={<EyeOff size={15} />} onClick={() => action.mutate({ bangumiId: item.bangumi_id, kind: "dismiss" })}>改为不追</Button>}
-                        </>}
-                      </div>
+                      {item.anime_id && rssMatches.data && <SeasonalRssStatus rssMatch={rssMatch} />}
+                      <SeasonalActions item={item} pending={pending} className="seasonal-card__actions" onAction={runAction} />
                     </div>
                   </article>
                 );

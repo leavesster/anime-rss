@@ -156,6 +156,26 @@ describe("seasonal anime homepage", () => {
     await waitFor(() => expect(markSeasonalAnimeWatched).toHaveBeenCalledWith(101));
   });
 
+  it("switches from covers to a text-only list without losing RSS state or actions", async () => {
+    renderSection();
+    await screen.findByText("准备追的新番");
+
+    expect(screen.getByRole("button", { name: "封面" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("img", { name: "《准备追的新番》封面" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "列表" }));
+
+    expect(screen.getByRole("button", { name: "列表" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("img", { name: "《准备追的新番》封面" })).not.toBeInTheDocument();
+    const row = screen.getByText("准备追的新番").closest("article");
+    expect(within(row!).getByText("Follow Anime")).toBeInTheDocument();
+    expect(within(row!).getByText("RSS 已匹配")).toBeInTheDocument();
+    expect(within(row!).getByText("1 集 · 2 个种子")).toBeInTheDocument();
+
+    fireEvent.click(within(row!).getByRole("button", { name: "追番" }));
+    await waitFor(() => expect(followSeasonalAnime).toHaveBeenCalledWith(101));
+  });
+
   it("switches quarters and explicitly refreshes the selected period", async () => {
     vi.mocked(refreshSeasonalOverview).mockResolvedValue({
       year: 2026,

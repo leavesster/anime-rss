@@ -135,7 +135,10 @@ h3 { font-size: 15px; letter-spacing: 0; }
 .seasonal-toolbar { min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
 .period-switcher { display: flex; align-items: center; gap: 10px; }
 .period-switcher h2 { min-width: 148px; font-size: 17px; text-align: center; }
-.seasonal-filters.segmented { margin-bottom: 18px; }
+.seasonal-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.seasonal-controls .segmented { margin-bottom: 0; }
+.seasonal-view-switcher { flex: 0 0 auto; }
+.seasonal-view-switcher button { gap: 5px; }
 .seasonal-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
 .seasonal-card { min-width: 0; overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
 .seasonal-card:hover { border-color: #c3d0ca; }
@@ -161,6 +164,21 @@ h3 { font-size: 15px; letter-spacing: 0; }
 .seasonal-card__actions .button { min-width: 0; padding-right: 8px; padding-left: 8px; }
 .seasonal-card__actions .button:only-child { grid-column: 1 / -1; }
 .seasonal-card__actions .button:nth-child(3):last-child { grid-column: 1 / -1; }
+.seasonal-text-list { display: grid; overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.seasonal-text-row { min-width: 0; min-height: 82px; display: grid; grid-template-columns: minmax(230px, 1fr) minmax(180px, 230px) auto; align-items: center; gap: 18px; padding: 12px 14px; border-bottom: 1px solid var(--soft-line); }
+.seasonal-text-row:last-child { border-bottom: 0; }
+.seasonal-text-row:hover { background: #f9fbfa; }
+.seasonal-text-row__main { min-width: 0; display: grid; gap: 4px; }
+.seasonal-text-row__heading { min-width: 0; display: flex; align-items: center; gap: 8px; }
+.seasonal-text-row__heading > a { min-width: 0; overflow: hidden; color: var(--ink); font-size: 13px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.seasonal-text-row__heading > a:hover { color: var(--accent-dark); }
+.seasonal-text-row__heading .status-badge { flex: 0 0 auto; }
+.seasonal-text-row__main > small { overflow: hidden; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.seasonal-text-row__facts { display: flex; align-items: center; gap: 8px; color: #52605b; font-size: 9px; }
+.seasonal-text-row__facts > span:not(:last-child)::after { margin-left: 8px; color: #b5bdb9; content: "·"; }
+.seasonal-text-row > .seasonal-card__rss { margin-top: 0; }
+.seasonal-text-row__actions { display: flex; justify-content: flex-end; gap: 7px; }
+.seasonal-text-row__actions .button { flex: 0 0 auto; }
 .schedule-section { margin-bottom: 34px; }
 .schedule-calendar { display: grid; grid-template-columns: repeat(8, minmax(138px, 1fr)); overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
 .schedule-day { min-width: 138px; min-height: 168px; border-right: 1px solid var(--soft-line); }
@@ -652,6 +670,8 @@ a.compact-row:hover { background: var(--surface-soft); }
   .dashboard-grid { grid-template-columns: 1fr; gap: 34px; }
   .seasonal-section { margin-bottom: 34px; }
   .seasonal-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .seasonal-text-row { grid-template-columns: minmax(220px, 1fr) minmax(170px, 220px); gap: 10px 16px; }
+  .seasonal-text-row__actions { grid-column: 1 / -1; justify-content: flex-end; }
   .system-layout { grid-template-columns: 1fr; }
   .system-section--wide { grid-column: 1; }
   .setup-header { height: 62px; padding: 0 18px; }
@@ -715,9 +735,18 @@ a.compact-row:hover { background: var(--surface-soft); }
   .period-switcher { gap: 6px; }
   .period-switcher h2 { min-width: 126px; font-size: 14px; }
   .seasonal-filters.segmented button { gap: 3px; padding: 0 6px; font-size: 11px; white-space: nowrap; }
+  .seasonal-controls { align-items: stretch; flex-direction: column; }
+  .seasonal-view-switcher { width: fit-content; align-self: flex-end; }
+  .seasonal-view-switcher button { flex: 0 0 auto; padding: 0 12px; }
   .seasonal-card__body { min-height: 184px; padding: 10px; }
   .seasonal-card__actions { gap: 5px; }
   .seasonal-card__actions .button { gap: 4px; padding-right: 5px; padding-left: 5px; font-size: 11px; }
+  .seasonal-text-row { grid-template-columns: minmax(0, 1fr); gap: 9px; padding: 12px; }
+  .seasonal-text-row > .seasonal-card__rss { width: 100%; }
+  .seasonal-text-row__actions { grid-column: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); justify-content: stretch; }
+  .seasonal-text-row__actions .button { min-width: 0; }
+  .seasonal-text-row__actions .button:only-child { grid-column: 1 / -1; }
+  .seasonal-text-row__actions .button:nth-child(3):last-child { grid-column: 1 / -1; }
   .data-table { overflow-x: auto; }
   .data-table__head, .data-table__row { min-width: 560px; }
   .releases-table .data-table__head, .releases-table .data-table__row { min-width: 0; }
