@@ -81,11 +81,6 @@ export function SubscriptionsPage() {
           <div className="overview-metric"><span className="metric-icon metric-icon--gray"><Sparkles size={19} /></span><div><small>选择记录</small><strong>{decisions.data.length}</strong></div></div>
         </section>
 
-        <DiscoveredSeriesSection anime={anime.data} subscriptions={subscriptions.data} groups={groups.data} />
-
-        <GlobalPreferencesPanel />
-        <SelectionLogicPanel />
-
         <div className="subscription-layout">
           <section className="data-section"><div className="section-heading"><div><h2>追番订阅</h2><p>完结仅接收同组修订版；归档停止全部自动处理。</p></div><div className="segmented" aria-label="订阅视图"><button className={subscriptionView === "active" ? "active" : ""} onClick={() => setSubscriptionView("active")}>当前</button><button className={subscriptionView === "archived" ? "active" : ""} onClick={() => setSubscriptionView("archived")}><Archive size={14} />归档 {archived}</button></div></div>
             {subscriptions.data.length === 0 ? <EmptyState icon={BookOpen} title="还没有追番" description="先添加动画，再设置字幕组偏好和等待首选版本的时间。" /> : visibleSubscriptions.length === 0 ? <EmptyState icon={Archive} title={subscriptionView === "archived" ? "没有归档订阅" : "没有当前订阅"} description={subscriptionView === "archived" ? "归档后的订阅会集中显示在这里。" : "恢复归档订阅或创建新的追番。"} /> : <div className="subscription-list">{visibleSubscriptions.map((subscription) => <article className="subscription-row" key={subscription.id}>
@@ -105,6 +100,11 @@ export function SubscriptionsPage() {
             </article>)}</div>}
           </section>
         </div>
+
+        <GlobalPreferencesPanel />
+        <SelectionLogicPanel />
+
+        <DiscoveredSeriesSection anime={anime.data} subscriptions={subscriptions.data} groups={groups.data} />
       </>}
       {showAnime && <AddAnimeDialog onClose={() => setShowAnime(false)} />}
       {showSubscription && anime.data && subscriptions.data && <CreateSubscriptionDialog anime={anime.data} unavailableAnimeIds={new Set(subscriptions.data.map((item) => item.anime_id))} onClose={() => setShowSubscription(false)} />}

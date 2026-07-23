@@ -55,7 +55,7 @@ export function DiscoveredSeriesSection({
   groups: EpisodeGroup[];
 }) {
   const queryClient = useQueryClient();
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [expandedSeries, setExpandedSeries] = useState<Set<string>>(new Set());
   const [selectedSeries, setSelectedSeries] = useState<Set<string>>(new Set());
   const [matchTargets, setMatchTargets] = useState<DiscoveredSeries[] | null>(null);

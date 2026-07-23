@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
 import { DiscoveredSeriesSection } from "../src/features/subscriptions/DiscoveredSeriesSection";
@@ -24,6 +24,8 @@ describe("RSS discovered series", () => {
     vi.clearAllMocks();
     vi.mocked(bindCatalogTitles).mockResolvedValue({ id: "anime-123" } as never);
   });
+
+  afterEach(cleanup);
 
   it("shows an untracked recognized series and starts following it", async () => {
     vi.mocked(createSubscription).mockResolvedValue({ id: "subscription-1" } as never);
@@ -54,6 +56,8 @@ describe("RSS discovered series", () => {
 
     expect(screen.getByRole("heading", { name: "RSS 动画" })).toBeInTheDocument();
     expect(screen.getByText("先把一个或多个 RSS 动画匹配到 Bangumi 动画，再单独选择是否追番。“未匹配到动画”表示尚未对应上 Bangumi 动画 ID。")).toBeInTheDocument();
+    expect(screen.queryByText("New Anime")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "RSS 动画" }));
     expect(screen.getByText("New Anime")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "展开《New Anime》的 RSS 标题" }));
     expect(screen.getByRole("link", { name: "查看识别结果" })).toHaveAttribute(
@@ -143,6 +147,7 @@ describe("RSS discovered series", () => {
       </QueryClientProvider>,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "RSS 动画" }));
     fireEvent.click(screen.getByRole("button", { name: "匹配" }));
     expect(screen.getByText("1 集 · 1 个候选 · 1 个 RSS 标题 · 未匹配到动画")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "匹配 Bangumi 动画" })).toBeInTheDocument();
@@ -214,6 +219,7 @@ describe("RSS discovered series", () => {
     );
     const section = within(view.container);
 
+    fireEvent.click(section.getByRole("button", { name: "RSS 动画" }));
     fireEvent.click(section.getByRole("checkbox", { name: "选择 RSS 动画 New Anime RSS" }));
     fireEvent.click(section.getByRole("checkbox", { name: "选择 RSS 动画 新番动画 RSS" }));
     fireEvent.click(section.getByRole("button", { name: "匹配所选（2）" }));
@@ -323,6 +329,7 @@ describe("RSS discovered series", () => {
     );
     const section = within(view.container);
 
+    fireEvent.click(section.getByRole("button", { name: "RSS 动画" }));
     fireEvent.click(section.getByRole("checkbox", { name: "选择 RSS 动画 新番" }));
     fireEvent.click(section.getByRole("checkbox", { name: "选择 RSS 动画 New Anime Extra RSS" }));
     fireEvent.click(section.getByRole("button", { name: "匹配所选（2）" }));
