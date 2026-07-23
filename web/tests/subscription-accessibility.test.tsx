@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SubscriptionsPage } from "../src/features/subscriptions/SubscriptionsPage";
 import {
@@ -24,7 +24,9 @@ vi.mock("../src/generated/api/client", () => ({
   updateSubscription: vi.fn(),
 }));
 
-describe("subscription title actions", () => {
+afterEach(cleanup);
+
+describe("subscription page accessibility", () => {
   const writeText = vi.fn();
 
   beforeEach(() => {
@@ -76,5 +78,33 @@ describe("subscription title actions", () => {
       "href",
       "https://bgm.tv/subject/54321",
     );
+  });
+
+  it("toggles recent decisions from the full heading text area", async () => {
+    vi.mocked(listDecisions).mockResolvedValue([{
+      id: "decision-1",
+      kind: "selected_preferred",
+      anime_title: "可以折叠的新番",
+      episode_key: "01",
+      candidate_snapshot: {
+        release_group: "字幕组",
+        resolution: "1080p",
+      },
+      created_at: "2026-07-23T00:00:00Z",
+    } as never]);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <SubscriptionsPage />
+      </QueryClientProvider>,
+    );
+
+    const toggle = await screen.findByRole("button", { name: /最近选择.*保留每次选择的原因/ });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(await screen.findByText("可以折叠的新番 · 第 01 集")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("保留每次选择的原因，以及当时的字幕组、画质和编码。"));
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("可以折叠的新番 · 第 01 集")).not.toBeInTheDocument();
   });
 });

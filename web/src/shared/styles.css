@@ -150,6 +150,13 @@ h3 { font-size: 15px; letter-spacing: 0; }
 .section-heading { min-height: 48px; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 13px; }
 .section-heading p { margin-top: 4px; color: var(--muted); font-size: 12px; }
 .section-heading > a { display: flex; align-items: center; gap: 4px; color: var(--accent); font-size: 12px; font-weight: 700; }
+.section-heading--collapsible { min-height: 0; }
+.section-heading-toggle { width: 100%; min-height: 48px; display: flex; align-items: center; padding: 0; color: inherit; background: transparent; border: 0; text-align: left; cursor: pointer; }
+.section-heading-toggle > span { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.section-heading-toggle strong { width: fit-content; display: inline-flex; align-items: center; gap: 6px; margin: -3px -5px; padding: 3px 5px; border-radius: 5px; font-size: 17px; line-height: 1.2; }
+.section-heading-toggle small { color: var(--muted); font-size: 12px; line-height: 1.4; }
+.section-heading-toggle strong > svg { flex: 0 0 auto; }
+.section-heading-toggle:hover strong { color: var(--accent); background: var(--accent-soft); }
 .compact-list { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .compact-row { min-height: 66px; display: grid; grid-template-columns: 34px minmax(0, 1fr) auto 16px; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--soft-line); }
 .compact-row:last-child { border-bottom: 0; }

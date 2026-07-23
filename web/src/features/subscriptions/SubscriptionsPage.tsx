@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, BookOpen, CalendarClock, Check, Clock3, Copy, History, ListTree, Plus, Sparkles } from "lucide-react";
+import { Archive, BookOpen, CalendarClock, Check, ChevronDown, ChevronUp, Clock3, Copy, History, ListTree, Plus, Sparkles } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -46,6 +46,7 @@ export function SubscriptionsPage() {
   const [scheduleAnime, setScheduleAnime] = useState<Anime | null>(null);
   const [copiedSubscriptionId, setCopiedSubscriptionId] = useState<string | null>(null);
   const [subscriptionView, setSubscriptionView] = useState<"active" | "archived">("active");
+  const [showRecentDecisions, setShowRecentDecisions] = useState(true);
   const anime = useQuery({ queryKey: ["anime"], queryFn: listAnime });
   const subscriptions = useQuery({ queryKey: ["subscriptions"], queryFn: listSubscriptions });
   const slots = useQuery({ queryKey: ["selection-slots"], queryFn: () => listSelectionSlots() });
@@ -92,12 +93,12 @@ export function SubscriptionsPage() {
             </article>)}</div>}
           </section>
 
-          <section className="data-section"><div className="section-heading"><div><h2>最近选择</h2><p>保留每次选择的原因，以及当时的字幕组、画质和编码。</p></div></div>
-            {decisions.data.length === 0 ? <EmptyState icon={Sparkles} title="还没有选择" description="新候选命中订阅后会进入首选、等待或人工确认状态；开始追番前的剧集需要手动补番。" /> : <div className="decision-list">{decisions.data.map((decision) => <article key={decision.id}>
+          <section className="data-section"><div className="section-heading section-heading--collapsible"><button className="section-heading-toggle" type="button" aria-expanded={showRecentDecisions} aria-controls="recent-decisions-content" onClick={() => setShowRecentDecisions((current) => !current)}><span><strong role="heading" aria-level={2}>最近选择 {showRecentDecisions ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</strong><small>保留每次选择的原因，以及当时的字幕组、画质和编码。</small></span></button></div>
+            {showRecentDecisions && (decisions.data.length === 0 ? <div id="recent-decisions-content"><EmptyState icon={Sparkles} title="还没有选择" description="新候选命中订阅后会进入首选、等待或人工确认状态；开始追番前的剧集需要手动补番。" /></div> : <div className="decision-list" id="recent-decisions-content">{decisions.data.map((decision) => <article key={decision.id}>
               <span className="decision-kind">{decisionLabels[decision.kind] ?? decision.kind}</span>
               <div><strong>{decision.anime_title} · 第 {decision.episode_key} 集</strong><small>{String(decision.candidate_snapshot.release_group ?? "未知字幕组")} · {String(decision.candidate_snapshot.resolution ?? "分辨率未知")} · {formatDate(decision.created_at)}</small></div>
               <StatusBadge status="decided" />
-            </article>)}</div>}
+            </article>)}</div>)}
           </section>
         </div>
 
