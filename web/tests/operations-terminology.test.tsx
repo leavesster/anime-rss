@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { OperationsPage } from "../src/features/operations/OperationsPage";
@@ -45,11 +45,16 @@ describe("operations terminology", () => {
     );
 
     expect(await screen.findByText("已安排任务")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "立即执行待处理任务" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "运行到期任务" })).toHaveAttribute("title", "执行所有已经到期的抓取、选择、通知和下载任务");
+    const summary = screen.getByText("作业、运行记录和原始审计标识").closest("summary");
+    const diagnostics = summary?.closest("details");
+    expect(diagnostics).not.toHaveAttribute("open");
+    fireEvent.click(summary as HTMLElement);
+    expect(diagnostics).toHaveAttribute("open");
     expect(screen.getByRole("heading", { name: "后台任务" })).toBeInTheDocument();
     expect(screen.getByText("计划执行时间和当前状态")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "运行记录" })).toBeInTheDocument();
     expect(screen.getByText("记录每次后台任务的运行结果")).toBeInTheDocument();
-    expect(screen.queryByText(/持久化|租约|作业/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/持久化|租约/)).not.toBeInTheDocument();
   });
 });
