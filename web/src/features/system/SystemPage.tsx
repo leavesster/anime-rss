@@ -2,9 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bell,
   Check,
+  Clock3,
   Download,
   FileArchive,
-  Languages,
   LogOut,
   RefreshCw,
   RotateCcw,
@@ -50,7 +50,6 @@ export function SystemPage() {
   const [bearerToken, setBearerToken] = useState("");
   const [restorePending, setRestorePending] = useState(false);
   const [timezone, setTimezone] = useState("Asia/Shanghai");
-  const [interfaceLanguage, setInterfaceLanguage] = useState("zh-CN");
   const [missingGraceHours, setMissingGraceHours] = useState(24);
   const restoreInput = useRef<HTMLInputElement>(null);
 
@@ -63,7 +62,6 @@ export function SystemPage() {
   useEffect(() => {
     if (!instance.data) return;
     setTimezone(instance.data.timezone);
-    setInterfaceLanguage(instance.data.interface_language);
     setMissingGraceHours(instance.data.missing_episode_grace_hours);
   }, [instance.data]);
 
@@ -89,7 +87,7 @@ export function SystemPage() {
     mutationFn: () => saveInstanceSettings(
       {
         timezone,
-        interface_language: interfaceLanguage,
+        interface_language: "zh-CN",
         missing_episode_grace_hours: missingGraceHours,
       },
       instance.data?.version ?? 0,
@@ -151,7 +149,7 @@ export function SystemPage() {
           <section className="system-section">
             <div className="section-heading">
               <div><h2>地区与缺集判断</h2><p>所有存储时间保持 UTC，界面按这里转换</p></div>
-              <Languages size={18} />
+              <Clock3 size={18} />
             </div>
             <form className="system-form" onSubmit={submitInstance}>
               <label className="field">
@@ -164,13 +162,6 @@ export function SystemPage() {
                   <option value="Asia/Taipei" />
                   <option value="UTC" />
                 </datalist>
-              </label>
-              <label className="field">
-                <span>界面语言</span>
-                <select value={interfaceLanguage} onChange={(event) => setInterfaceLanguage(event.target.value)}>
-                  <option value="zh-CN">简体中文</option>
-                  <option value="en">English</option>
-                </select>
               </label>
               <label className="field">
                 <span>缺集宽限时间</span>

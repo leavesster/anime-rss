@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Languages, Save } from "lucide-react";
+import { Clock3, Save } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import {
@@ -13,11 +13,10 @@ import { StepFrame } from "../StepFrame";
 export function InstancePreferencesStep({ settings }: { settings: InstanceSettings }) {
   const queryClient = useQueryClient();
   const [timezone, setTimezone] = useState(settings.timezone);
-  const [language, setLanguage] = useState(settings.interface_language);
   const save = useMutation({
     mutationFn: () => saveInstanceSettings({
       timezone,
-      interface_language: language,
+      interface_language: "zh-CN",
       missing_episode_grace_hours: settings.missing_episode_grace_hours,
     }, settings.version),
     onSuccess: async () => {
@@ -31,7 +30,7 @@ export function InstancePreferencesStep({ settings }: { settings: InstanceSettin
   };
 
   return (
-    <StepFrame icon={Languages} title="地区与语言" summary="实例时间显示和界面语言">
+    <StepFrame icon={Clock3} title="地区设置" summary="实例时间显示">
       {save.isError && <ErrorBanner message={save.error.message} />}
       <form className="setup-form" onSubmit={submit}>
         <label className="field">
@@ -41,12 +40,6 @@ export function InstancePreferencesStep({ settings }: { settings: InstanceSettin
             <option value="Asia/Shanghai" /><option value="Asia/Tokyo" />
             <option value="Asia/Hong_Kong" /><option value="Asia/Taipei" /><option value="UTC" />
           </datalist>
-        </label>
-        <label className="field">
-          <span>界面语言</span>
-          <select value={language} onChange={(event) => setLanguage(event.target.value)}>
-            <option value="zh-CN">简体中文</option><option value="en">English</option>
-          </select>
         </label>
         <div className="setup-form__actions">
           <Button type="submit" variant="primary" icon={<Save size={16} />} disabled={save.isPending}>保存并继续</Button>
