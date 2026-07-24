@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 CONTAINERS=()
 TEMP_DIR=$(mktemp -d)
+HOST_UID=$(id -u)
+HOST_GID=$(id -g)
 IMAGES=(
   "lscr.io/linuxserver/qbittorrent:version-4.6.7-r0@sha256:55f15d44396315551f87294a176efae733b16e283f38980308e46073950257c6|v4.6.7"
   "lscr.io/linuxserver/qbittorrent:version-5.0.4-r0@sha256:46f4e80af074fa2ffc0214fe0b7d59384748cfb34685892a53b7a3c87407a333|v5.0.4"
@@ -30,8 +32,8 @@ for specification in "${IMAGES[@]}"; do
     > "$config_dir/qBittorrent/qBittorrent.conf"
   docker pull "$image" >/dev/null
   container=$(docker run --detach --rm \
-    --env PUID=1000 \
-    --env PGID=1000 \
+    --env PUID="$HOST_UID" \
+    --env PGID="$HOST_GID" \
     --env WEBUI_PORT=8080 \
     --publish 127.0.0.1::8080/tcp \
     --volume "$config_dir:/config" \
