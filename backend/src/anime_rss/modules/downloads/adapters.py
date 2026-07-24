@@ -127,7 +127,7 @@ class QbittorrentClient:
                     "api/v2/auth/login",
                     data={"username": connection.username, "password": connection.password},
                 )
-            except (httpx.TimeoutException, httpx.NetworkError) as error:
+            except httpx.TransportError as error:
                 raise DownloaderError("connection_failed", transient=True) from error
             if response.status_code != 200 or response.text.strip() != "Ok.":
                 raise DownloaderError("authentication_failed", transient=False)
@@ -185,7 +185,7 @@ class QbittorrentClient:
     def _request(client: httpx.Client, method: str, path: str, **kwargs: Any) -> httpx.Response:
         try:
             return client.request(method, path, **kwargs)
-        except (httpx.TimeoutException, httpx.NetworkError) as error:
+        except httpx.TransportError as error:
             raise DownloaderError("connection_failed", transient=True) from error
 
     @staticmethod

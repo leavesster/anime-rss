@@ -73,6 +73,26 @@ def test_authentication_and_transient_response_errors_are_classified() -> None:
     assert upstream_error.value.transient is True
 
 
+def test_transport_protocol_errors_are_classified_as_transient() -> None:
+    def auth_disconnect(request: httpx.Request) -> httpx.Response:
+        raise httpx.RemoteProtocolError("server disconnected", request=request)
+
+    auth_client = QbittorrentClient(transport=httpx.MockTransport(auth_disconnect))
+    with pytest.raises(DownloaderError, match="connection_failed") as auth_error:
+        auth_client.test(CONNECTION)
+    assert auth_error.value.transient is True
+
+    def request_disconnect(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/v2/auth/login":
+            return httpx.Response(200, text="Ok.")
+        raise httpx.RemoteProtocolError("server disconnected", request=request)
+
+    request_client = QbittorrentClient(transport=httpx.MockTransport(request_disconnect))
+    with pytest.raises(DownloaderError, match="connection_failed") as request_error:
+        request_client.lookup(CONNECTION, HASH)
+    assert request_error.value.transient is True
+
+
 def test_reverse_proxy_base_path_is_preserved() -> None:
     paths: list[str] = []
 
