@@ -21,7 +21,7 @@ jobs:
         with:
           version: "0.6.2"
           enable-cache: true
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       - uses: actions/setup-node@v4
@@ -46,7 +46,7 @@ jobs:
         with:
           version: "0.6.2"
           enable-cache: true
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       - run: python3 -m venv .venv
