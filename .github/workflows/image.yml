@@ -45,7 +45,7 @@ jobs:
 
       - run: make image-smoke IMAGE=anime-rss-smoke:${{ matrix.platform.arch }}
 
-      - uses: aquasecurity/trivy-action@0.33.1
+      - uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: anime-rss-smoke:${{ matrix.platform.arch }}
           format: table
